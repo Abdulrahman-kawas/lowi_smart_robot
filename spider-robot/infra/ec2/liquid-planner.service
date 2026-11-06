@@ -1,0 +1,16 @@
+[Unit]
+Description=Liquid AI LFM2.5-1.2B-Instruct planner (llama-server, port 8080, tool calling)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=__USER__
+Environment=LLAMA_CACHE=/var/lib/liquid
+# --jinja is required: it renders the tool definitions and parses tool calls.
+ExecStart=/usr/local/bin/llama-server -hf LiquidAI/LFM2.5-1.2B-Instruct-GGUF:Q4_K_M \
+  --host 127.0.0.1 --port 8080 -c 8192 --jinja
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

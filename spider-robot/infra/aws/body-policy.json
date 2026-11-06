@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "iot:Connect",
+      "Resource": "arn:aws:iot:__REGION__:__ACCOUNT__:client/${iot:Connection.Thing.ThingName}",
+      "Condition": {
+        "Bool": {
+          "iot:Connection.Thing.IsAttached": "true"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Publish",
+      "Resource": [
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/${iot:Connection.Thing.ThingName}/state",
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/${iot:Connection.Thing.ThingName}/event",
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/${iot:Connection.Thing.ThingName}/camera/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Subscribe",
+      "Resource": "arn:aws:iot:__REGION__:__ACCOUNT__:topicfilter/spider/${iot:Connection.Thing.ThingName}/cmd"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Receive",
+      "Resource": "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/${iot:Connection.Thing.ThingName}/cmd"
+    }
+  ]
+}

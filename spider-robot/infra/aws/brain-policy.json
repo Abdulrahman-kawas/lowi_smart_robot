@@ -1,0 +1,33 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "iot:Connect",
+      "Resource": "arn:aws:iot:__REGION__:__ACCOUNT__:client/__BRAIN__*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Publish",
+      "Resource": "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/*/cmd"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Subscribe",
+      "Resource": [
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topicfilter/spider/*/state",
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topicfilter/spider/*/event",
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topicfilter/spider/*/camera/+"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Receive",
+      "Resource": [
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/*/state",
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/*/event",
+        "arn:aws:iot:__REGION__:__ACCOUNT__:topic/spider/*/camera/*"
+      ]
+    }
+  ]
+}

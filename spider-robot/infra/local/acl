@@ -1,0 +1,13 @@
+# Mosquitto ACL (identity = client certificate CN). Mirrors infra/aws/*-policy.json.
+# Every robot (CN = robot id, e.g. spider-01) may use only its own topics:
+pattern write spider/%u/state
+pattern write spider/%u/event
+pattern write spider/%u/camera/#
+pattern read spider/%u/cmd
+
+# The brain (CN = spider-brain) commands robots and reads their telemetry.
+user spider-brain
+topic write spider/+/cmd
+topic read spider/+/state
+topic read spider/+/event
+topic read spider/+/camera/#

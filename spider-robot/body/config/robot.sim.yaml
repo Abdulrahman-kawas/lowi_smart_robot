@@ -1,0 +1,106 @@
+# Simulator config: fake servos, simulated LiDAR room, fake camera, local Mosquitto (no TLS).
+robot_id: spider-01
+
+mqtt:
+  host: 127.0.0.1
+  port: 1884
+  tls: false
+
+safety:
+  require_lidar: true
+
+camera:
+  backend: fake
+
+
+# Servo controller: Lynxmotion SSC-32U on USB (chosen). Left legs on VS1 (channels 0-15),
+# right legs on VS2 (channels 16-31); two UBECs at 6.0 V, VS1=VS2 jumpers REMOVED.
+servo_driver: ssc32u
+ssc:
+  port: /dev/ttyUSB0       # better: the /dev/serial/by-id/usb-FTDI_... path (ls /dev/serial/by-id/)
+  baud: 115200             # set the SSC-32U to 115200 with its baud button (factory default 9600)
+  update_hz: 25
+
+# DSSERVO RDS3218: 500-2500 us = 270 deg. Logical servo degrees: 90 = centre pulse (1500 us).
+pulse:
+  min_us: 500
+  max_us: 2500
+  range_deg: 270
+
+# Alternative controller (not used): servo_driver: pca9685, boards 0x40/0x41, channels 0-15
+pca:
+  i2c_bus: 1
+  addresses: [0x40, 0x41]
+  freq_hz: 50
+  osc_hz: 25000000
+
+# Measure YOUR robot (metres): joint axis to joint axis.
+geometry:
+  coxa_m: 0.045
+  femur_m: 0.075
+  tibia_m: 0.130
+  stance_radius_m: 0.12
+  body_height_m: 0.09
+  sit_height_m: 0.035
+  footprint_x_m: 0.24      # half-length incl. legs (top view); LiDAR ignores points inside
+  footprint_y_m: 0.27      # half-width incl. legs; obstacle distances are from this box edge
+
+gait:
+  period_s: 1.0
+  step_height_m: 0.035
+  max_stride_m: 0.07
+  max_vx: 0.12
+  max_vy: 0.08
+  max_wz: 0.6
+  accel: 0.25
+  yaw_accel: 1.5
+  control_hz: 50
+  posture_speed_mps: 0.04
+
+state_hz: 4
+
+# Leg mounts (body frame: x forward, y left). SSC-32U channels: coxa, femur, tibia = ch, ch+1, ch+2.
+# direction/trim come from calibration.yaml (spider-calibrate).
+legs:
+  - name: LF
+    mount_x: 0.1
+    mount_y: 0.06
+    mount_angle_deg: 45
+    coxa:  {channel: 0}
+    femur: {channel: 1}
+    tibia: {channel: 2}
+  - name: LM
+    mount_x: 0.0
+    mount_y: 0.08
+    mount_angle_deg: 90
+    coxa:  {channel: 4}
+    femur: {channel: 5}
+    tibia: {channel: 6}
+  - name: LR
+    mount_x: -0.1
+    mount_y: 0.06
+    mount_angle_deg: 135
+    coxa:  {channel: 8}
+    femur: {channel: 9}
+    tibia: {channel: 10}
+  - name: RF
+    mount_x: 0.1
+    mount_y: -0.06
+    mount_angle_deg: -45
+    coxa:  {channel: 16}
+    femur: {channel: 17}
+    tibia: {channel: 18}
+  - name: RM
+    mount_x: 0.0
+    mount_y: -0.08
+    mount_angle_deg: -90
+    coxa:  {channel: 20}
+    femur: {channel: 21}
+    tibia: {channel: 22}
+  - name: RR
+    mount_x: -0.1
+    mount_y: -0.06
+    mount_angle_deg: -135
+    coxa:  {channel: 24}
+    femur: {channel: 25}
+    tibia: {channel: 26}

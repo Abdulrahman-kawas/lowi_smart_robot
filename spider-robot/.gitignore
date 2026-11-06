@@ -1,0 +1,10 @@
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+brain/.env
+brain/photos/
+infra/aws/certs/
+infra/local/local-certs/
+*.private.key
+*.key
