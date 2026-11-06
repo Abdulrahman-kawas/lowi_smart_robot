@@ -27,7 +27,7 @@ from .supervision.supervisor import Supervisor
 from .tools import ToolExecutor
 
 # Tools that only read; a batch made only of these runs in parallel (faster multi-tasking).
-PARALLEL_SAFE = frozenset({"get_status", "scan_surroundings", "look"})
+PARALLEL_SAFE = frozenset({"get_status", "scan_surroundings", "look", "load_skill", "recall"})
 
 
 class AgentState(TypedDict):
@@ -73,13 +73,13 @@ def build_graph(
         for call in calls:
             risk = classify(call, settings)
             if needs_approval(risk, settings.autonomy):
-                if settings.dashboard:
+                if settings.approvals_available:
                     approved = await supervisor.request_approval(describe(call), risk.name.lower())
                     reason = "Rejected by the owner. Choose a different approach."
                 else:  # nobody can approve without the dashboard: fail closed, never hang
                     approved = False
                     reason = (f"'{describe(call)}' needs owner approval ({risk.name}) but no "
-                              "dashboard is open. Choose a lower-risk action.")
+                              "dashboard or Telegram is configured. Choose a lower-risk action.")
                 if not approved:
                     if supervisor.aborted:
                         return {"status": "aborted", "pending": []}

@@ -8,7 +8,7 @@ set -euo pipefail
 SR="$(cd "$(dirname "$0")/../.." && pwd)"   # the spider-robot folder (no git needed)
 
 sudo apt-get update
-sudo apt-get install -y build-essential cmake git curl libcurl4-openssl-dev pkg-config chrony
+sudo apt-get install -y build-essential cmake git curl libcurl4-openssl-dev pkg-config chrony ffmpeg
 command -v aws >/dev/null || sudo snap install aws-cli --classic   # run-brain.sh reads SSM
 
 # uv (Python package manager used by every spider-robot package), system-wide
@@ -37,7 +37,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now liquid-vision liquid-planner
 
 # Brain
-(cd "$SR/brain" && uv sync)
+(cd "$SR/brain" && uv sync --extra voice)
 sudo mkdir -p /etc/spider-brain/certs
 sudo chown -R "$USER" /etc/spider-brain
 chmod 700 /etc/spider-brain/certs
@@ -54,6 +54,11 @@ if [[ "${FETCH_CERTS_FROM_SSM:-1}" == "1" ]] && command -v aws >/dev/null; then
   chmod 600 /etc/spider-brain/certs/*.key 2>/dev/null || true
   curl -fsSL -o /etc/spider-brain/certs/AmazonRootCA1.pem https://www.amazontrust.com/repository/AmazonRootCA1.pem
 fi
+sudo mkdir -p /var/lib/spider-brain && sudo chown "$USER" /var/lib/spider-brain   # memory
 [[ -f /etc/spider-brain/brain.env ]] || cp "$SR/brain/.env.example" /etc/spider-brain/brain.env
 chmod 600 /etc/spider-brain/brain.env
+sed -e "s#__USER__#$USER#g" -e "s#__SR__#$SR#g" "$SR/infra/ec2/spider-brain.service" \
+  | sudo tee /etc/systemd/system/spider-brain.service >/dev/null
+sudo systemctl daemon-reload
 echo "Next: edit /etc/spider-brain/brain.env (IoT endpoint), then: $SR/infra/ec2/run-brain.sh status"
+echo "Always-on brain (Telegram, alerts): sudo systemctl enable --now spider-brain"

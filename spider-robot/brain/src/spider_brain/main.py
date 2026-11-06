@@ -5,6 +5,9 @@
   spider-brain ping --n 100                    command round-trip latency (p50/p95)
   spider-brain look "what is in front?"        photo + Liquid vision answer
   spider-brain run "walk to the orange box"    autonomous task with the dashboard
+      --tier simple|default (simple = cheap model, escalates when needed)
+  spider-brain serve                           long-running brain: dashboard + Telegram bot +
+                                               WhatsApp alerts + memory + skills + voice
       --planner claude|liquid --autonomy supervised|guarded|autonomous
 """
 
@@ -131,6 +134,26 @@ async def _teleop(settings: Settings) -> int:
     return 0
 
 
+async def _serve(settings: Settings) -> int:
+    import signal
+
+    from .service import BrainService
+
+    svc = BrainService(settings)
+    await svc.start()
+    print(f"spider-brain serving robot {settings.robot_id}: "
+          f"telegram={'on' if svc.telegram else 'off'}, "
+          f"whatsapp={'on' if svc.whatsapp else 'off'}, voice={'on' if svc.voice else 'off'}, "
+          f"skills={len(svc.skills.skills)}, memory={len(svc.memory.facts)} facts")
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+    await stop.wait()
+    await svc.stop()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="spider-brain")
     sub = p.add_subparsers(dest="command", required=True)
@@ -141,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--model")
     run.add_argument("--max-steps", type=int)
     run.add_argument("--no-dashboard", action="store_true")
+    run.add_argument("--tier", choices=["simple", "default"], default="default")
+    sub.add_parser("serve", help="long-running brain (dashboard, Telegram, alerts)")
     sub.add_parser("status")
     sub.add_parser("teleop")
     ping = sub.add_parser("ping", help="measure command round-trip latency")
@@ -159,7 +184,8 @@ def main(argv: list[str] | None = None) -> int:
             if getattr(args, field):
                 overrides[field] = getattr(args, field)
         if args.model:
-            overrides["claude_model"] = args.model
+            overrides["route_default"] = f"anthropic:{args.model}"
+            overrides["route_simple"] = f"anthropic:{args.model}"
         if args.max_steps:
             overrides["max_steps"] = args.max_steps
         if args.no_dashboard:
@@ -180,12 +206,15 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_ping(settings, args.n))
         if args.command == "look":
             return asyncio.run(_look(settings, args.question))
+        if args.command == "serve":
+            return asyncio.run(_serve(settings))
         if settings.planner == "claude" and not settings.anthropic_api_key:
             print("ANTHROPIC_API_KEY is not set (or use --planner liquid).", file=sys.stderr)
             return 2
         print(f"Task: {args.task}\nplanner={settings.planner} autonomy={settings.autonomy}")
         with contextlib.suppress(KeyboardInterrupt):
-            print("\n=== Summary ===\n" + asyncio.run(run_task(args.task, settings)))
+            summary = asyncio.run(run_task(args.task, settings, tier=args.tier))
+            print("\n=== Summary ===\n" + summary)
         return 0
     except RobotOffline as exc:
         print(f"robot offline: {exc}", file=sys.stderr)

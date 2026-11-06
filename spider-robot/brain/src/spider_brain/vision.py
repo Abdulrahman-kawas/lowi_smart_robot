@@ -49,3 +49,62 @@ class VisionClient:
 
     async def aclose(self) -> None:
         await self.http.aclose()
+
+
+class ClaudeVision:
+    """Backup vision: the same question to a Claude model with the JPEG attached."""
+
+    def __init__(self, model: str, api_key: str = "", client=None) -> None:
+        if client is None:
+            from anthropic import AsyncAnthropic
+
+            client = AsyncAnthropic(api_key=api_key or None)
+        self.client = client
+        self.model = model
+
+    async def ask(self, jpeg: bytes, question: str) -> str:
+        resp = await self.client.messages.create(
+            model=self.model,
+            max_tokens=2000,
+            system=VISION_SYSTEM,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                             "data": base64.standard_b64encode(jpeg).decode()}},
+                {"type": "text", "text": question},
+            ]}],
+        )
+        if resp.stop_reason == "refusal":
+            return "(the backup vision model declined to describe this image)"
+        return "\n".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+
+    async def aclose(self) -> None:
+        pass
+
+
+class RoutedVision:
+    """Liquid first (local, free); on a server/network failure, the backup model."""
+
+    def __init__(self, primary, backup=None) -> None:
+        self.primary, self.backup = primary, backup
+
+    async def ask(self, jpeg: bytes, question: str) -> str:
+        try:
+            return await self.primary.ask(jpeg, question)
+        except (httpx.TransportError, httpx.HTTPStatusError, TimeoutError):
+            if self.backup is None:
+                raise
+            return await self.backup.ask(jpeg, question)
+
+    async def aclose(self) -> None:
+        await self.primary.aclose()
+        if self.backup is not None:
+            await self.backup.aclose()
+
+
+def make_vision(settings) -> RoutedVision:
+    primary = VisionClient(settings.vision_url, settings.vision_model, settings.vision_timeout_s)
+    backup = None
+    kind, _, model = settings.vision_fallback.partition(":")
+    if kind == "anthropic" and settings.anthropic_api_key:
+        backup = ClaudeVision(model, settings.anthropic_api_key)
+    return RoutedVision(primary, backup)

@@ -15,7 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .calls import ToolCall, ToolOutcome
 from .config import Settings
+from .memory import Memory
 from .robot_client import RobotClient, RobotOffline
+from .skills import SkillLibrary
 from .supervision.events import EventBus
 from .vision import VisionClient
 
@@ -84,6 +86,26 @@ TOOL_SPECS: list[tuple[str, str, dict]] = [
     ),
     ("stop", "Stop all motion immediately.", _obj({})),
     (
+        "load_skill",
+        "Load the full text of a skill listed in the system prompt (e.g. cv-writing-japan, "
+        "japanese-business-writing, interview-coaching), or one of its reference files. Use "
+        "an empty reference to load the skill itself.",
+        _obj({"name": {"type": "string"}, "reference": {"type": "string"}}),
+    ),
+    (
+        "remember",
+        "Store a fact worth keeping across tasks (a place name, a preference, a correction "
+        "from the owner). Keep it short and specific.",
+        _obj({"fact": {"type": "string"},
+              "tags": {"type": "array", "items": {"type": "string"}}}),
+    ),
+    (
+        "recall",
+        "Search long-term memory for facts related to a query (places, preferences, earlier "
+        "results). Use before asking the owner something they may have told you.",
+        _obj({"query": {"type": "string"}}),
+    ),
+    (
         "wait",
         "Wait without moving (0.5-10 s), e.g. for a person to pass.",
         _obj({"seconds": {"type": "number", "description": "0.5 to 10"}}),
@@ -137,11 +159,27 @@ class WaitArgs(_A):
     seconds: float = Field(ge=0.5, le=10)
 
 
+class SkillArgs(_A):
+    name: str = Field(min_length=1, max_length=64)
+    reference: str = Field("", max_length=64)
+
+
+class RememberArgs(_A):
+    fact: str = Field(min_length=1, max_length=500)
+    tags: list[str] = Field(default_factory=list, max_length=5)
+
+
+class RecallArgs(_A):
+    query: str = Field(max_length=200)
+
+
 class ToolExecutor:
     def __init__(
-        self, robot: RobotClient, vision: VisionClient | None, settings: Settings, bus: EventBus
+        self, robot: RobotClient, vision: VisionClient | None, settings: Settings, bus: EventBus,
+        skills: SkillLibrary | None = None, memory: Memory | None = None,
     ) -> None:
         self.robot, self.vision, self.settings, self.bus = robot, vision, settings, bus
+        self.skills, self.memory = skills, memory
 
     async def run(self, call: ToolCall) -> ToolOutcome:
         handler = getattr(self, f"_t_{call.name}", None)
@@ -215,6 +253,31 @@ class ToolExecutor:
         _A.model_validate(args)
         self.robot.stop()
         return ToolOutcome("Stop sent.")
+
+    async def _t_load_skill(self, args: dict) -> ToolOutcome:
+        a = SkillArgs.model_validate(args)
+        if self.skills is None:
+            return ToolOutcome("No skills are installed.", is_error=True)
+        try:
+            return ToolOutcome(self.skills.load(a.name, a.reference))
+        except KeyError as exc:
+            return ToolOutcome(str(exc.args[0]), is_error=True)
+
+    async def _t_remember(self, args: dict) -> ToolOutcome:
+        a = RememberArgs.model_validate(args)
+        if self.memory is None:
+            return ToolOutcome("Memory is not enabled.", is_error=True)
+        fact = self.memory.remember(a.fact, a.tags)
+        return ToolOutcome(f"Remembered (#{fact.id}).")
+
+    async def _t_recall(self, args: dict) -> ToolOutcome:
+        a = RecallArgs.model_validate(args)
+        if self.memory is None:
+            return ToolOutcome("Memory is not enabled.", is_error=True)
+        facts = self.memory.recall(a.query)
+        if not facts:
+            return ToolOutcome("Nothing in memory about that.")
+        return ToolOutcome("\n".join(f"#{f.id}: {f.text}" for f in facts))
 
     async def _t_wait(self, args: dict) -> ToolOutcome:
         a = WaitArgs.model_validate(args)

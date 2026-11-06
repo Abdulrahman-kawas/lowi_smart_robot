@@ -23,7 +23,8 @@ class Risk(IntEnum):
     HIGH = 2
 
 
-_READ_ONLY = {"get_status", "scan_surroundings", "look", "stop", "wait"}
+_READ_ONLY = {"get_status", "scan_surroundings", "look", "stop", "wait",
+              "load_skill", "remember", "recall"}
 
 _THRESHOLD: dict[Autonomy, Risk] = {
     "supervised": Risk.LOW,
@@ -67,6 +68,12 @@ def describe(call: ToolCall) -> str:
         return f"look: {str(a.get('question', ''))[:80]}"
     if call.name == "adjust_body":
         return f"adjust body: height {a.get('height_m')} m, pitch {a.get('pitch_deg')} deg"
+    if call.name == "load_skill":
+        return f"load skill {a.get('name')} {a.get('reference') or ''}".strip()
+    if call.name == "remember":
+        return f"remember: {str(a.get('fact', ''))[:60]}"
+    if call.name == "recall":
+        return f"recall: {a.get('query')}"
     if call.name == "wait":
         return f"wait {a.get('seconds')} s"
     return call.name
