@@ -17,7 +17,8 @@ LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 class Settings(BaseSettings):
     # On servers put settings in /etc/spider-brain/brain.env and set SB_ENV_FILE to it.
     model_config = SettingsConfigDict(
-        env_file=os.getenv("SB_ENV_FILE", ".env"), env_prefix="SB_", extra="ignore"
+        env_file=os.getenv("SB_ENV_FILE", ".env"), env_prefix="SB_", extra="ignore",
+        populate_by_name=True,  # Settings(telegram_token=...) works as well as the env alias
     )
 
     # Robot link ---------------------------------------------------------------
@@ -33,6 +34,7 @@ class Settings(BaseSettings):
     online_timeout_s: float = 20.0
 
     # Planner ------------------------------------------------------------------
+    # "claude" = routed (simple/default tiers below); "liquid" = everything on the local model
     planner: Literal["claude", "liquid"] = "claude"
     anthropic_api_key: str = Field(
         default="", validation_alias=AliasChoices("ANTHROPIC_API_KEY", "SB_ANTHROPIC_API_KEY")
@@ -42,13 +44,58 @@ class Settings(BaseSettings):
     claude_fallbacks: bool = True  # server-side refusal fallback (Claude API only)
     claude_sees_images: bool = False  # also send camera frames to Claude (vision stays Liquid)
     max_task_usd: float = 1.0  # stop a task when its Claude spend passes this
-    # list prices, USD per million tokens (claude-opus-5-5); update if you change model
+    # list prices for models not in planner.PRICES, USD per million tokens
     price_input_per_mtok: float = 4.0
     price_output_per_mtok: float = 20.0
     price_cache_read_per_mtok: float = 0.20
     price_cache_write_per_mtok: float = 5.0
     liquid_url: str = "http://127.0.0.1:8080/v1"  # llama-server with LFM2.5-1.2B-Instruct
     liquid_model: str = "LFM2.5-1.2B-Instruct"
+
+    # Model routing (the llm-gateway idea from the JobHunt repo) ----------------
+    # A route is "anthropic:<model>", "liquid", or "compat:<model>" (any OpenAI-compatible
+    # server: OpenAI, Kimi, a "free" provider; set compat_base_url + COMPAT_API_KEY).
+    route_simple: str = "anthropic:claude-haiku-5-5"  # chat, questions, one-step commands
+    route_default: str = "anthropic:claude-opus-5-5"  # multi-step robot tasks
+    route_fallback: str = "liquid"  # used when the primary provider is down ("" = none)
+    escalate_after_errors: int = 2  # simple tier -> default tier after N failed tool calls
+    escalate_after_steps: int = 8  # ... or after N steps
+    compat_base_url: str = ""
+    compat_api_key: str = Field(
+        default="", validation_alias=AliasChoices("COMPAT_API_KEY", "SB_COMPAT_API_KEY")
+    )
+    vision_fallback: str = "anthropic:claude-haiku-5-5"  # when the Liquid vision server fails
+
+    # Skills and memory ----------------------------------------------------------
+    # brain/skills first, then the repo's skills/ (all JobHunt skills, loadable on demand)
+    skills_dirs: list[str] = Field(default_factory=lambda: ["skills", "../../skills"])
+    always_on_skills: list[str] = Field(
+        default_factory=lambda: ["robot-reasoning", "robot-conversation"]
+    )
+    memory_path: str = "data/memory.jsonl"
+
+    # Voice (same stack as the repo's orchestrator.py: Gemini STT + Gemini TTS, gTTS fallback)
+    gemini_api_key: str = Field(
+        default="", validation_alias=AliasChoices("GEMINI_API_KEY", "SB_GEMINI_API_KEY")
+    )
+    gemini_text_model: str = "gemini-2.5-flash"
+    gemini_fallback_model: str = "gemini-2.5-flash"
+    gemini_tts_model: str = "gemini-2.5-flash-preview-tts"
+    tts_voice: str = "Puck"
+    voice_lang: str = "ar"  # gTTS fallback language when the text has no Arabic letters: "en"
+    voice_replies: bool = True  # answer voice notes with a voice note
+
+    # Telegram (owner-only bot: commands, approvals, alerts, voice notes) ---------
+    telegram_token: str = Field(
+        default="", validation_alias=AliasChoices("TELEGRAM_BOT_TOKEN", "SB_TELEGRAM_TOKEN")
+    )
+    telegram_owner_ids: list[int] = Field(default_factory=list)  # your Telegram user id(s)
+
+    # WhatsApp alerts through the repo's local voice-agent bridge (127.0.0.1:3050) -----
+    whatsapp_bridge_url: str = ""  # e.g. http://127.0.0.1:3050 when the brain runs locally
+    whatsapp_bridge_token: str = Field(
+        default="", validation_alias=AliasChoices("BRIDGE_TOKEN", "SB_WHATSAPP_BRIDGE_TOKEN")
+    )
 
     # Vision (Liquid LFM2.5-VL behind llama-server) -----------------------------
     vision_url: str = "http://127.0.0.1:8081/v1"
@@ -72,6 +119,15 @@ class Settings(BaseSettings):
     dashboard: bool = True
     dashboard_origins: list[str] = Field(default_factory=list)
     run_token_seconds: float = 5.0
+
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.telegram_token and self.telegram_owner_ids)
+
+    @property
+    def approvals_available(self) -> bool:
+        """Someone can press Approve: the dashboard or the owner's Telegram."""
+        return self.dashboard or self.telegram_enabled
 
     @field_validator("host")
     @classmethod

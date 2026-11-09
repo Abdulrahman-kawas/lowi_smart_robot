@@ -14,6 +14,10 @@ dependencies = [
     "pydantic-settings>=2.6.0",
 ]
 
+[project.optional-dependencies]
+# Voice notes (same libraries as the repo's orchestrator.py); ffmpeg comes from apt.
+voice = ["google-genai>=1.0", "gTTS>=2.5"]
+
 [project.scripts]
 spider-brain = "spider_brain.main:main"
 

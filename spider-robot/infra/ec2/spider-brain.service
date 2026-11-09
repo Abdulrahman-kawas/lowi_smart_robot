@@ -1,0 +1,15 @@
+[Unit]
+Description=Spider robot brain (serve: dashboard, Telegram bot, alerts, memory, skills, voice)
+After=network-online.target liquid-vision.service liquid-planner.service
+Wants=network-online.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__SR__/brain
+Environment=SB_ENV_FILE=/etc/spider-brain/brain.env
+ExecStart=__SR__/infra/ec2/run-brain.sh serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
