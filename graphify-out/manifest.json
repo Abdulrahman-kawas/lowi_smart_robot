@@ -1,0 +1,404 @@
+{
+  "spider-robot/body/lidar_bridge/lidar_bridge.cpp": {
+    "mtime": 1793930879.1006324,
+    "seen": 1793931611.1167004,
+    "ast_hash": "a51a66b1be2d64d0312f95c8b344fbba",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/pyproject.toml": {
+    "mtime": 1793930879.0994835,
+    "seen": 1793931611.1167052,
+    "ast_hash": "daffb9345d10f7c52c8949b20d845b57",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/__init__.py": {
+    "mtime": 1793930879.099731,
+    "seen": 1793931611.1167076,
+    "ast_hash": "e81041dd336096a3c42068d92dd580c6",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/calibrate.py": {
+    "mtime": 1793930879.1002073,
+    "seen": 1793931611.1167092,
+    "ast_hash": "a3cec5dc693adf4ae63ec47d3de30a98",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/config.py": {
+    "mtime": 1793930879.0997963,
+    "seen": 1793931611.1167102,
+    "ast_hash": "2d2395f1020d21b458fdcd7cb93446c5",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/gait.py": {
+    "mtime": 1793930879.0999308,
+    "seen": 1793931611.1167114,
+    "ast_hash": "9de81124b85a3a2a5e24dc9560d901c9",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/hw/__init__.py": {
+    "mtime": 1793930879.1002905,
+    "seen": 1793931611.1167128,
+    "ast_hash": "f499700222573d3fe6d4341e2fbc8dad",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/hw/camera.py": {
+    "mtime": 1793930879.1004932,
+    "seen": 1793931611.1167138,
+    "ast_hash": "4abd668d87cf79c6e233706723726283",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/hw/lidar.py": {
+    "mtime": 1793930879.1004257,
+    "seen": 1793931611.116715,
+    "ast_hash": "c3e8974f7619afa486668d782461e67a",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/hw/servos.py": {
+    "mtime": 1793930879.1003568,
+    "seen": 1793931611.1167161,
+    "ast_hash": "6be5fd84ad3c14d6a559a3ec439d3e8b",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/kinematics.py": {
+    "mtime": 1793930879.099868,
+    "seen": 1793931611.116717,
+    "ast_hash": "2039f8d9c189a18be336882973a4655c",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/main.py": {
+    "mtime": 1793930879.100143,
+    "seen": 1793931611.1167183,
+    "ast_hash": "758eca7753256c6a9666b257d4e7c177",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/robot.py": {
+    "mtime": 1793930879.1000726,
+    "seen": 1793931611.1167192,
+    "ast_hash": "bccb9931c71f14b611171ce60398fb2e",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/src/spider_body/safety.py": {
+    "mtime": 1793930879.0999956,
+    "seen": 1793931611.1167204,
+    "ast_hash": "9839a5807f45295f3e4b65e48461b60f",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/tests/conftest.py": {
+    "mtime": 1793930879.1008298,
+    "seen": 1793931611.1167214,
+    "ast_hash": "137892e90cd2fe74ec1c0457d75e0d40",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/tests/test_kinematics_gait.py": {
+    "mtime": 1793930879.1008916,
+    "seen": 1793931611.1167226,
+    "ast_hash": "27b9b0b30d32cb41f671db8eab5eb4a3",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/tests/test_robot.py": {
+    "mtime": 1793930879.1010203,
+    "seen": 1793931611.1167238,
+    "ast_hash": "8ecbc41113e2826c6e3acc31ea9b818b",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/tests/test_safety_lidar.py": {
+    "mtime": 1793930879.1009536,
+    "seen": 1793931611.1167247,
+    "ast_hash": "88b496110aed331e87d52dfdf3fd9ea6",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/pyproject.toml": {
+    "mtime": 1793935821.6950607,
+    "seen": 1793936027.3853557,
+    "ast_hash": "9f92ed06ff2db8e37afc8be4a0ed5632",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/__init__.py": {
+    "mtime": 1793930879.1012864,
+    "seen": 1793931611.116727,
+    "ast_hash": "416508db57120804cd821e56ad3324a3",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/calls.py": {
+    "mtime": 1793930879.101417,
+    "seen": 1793931611.116728,
+    "ast_hash": "f2a9413cc103b970a54adb955ffa5503",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/config.py": {
+    "mtime": 1793935821.693483,
+    "seen": 1793936027.385361,
+    "ast_hash": "f87797aa348e4e3ff15e9e0c0f4feba3",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/graph.py": {
+    "mtime": 1793935821.693592,
+    "seen": 1793936027.3853621,
+    "ast_hash": "4d3e5beea66df395520fd639cc00036f",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/main.py": {
+    "mtime": 1793935821.6936805,
+    "seen": 1793936027.3853633,
+    "ast_hash": "92d1781bf22e7c118aec766685dc88ad",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/planner.py": {
+    "mtime": 1793935821.6939068,
+    "seen": 1793936027.3853667,
+    "ast_hash": "1082aa546c037435844d084d5be01925",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/policy.py": {
+    "mtime": 1793935821.694001,
+    "seen": 1793936027.3853686,
+    "ast_hash": "2e3e91c4c9d410dd1f8a775dc7874da3",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/robot_client.py": {
+    "mtime": 1793930879.1014795,
+    "seen": 1793931611.1167352,
+    "ast_hash": "04b115410a33759a322b1fe7fd4792a6",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/runner.py": {
+    "mtime": 1793935821.6941073,
+    "seen": 1793936027.3853714,
+    "ast_hash": "f552284b8fc1b87bc94670070f531c08",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/supervision/__init__.py": {
+    "mtime": 1793930879.1020098,
+    "seen": 1793931611.1167376,
+    "ast_hash": "042f0b6cdac73b3bae42b40400b8fc22",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/supervision/events.py": {
+    "mtime": 1793930879.1020718,
+    "seen": 1793931611.1167386,
+    "ast_hash": "c0754b53bde3e66c62c888badaaf4615",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/supervision/server.py": {
+    "mtime": 1793930879.1021986,
+    "seen": 1793931611.1167397,
+    "ast_hash": "5a5857ec246c1046e3e65104d297075e",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/supervision/supervisor.py": {
+    "mtime": 1793930879.102136,
+    "seen": 1793931611.116741,
+    "ast_hash": "00880433f7147c9a37063d7c0c1b522a",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/tools.py": {
+    "mtime": 1793935821.694455,
+    "seen": 1793936027.3853822,
+    "ast_hash": "81a8783f8a6bcc13bc75366ce7bade87",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/vision.py": {
+    "mtime": 1793935821.6945686,
+    "seen": 1793936027.3853834,
+    "ast_hash": "b0201e7c0b1340f10eb56cda52287db8",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/tests/test_brain.py": {
+    "mtime": 1793930879.1023612,
+    "seen": 1793931611.1167443,
+    "ast_hash": "e92c169a186eb2a26cfa3b7d8172bf90",
+    "semantic_hash": ""
+  },
+  "spider-robot/common/pyproject.toml": {
+    "mtime": 1793930879.0990493,
+    "seen": 1793931611.1167455,
+    "ast_hash": "63e54e21361c22cc1dff8472bb5e9ec4",
+    "semantic_hash": ""
+  },
+  "spider-robot/common/src/spider_common/__init__.py": {
+    "mtime": 1793930879.0991876,
+    "seen": 1793931611.1167464,
+    "ast_hash": "e3dbd5cfe2f610e1689ff6ffa82c1190",
+    "semantic_hash": ""
+  },
+  "spider-robot/common/src/spider_common/link.py": {
+    "mtime": 1793930879.0993326,
+    "seen": 1793931611.1167476,
+    "ast_hash": "1de74d49e269bb9fc29da298f33ec4bf",
+    "semantic_hash": ""
+  },
+  "spider-robot/common/src/spider_common/protocol.py": {
+    "mtime": 1793930879.0992646,
+    "seen": 1793931611.1167488,
+    "ast_hash": "048856fa1d64ff78594783385d9771b0",
+    "semantic_hash": ""
+  },
+  "spider-robot/common/tests/test_protocol.py": {
+    "mtime": 1793930879.09941,
+    "seen": 1793931611.1167498,
+    "ast_hash": "203ae7f7956ec64b591c2bb84138f200",
+    "semantic_hash": ""
+  },
+  "spider-robot/infra/aws/body-policy.json": {
+    "mtime": 1793930879.1025536,
+    "seen": 1793931611.116751,
+    "ast_hash": "afe56458d43ffcb2d1a58574842ada39",
+    "semantic_hash": ""
+  },
+  "spider-robot/infra/aws/brain-policy.json": {
+    "mtime": 1793930879.1026163,
+    "seen": 1793931611.116752,
+    "ast_hash": "af667a10afc10e8a4b7093e03a71f7ec",
+    "semantic_hash": ""
+  },
+  "spider-robot/infra/aws/iot_setup.sh": {
+    "mtime": 1793930879.1024911,
+    "seen": 1793931611.116753,
+    "ast_hash": "9c67ce3ffcfca63d23e2ab53ae4301aa",
+    "semantic_hash": ""
+  },
+  "spider-robot/infra/ec2/run-brain.sh": {
+    "mtime": 1793935821.6951628,
+    "seen": 1793936027.3854012,
+    "ast_hash": "db4663f41d5687e05c12c6adf3797f23",
+    "semantic_hash": ""
+  },
+  "spider-robot/infra/ec2/setup_ec2.sh": {
+    "mtime": 1793935821.6952825,
+    "seen": 1793936027.3854027,
+    "ast_hash": "862d3c0777f44f13f17c44637bc63684",
+    "semantic_hash": ""
+  },
+  "spider-robot/infra/local/make_local_certs.sh": {
+    "mtime": 1793930879.1030102,
+    "seen": 1793931611.1167572,
+    "ast_hash": "83bc865702c070e66d2a4fe0b3a5977e",
+    "semantic_hash": ""
+  },
+  "spider-robot/infra/pi/setup_pi.sh": {
+    "mtime": 1793930879.102936,
+    "seen": 1793931611.1167583,
+    "ast_hash": "6c03c791a167608e3c1367d4da50fcb4",
+    "semantic_hash": ""
+  },
+  "SPIDER_ROBOT_AGENT_PLAN(1).md": {
+    "mtime": 1793930760.6449049,
+    "seen": 1793931611.1167595,
+    "ast_hash": "30febc31ba236d7a010df691aa63a89f",
+    "semantic_hash": ""
+  },
+  "spider-robot/README.md": {
+    "mtime": 1793930879.0988638,
+    "seen": 1793931611.1167605,
+    "ast_hash": "5f7fa1b166307ffb882b1fc51f9b0a42",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/config/robot.example.yaml": {
+    "mtime": 1793930879.0995553,
+    "seen": 1793931611.1167617,
+    "ast_hash": "c9fd340eac32bccfc8d08daf0fe3bb84",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/config/robot.sim.yaml": {
+    "mtime": 1793930879.0996199,
+    "seen": 1793931611.1167626,
+    "ast_hash": "dc06cd76216ca31eb0dadbcdb0ec7075",
+    "semantic_hash": ""
+  },
+  "spider-robot/body/lidar_bridge/CMakeLists.txt": {
+    "mtime": 1793930879.1005666,
+    "seen": 1793931611.1167636,
+    "ast_hash": "a841601ac9c9f41263fcc398af6cdb96",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/supervision/static/index.html": {
+    "mtime": 1793930879.1022806,
+    "seen": 1793931611.116765,
+    "ast_hash": "61b0eb78ab160b17a297cb5616891525",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/memory.py": {
+    "mtime": 1793935821.6937895,
+    "seen": 1793936027.3853652,
+    "ast_hash": "c06c9482acf0b8d22e6874b025d32328",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/service.py": {
+    "mtime": 1793935821.6941953,
+    "seen": 1793936027.3853726,
+    "ast_hash": "8ac58b5db6cb2de79712f46e7bf57f16",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/skills.py": {
+    "mtime": 1793935821.6942997,
+    "seen": 1793936027.385374,
+    "ast_hash": "78de54836e0cc991e405c4c05aa75050",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/telegram.py": {
+    "mtime": 1793935821.694377,
+    "seen": 1793936027.3853807,
+    "ast_hash": "537823a1d52cf000b028379a9284e4ba",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/voice.py": {
+    "mtime": 1793935821.6947122,
+    "seen": 1793936027.3853846,
+    "ast_hash": "01cc7de39ea2d622dc179fb94f131dbe",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/src/spider_brain/whatsapp.py": {
+    "mtime": 1793935821.6947823,
+    "seen": 1793936027.3853858,
+    "ast_hash": "944640a3a84725154794f72b8353c1b7",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/tests/test_part2.py": {
+    "mtime": 1793935821.6948638,
+    "seen": 1793936027.3853886,
+    "ast_hash": "1c7d9048864037c7d980446d71522dc0",
+    "semantic_hash": ""
+  },
+  "SPIDER_ROBOT_PART2_BRAIN.md": {
+    "mtime": 1793935643.1545372,
+    "seen": 1793936027.3854082,
+    "ast_hash": "c2ab3c8825d0efde595efac2fe304c17",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/skills/robot-conversation/SKILL.md": {
+    "mtime": 1793935821.6929286,
+    "seen": 1793936027.3854148,
+    "ast_hash": "d0d50276bfec9f70aad677aef18f0e03",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/skills/robot-conversation/references/ai-tells.md": {
+    "mtime": 1793935821.693037,
+    "seen": 1793936027.3854163,
+    "ast_hash": "f467a93085e032eb1066ad72fe03d775",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/skills/robot-conversation/references/arabic.md": {
+    "mtime": 1793935821.693123,
+    "seen": 1793936027.3854172,
+    "ast_hash": "db87c72364f2794c51ae961d64e6761c",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/skills/robot-conversation/references/english.md": {
+    "mtime": 1793935821.6931953,
+    "seen": 1793936027.3854182,
+    "ast_hash": "2edd2236cb5597064f8f2568d9448ad5",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/skills/robot-conversation/references/japanese.md": {
+    "mtime": 1793935821.693322,
+    "seen": 1793936027.3854196,
+    "ast_hash": "0035fd0b4ef7735a8bc41abd8b7c6961",
+    "semantic_hash": ""
+  },
+  "spider-robot/brain/skills/robot-reasoning/SKILL.md": {
+    "mtime": 1793935821.6934052,
+    "seen": 1793936027.3854206,
+    "ast_hash": "edd82ca77f0bed73cb9e0fc3d2de368c",
+    "semantic_hash": ""
+  }
+}
