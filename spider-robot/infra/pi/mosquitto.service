@@ -1,0 +1,25 @@
+# /etc/systemd/system/mosquitto.service. The whole unit is replaced because a drop-in cannot remove
+# the packaged After=network-online.target, and the broker must start with no network (decision 1).
+[Unit]
+Description=Mosquitto MQTT broker for the spider robot
+Documentation=man:mosquitto.conf(5) man:mosquitto(8)
+After=local-fs.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStartPre=/bin/mkdir -m 740 -p /var/log/mosquitto
+ExecStartPre=/bin/chown mosquitto /var/log/mosquitto
+ExecStartPre=/bin/mkdir -m 740 -p /run/mosquitto
+ExecStartPre=/bin/chown mosquitto /run/mosquitto
+ExecStart=/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=1
+CPUAffinity=1 2 3
+Nice=-5
+MemoryMax=64M
+OOMScoreAdjust=-800
+
+[Install]
+WantedBy=multi-user.target
