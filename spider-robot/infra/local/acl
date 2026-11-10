@@ -1,5 +1,9 @@
-# Mosquitto ACL (identity = client certificate CN).
-# Every robot (CN = robot id, e.g. spider-01) may use only its own topics:
+# Mosquitto ACL. Identity is the username on the loopback listener and the certificate CN on the
+# Tailscale listener. gateway/tests/test_acl_contract.py checks every client's topics against this.
+# Which source a command came from is decided here: a client can only write its own gw/<source>
+# topic, so the gateway's priority rules cannot be spoofed by a compromised lower-priority client.
+
+# Every robot body (identity = robot id, e.g. spider-01) may use only its own topics:
 pattern write spider/%u/state
 pattern write spider/%u/event
 pattern write spider/%u/camera/#
@@ -10,20 +14,65 @@ user spider-gateway
 topic write spider/+/cmd
 topic read spider/+/gw/+/cmd
 topic read spider/+/event
+topic read spider/+/state
+topic read spider/+/camera/#
 topic write spider/+/gw/+/event
+topic write spider/+/gw/status
 
-# The brain sends through the gateway (set SB_ROBOT_SOURCE) and reads telemetry.
+# The brain sends through the gateway and reads telemetry. It answers voice over RPC.
 user spider-brain
 topic write spider/+/gw/remote/cmd
 topic write spider/+/gw/planner/cmd
 topic read spider/+/gw/remote/event
 topic read spider/+/gw/planner/event
+topic read spider/+/gw/status
 topic read spider/+/state
 topic read spider/+/camera/#
+topic read spider/+/voice/turn
+topic read spider/+/health/+
+topic write spider/+/health/brain
+topic read spider/+/rpc/+/req
+topic write spider/+/rpc/+/res/+
+topic write spider/+/rec/cmd
+topic read spider/+/rec/event
 
 # The voice loop on the Pi.
 user spider-voice
 topic write spider/+/gw/voice/cmd
 topic read spider/+/gw/voice/event
 topic read spider/+/state
+topic write spider/+/voice/turn
+topic write spider/+/health/voice
+topic write spider/+/rpc/+/req
+topic read spider/+/rpc/+/res/voice
+
+# Camera capture on the Pi. It reads the Snapshot commands the gateway forwards.
+user spider-camera
+topic read spider/+/cmd
+topic write spider/+/event
+topic write spider/+/camera/#
+topic write spider/+/health/camera
+
+# The LiDAR recorder on the Pi.
+user spider-recorder
+topic read spider/+/rec/cmd
+topic write spider/+/rec/event
+
+# The Pi's own health reporter.
+user spider-sysmon
+topic write spider/+/health/system
+
+# spider-robotctl, the fallback console over SSH. Same rules as any remote operator.
+user spider-console
+topic write spider/+/gw/remote/cmd
+topic read spider/+/gw/remote/event
+topic write spider/+/gw/bench/cmd
+topic read spider/+/gw/bench/event
+topic read spider/+/gw/status
+topic read spider/+/state
 topic read spider/+/camera/#
+
+# The physical E-stop release. The gateway accepts only estop_release from this source.
+user spider-button
+topic write spider/+/gw/button/cmd
+topic read spider/+/gw/button/event

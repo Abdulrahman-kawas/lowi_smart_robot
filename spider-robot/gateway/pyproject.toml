@@ -6,10 +6,17 @@ requires-python = ">=3.11"
 dependencies = [
     "spider-common",
     "pydantic>=2.7,<3",
+    "pyyaml>=6.0",
 ]
+
+[project.optional-dependencies]
+# The physical E-stop release button. Linux only, so development machines skip it.
+gpio = ["gpiod>=2.2; sys_platform == 'linux'"]
 
 [project.scripts]
 spider-gateway = "spider_gateway.main:main"
+spider-robotctl = "spider_gateway.console:main"
+spider-button = "spider_gateway.button:main"
 
 [dependency-groups]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.7", "spider-body"]
