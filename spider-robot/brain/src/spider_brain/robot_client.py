@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import itertools
 import json
 import logging
@@ -17,12 +18,15 @@ import math
 import time
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from spider_common.link import Link, topic_matches
 from spider_common.protocol import (
     PROTOCOL_VERSION,
     BodyPose,
+    ConfirmChallenge,
+    ConfirmRequest,
     EStop,
     EStopRelease,
     Heartbeat,
@@ -42,7 +46,7 @@ log = logging.getLogger(__name__)
 
 _DIRS = {"forward": (1.0, 0.0), "backward": (-1.0, 0.0), "left": (0.0, 1.0), "right": (0.0, -1.0)}
 # events that stop ANY motion, whatever command caused them
-_GLOBAL_STOPPERS = {"tilt", "fallen", "link_lost", "estop"}
+_GLOBAL_STOPPERS = {"tilt", "fallen", "link_lost", "estop", "preempted"}
 # events that stop a motion only when they refer to one of its own Move commands
 _OWN_STOPPERS = {"obstacle_stop", "error", "rejected"}
 TELEMETRY_STALE_S = 1.5
@@ -54,6 +58,21 @@ COMPASS = [
 
 class RobotOffline(RuntimeError):
     pass
+
+
+class ConfirmRefused(RuntimeError):
+    """The gateway would not issue a challenge, or the frame did not match it."""
+
+
+@dataclass(frozen=True)
+class Confirmation:
+    """A fresh frame and the single-use challenge the gateway bound to it."""
+
+    id: str
+    action: str
+    sha256: str
+    ttl_s: float
+    jpeg: bytes
 
 
 @dataclass
@@ -78,12 +97,19 @@ def cone_min(lidar: LidarSummary, bearing: float, half: float = 22.5) -> float:
 
 class RobotClient:
     def __init__(
-        self, link: Link, robot_id: str, bus: EventBus | None = None, source: str | None = None
+        self, link: Link, robot_id: str, bus: EventBus | None = None, source: str | None = None,
+        human_source: str | None = None,
     ) -> None:
         self.link = link
         self.topics = Topics(robot_id)
+        self.via_gateway = source is not None
         self._cmd_topic = self.topics.request(source) if source else self.topics.cmd
-        self._event_topic = self.topics.source_event(source) if source else self.topics.event
+        self._human_topic = self.topics.request(human_source) if human_source else self._cmd_topic
+        self._event_topics = (
+            {self.topics.source_event(s) for s in (source, human_source) if s}
+            or {self.topics.event}
+        )
+        self.handlers: list[tuple[str, Callable[[str, bytes], None]]] = []  # topic filter, handler
         self.bus = bus
         self.state: RobotState | None = None
         self.state_rx: float | None = None
@@ -100,17 +126,25 @@ class RobotClient:
         self._event_arrived = asyncio.Event()
 
     @staticmethod
-    def subscriptions(robot_id: str, source: str | None = None) -> list[str]:
+    def subscriptions(
+        robot_id: str, source: str | None = None, human_source: str | None = None
+    ) -> list[str]:
         t = Topics(robot_id)
-        return [t.state, t.source_event(source) if source else t.event, t.camera_filter]
+        events = sorted({t.source_event(s) for s in (source, human_source) if s}) or [t.event]
+        return [t.state, *events, t.camera_filter]
 
     # ------------------------------------------------------------------ inbound
     async def run(self) -> None:
         async for msg in self.link.messages():
             try:
-                if msg.topic == self.topics.state:
+                handler = next(
+                    (fn for flt, fn in self.handlers if topic_matches(flt, msg.topic)), None
+                )
+                if handler is not None:
+                    handler(msg.topic, msg.payload)
+                elif msg.topic == self.topics.state:
                     self._on_state(RobotState.model_validate_json(msg.payload))
-                elif msg.topic == self._event_topic:
+                elif msg.topic in self._event_topics:
                     self._on_event(RobotEvent.model_validate_json(msg.payload))
                 elif topic_matches(self.topics.camera_filter, msg.topic):
                     rid = msg.topic.rsplit("/", 1)[-1]
@@ -148,7 +182,8 @@ class RobotClient:
     async def heartbeat_loop(self, hz: float) -> None:
         while True:
             if self.link.connected.is_set():
-                self.link.publish(self._cmd_topic, Heartbeat(ts=time.time()).model_dump_json())
+                for topic in {self._cmd_topic, self._human_topic}:
+                    self.link.publish(topic, Heartbeat(ts=time.time()).model_dump_json())
             await asyncio.sleep(1.0 / hz)
 
     async def wait_online(self, timeout_s: float) -> bool:
@@ -168,11 +203,12 @@ class RobotClient:
         return self.state
 
     # ------------------------------------------------------------------ outbound
-    def _send(self, cmd, qos: int = 1) -> int:
+    def _send(self, cmd, qos: int = 1, human: bool = False) -> int:
         """Send one command. Returns its seq, or -1 if it could not be sent (link down)."""
         seq = next(self._seq)
         cmd = cmd.model_copy(update={"seq": seq, "ts": time.time(), "session": self.session})
-        ok = self.link.publish(self._cmd_topic, cmd.model_dump_json(), qos=qos)
+        topic = self._human_topic if human else self._cmd_topic
+        ok = self.link.publish(topic, cmd.model_dump_json(), qos=qos)
         return seq if ok else -1
 
     def stop(self) -> None:
@@ -181,17 +217,50 @@ class RobotClient:
     def cancel_motion(self) -> None:
         """Owner pressed Stop/Pause/E-STOP: end the running walk/turn now and stop the robot."""
         self._abort.set()
-        self.stop()
+        self._send(Stop(), human=True)
 
     def move(self, vx: float, vy: float, wz: float, duration_s: float, gait: str = "tripod") -> int:
         """Raw velocity command (teleop). The body clamps it and stops after duration_s."""
         return self._send(Move(vx=vx, vy=vy, wz=wz, duration_s=duration_s, gait=gait), qos=0)
 
     def estop(self) -> None:
-        self._send(EStop())
+        self._send(EStop(), human=True)
 
-    def estop_release(self) -> None:
-        self._send(EStopRelease())
+    def estop_release(self, confirmation: Confirmation | None = None) -> None:
+        """Through the gateway a release needs a Confirmation, or it is refused."""
+        if confirmation is None:
+            self._send(EStopRelease(), human=True)
+        else:
+            self._send(EStopRelease(challenge=confirmation.id, frame_sha256=confirmation.sha256),
+                       human=True)
+
+    def posture_confirmed(self, posture: str, confirmation: Confirmation) -> None:
+        self._send(Posture(posture=posture, challenge=confirmation.id,
+                           frame_sha256=confirmation.sha256), human=True)
+
+    async def request_confirm(self, action: str, timeout_s: float = 10.0) -> Confirmation:
+        """Ask the gateway for a fresh frame and a challenge bound to it."""
+        self.require_state()
+        rid = uuid.uuid4().hex[:12]
+        frame: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
+        self._snapshots[rid] = frame
+        mark = self._last_event_no
+        seq = self._send(ConfirmRequest(action=action, request_id=rid), human=True)
+        try:
+            ev = await self._wait_ack(seq, mark, timeout_s)
+            if ev is None:
+                raise ConfirmRefused("no answer from the gateway")
+            if ev.kind != "challenge":
+                raise ConfirmRefused(ev.detail or ev.kind)
+            challenge = ConfirmChallenge.model_validate_json(ev.detail)
+            jpeg = await asyncio.wait_for(frame, timeout_s)
+        except TimeoutError as exc:
+            raise ConfirmRefused("the camera frame did not arrive") from exc
+        finally:
+            self._snapshots.pop(rid, None)
+        if hashlib.sha256(jpeg).hexdigest() != challenge.sha256:
+            raise ConfirmRefused("the received frame does not match the challenge")
+        return Confirmation(challenge.id, challenge.action, challenge.sha256, challenge.ttl_s, jpeg)
 
     def _events_since(self, mark: int) -> list[RobotEvent]:
         return [ev for n, ev in self.events if n > mark]
@@ -200,17 +269,17 @@ class RobotClient:
         end = time.monotonic() + timeout_s
         while (left := end - time.monotonic()) > 0:
             for ev in self._events_since(mark):
-                if ev.seq == seq and ev.kind in ("ack", "rejected", "estop"):
+                if ev.seq == seq and ev.kind in ("ack", "rejected", "estop", "challenge"):
                     return ev
             self._event_arrived.clear()
             with contextlib.suppress(TimeoutError):  # wake on the next event, not on a timer
                 await asyncio.wait_for(self._event_arrived.wait(), left)
         return None
 
-    async def posture(self, posture: str) -> str:
+    async def posture(self, posture: str, human: bool = False) -> str:
         self.require_state()
         mark = self._last_event_no
-        seq = self._send(Posture(posture=posture))
+        seq = self._send(Posture(posture=posture), human=human)
         ev = await self._wait_ack(seq, mark)
         if ev is None:
             return "No answer from the robot (is it online?)."

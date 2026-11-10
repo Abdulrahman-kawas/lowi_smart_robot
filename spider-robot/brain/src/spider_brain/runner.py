@@ -13,6 +13,7 @@ from spider_common.link import Link, MqttLink, MqttSettings
 from .config import Settings
 from .planner import Planner
 from .robot_client import RobotClient
+from .workers import worker_subscriptions
 
 
 def build_link(settings: Settings, role: str = "run") -> MqttLink:
@@ -20,13 +21,17 @@ def build_link(settings: Settings, role: str = "run") -> MqttLink:
     # so `serve` and `teleop` would otherwise keep kicking each other off. The IoT policy and
     # the Mosquitto ACL allow the "spider-brain" prefix.
     client_id = f"{settings.mqtt_client_id}-{role}-{os.getpid()}"
+    robot = RobotClient.subscriptions(
+        settings.robot_id, settings.robot_source, settings.human_source
+    )
+    extra = worker_subscriptions(settings) if role == "serve" else []
     return MqttLink(
         MqttSettings(
             host=settings.mqtt_host, port=settings.mqtt_port, client_id=client_id,
             tls=settings.mqtt_tls, ca_path=settings.mqtt_ca_path,
             cert_path=settings.mqtt_cert_path, key_path=settings.mqtt_key_path,
         ),
-        subscriptions=RobotClient.subscriptions(settings.robot_id, settings.robot_source),
+        subscriptions=robot + extra,
     )
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import secrets
 import uuid
@@ -19,8 +20,11 @@ from pathlib import Path
 from spider_common.link import Link
 
 from .config import Settings
+from .confirm import ConfirmFlow
 from .graph import build_graph
+from .jobs import AwsWorker, JobManager
 from .memory import Memory
+from .observe import HealthMonitor, TraceStore
 from .planner import Planner, make_planner
 from .robot_client import RobotClient, RobotOffline
 from .skills import SkillLibrary
@@ -31,11 +35,12 @@ from .tools import ToolExecutor
 from .vision import make_vision
 from .voice import VoiceService
 from .whatsapp import WhatsAppNotifier
+from .workers import AskService, SttWorker, make_chat_chain
 
 log = logging.getLogger(__name__)
 
 BRAIN_ROOT = Path(__file__).resolve().parents[2]  # spider-robot/brain
-ALERT_EVENTS = {"obstacle_stop", "fallen", "tilt", "link_lost", "estop", "offline"}
+ALERT_EVENTS = {"obstacle_stop", "fallen", "tilt", "link_lost", "estop", "offline", "health"}
 
 
 class TaskSupervisor(Supervisor):
@@ -79,7 +84,14 @@ class BrainService:
         self.bus = EventBus()
         self.supervisor = TaskSupervisor(self.bus)
         self.link = link or build_link(settings, role)
-        self.robot = RobotClient(self.link, settings.robot_id, self.bus, settings.robot_source)
+        self.robot = RobotClient(self.link, settings.robot_id, self.bus, settings.robot_source,
+                                 settings.human_source)
+        self.confirm = ConfirmFlow(self.robot, self.bus)
+        traces_path = Path(settings.traces_path).expanduser()
+        self.traces = TraceStore(traces_path if traces_path.is_absolute()
+                                 else BRAIN_ROOT / traces_path)
+        self.health = HealthMonitor(self.bus)
+        self.jobs = JobManager(self.robot, settings, AwsWorker.from_settings(settings))
         self.vision = vision if vision is not None else make_vision(settings)
         self.skills = SkillLibrary(resolve_dirs(settings.skills_dirs), settings.always_on_skills)
         mem_path = Path(settings.memory_path).expanduser()
@@ -88,6 +100,12 @@ class BrainService:
                                      self.skills, self.memory)
         self.voice = voice if voice is not None else (
             VoiceService(settings) if settings.gemini_api_key else None)
+        self.ask = (
+            AskService(self.link, settings, self.robot, self.vision, make_chat_chain(settings))
+            if settings.ask_worker else None
+        )
+        self.stt = SttWorker(self.link, settings) if settings.stt_worker else None
+        self._attach_handlers()
         self._planner_factory = planner_factory or (
             lambda tier: make_planner(settings, tier, self.skills.system_text(), self.context))
         self._lock = asyncio.Lock()
@@ -106,6 +124,28 @@ class BrainService:
 
             self.telegram = TelegramBot(self, settings.telegram_token,
                                         set(settings.telegram_owner_ids), http=telegram_http)
+
+    def _attach_handlers(self) -> None:
+        t = self.robot.topics
+        self.robot.handlers += [
+            (t.voice_turn, self._on_trace),
+            (t.health_filter, self._on_health),
+            (t.gateway_status, self._on_gateway_status),
+            (t.record_event, self.jobs.on_status),
+        ]
+        if self.ask is not None:
+            self.robot.handlers.append((t.rpc_request("ask"), self.ask.on_request))
+        if self.stt is not None:
+            self.robot.handlers.append((t.rpc_request("stt"), self.stt.on_request))
+
+    def _on_trace(self, _topic: str, payload: bytes) -> None:
+        self.bus.publish("latency", summary=self.traces.add(payload))
+
+    def _on_health(self, _topic: str, payload: bytes) -> None:
+        self.health.on_report(payload)
+
+    def _on_gateway_status(self, _topic: str, payload: bytes) -> None:
+        self.bus.publish("gateway_status", status=json.loads(payload))
 
     # ------------------------------------------------------------------ lifecycle
     def context(self) -> str:
@@ -149,7 +189,7 @@ class BrainService:
 
         app = create_app(self.supervisor, self.robot, run_token=self.run_token,
                          port=self.settings.port, extra_origins=self.settings.dashboard_origins,
-                         token_timeout=self.settings.run_token_seconds)
+                         token_timeout=self.settings.run_token_seconds, confirm=self.confirm)
         return uvicorn.Server(uvicorn.Config(app, host=self.settings.host,
                                              port=self.settings.port, log_level="warning"))
 

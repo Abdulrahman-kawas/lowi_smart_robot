@@ -19,13 +19,14 @@ approval buttons and the robot's own reflexes.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from typing import TYPE_CHECKING
 
 import httpx
 
-from .robot_client import RobotOffline
+from .robot_client import ConfirmRefused, RobotOffline
 
 if TYPE_CHECKING:
     from .service import BrainService
@@ -40,9 +41,10 @@ HELP = (
     "/status /scan /photo [question]\n"
     "/stand /sit /relax\n"
     "/stop /estop /release /pause /resume /cancel\n"
+    "/record [seconds] /map <job id>\n"
     "/memory [query] /forget <id>"
 )
-ALERTS = {"obstacle_stop", "fallen", "tilt", "link_lost", "estop", "offline"}
+ALERTS = {"obstacle_stop", "fallen", "tilt", "link_lost", "estop", "offline", "health"}
 
 
 class TelegramBot:
@@ -74,11 +76,14 @@ class TelegramBot:
             return None
 
     async def _upload(self, method: str, chat: int, field: str, name: str, data: bytes,
-                      mime: str, caption: str = "") -> None:
+                      mime: str, caption: str = "", reply_markup: dict | None = None) -> None:
+        form = {"chat_id": str(chat), "caption": caption[:1000]}
+        if reply_markup is not None:
+            form["reply_markup"] = json.dumps(reply_markup)
         try:
             resp = await self.http.post(
                 f"/bot{self.token}/{method}",
-                data={"chat_id": str(chat), "caption": caption[:1000]},
+                data=form,
                 files={field: (name, data, mime)},
             )
             if not resp.json().get("ok"):
@@ -190,7 +195,11 @@ class TelegramBot:
                 await self._upload("sendPhoto", chat, "photo", "photo.jpg", jpeg, "image/jpeg",
                                    caption=answer)
             elif cmd in ("/stand", "/sit", "/relax"):
-                await self.send(chat, await robot.posture(cmd[1:]))
+                posture = cmd[1:]
+                if self.svc.confirm.needs_wake(posture):
+                    await self._confirm(chat, "wake_from_limp", posture)
+                else:
+                    await self.send(chat, await robot.posture(posture, human=True))
             elif cmd == "/stop":
                 robot.cancel_motion()
                 await self.send(chat, "Stop sent.")
@@ -200,8 +209,23 @@ class TelegramBot:
                 self.svc.supervisor.stop()
                 await self.send(chat, "E-STOP latched. /release to unlatch.")
             elif cmd == "/release":
-                robot.estop_release()
-                await self.send(chat, "E-stop released.")
+                if robot.via_gateway:
+                    await self._confirm(chat, "estop_release")
+                else:
+                    robot.estop_release()
+                    await self.send(chat, "E-stop released.")
+            elif cmd == "/record":
+                seconds = float(arg) if arg.strip().replace(".", "", 1).isdigit() else 60.0
+                seconds = max(1.0, min(3600.0, seconds))
+                job = self.svc.jobs.start_recording(seconds)
+                await self.send(chat, f"Recording {job}, {seconds:.0f} s. /map {job} afterwards.")
+            elif cmd == "/map":
+                job = arg.strip()
+                if not job:
+                    await self.send(chat, "Usage: /map <job id>")
+                else:
+                    await self.send(chat, f"Processing {job}. The worker stops itself when done.")
+                    await self.send(chat, await self.svc.jobs.process(job))
             elif cmd == "/pause":
                 robot.cancel_motion()
                 self.svc.supervisor.pause()
@@ -253,6 +277,22 @@ class TelegramBot:
                 else:
                     await self._upload("sendAudio", chat, "audio", "reply.mp3", data, "audio/mpeg")
 
+    # ------------------------------------------------------------------ confirmed actions
+    async def _confirm(self, chat: int, action: str, posture: str | None = None) -> None:
+        """The owner sees a frame taken just now and confirms that exact frame."""
+        try:
+            conf = await self.svc.confirm.begin(action, posture)
+        except ConfirmRefused as exc:
+            await self.send(chat, f"Refused: {exc}")
+            return
+        keyboard = {"inline_keyboard": [[
+            {"text": "✅ Clear, go ahead", "callback_data": f"cf:{conf.id}:1"},
+            {"text": "❌ Cancel", "callback_data": f"cf:{conf.id}:0"},
+        ]]}
+        await self._upload("sendPhoto", chat, "photo", "confirm.jpg", conf.jpeg, "image/jpeg",
+                           caption=f"{action}: is the robot clear? Expires in {conf.ttl_s:.0f} s.",
+                           reply_markup=keyboard)
+
     # ------------------------------------------------------------------ approvals and alerts
     async def _ask_approval(self, ev: dict) -> None:
         keyboard = {"inline_keyboard": [[
@@ -284,6 +324,12 @@ class TelegramBot:
         parts = str(cq.get("data", "")).split(":")
         if len(parts) == 3 and parts[0] == "ap":
             self.svc.supervisor.decide(parts[1], parts[2] == "1")
+        elif len(parts) == 3 and parts[0] == "cf":
+            done = self.svc.confirm.resolve(parts[1], parts[2] == "1")
+            chat = (cq.get("message") or {}).get("chat", {}).get("id")
+            if chat is not None:
+                text = "Sent." if done and parts[2] == "1" else "Cancelled or expired."
+                await self.send(chat, text)
         try:
             await self.call("answerCallbackQuery", callback_query_id=cq["id"])
         except (httpx.HTTPError, RuntimeError):

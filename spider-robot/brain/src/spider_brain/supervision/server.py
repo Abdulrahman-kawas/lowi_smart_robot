@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
+from ..confirm import ConfirmFlow
 from ..robot_client import RobotClient
 from .supervisor import Supervisor
 
@@ -37,6 +38,7 @@ def create_app(
     port: int,
     extra_origins: list[str] | None = None,
     token_timeout: float = 5.0,
+    confirm: ConfirmFlow | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Spider Brain")
     origins = allowed_origins(port, extra_origins or [])
@@ -67,7 +69,7 @@ def create_app(
 
         async def pump_commands() -> None:
             while True:
-                handle(supervisor, robot, await socket.receive_json())
+                handle(supervisor, robot, await socket.receive_json(), confirm)
 
         sender = asyncio.create_task(pump_events())
         receiver = asyncio.create_task(pump_commands())
@@ -82,7 +84,9 @@ def create_app(
     return app
 
 
-def handle(supervisor: Supervisor, robot: RobotClient, msg: dict) -> None:
+def handle(
+    supervisor: Supervisor, robot: RobotClient, msg: dict, confirm: ConfirmFlow | None = None
+) -> None:
     cmd = msg.get("cmd") if isinstance(msg, dict) else None
     # Every stopping button cancels the running walk/turn first; otherwise the tool would keep
     # renewing Move commands and the robot would keep walking (only E-STOP would work).
@@ -91,7 +95,12 @@ def handle(supervisor: Supervisor, robot: RobotClient, msg: dict) -> None:
         robot.cancel_motion()
         supervisor.stop()
     elif cmd == "estop_release":
-        robot.estop_release()
+        if confirm is not None and robot.via_gateway:  # fresh frame, then an explicit confirm
+            confirm.start("estop_release")
+        else:
+            robot.estop_release()
+    elif cmd == "confirm" and confirm is not None and isinstance(msg.get("id"), str):
+        confirm.resolve(msg["id"], bool(msg.get("approved")))
     elif cmd == "robot_stop":
         robot.cancel_motion()
     elif cmd == "pause":
