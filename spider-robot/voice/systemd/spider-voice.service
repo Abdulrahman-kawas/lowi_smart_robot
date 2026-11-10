@@ -1,0 +1,27 @@
+[Unit]
+Description=Spider robot - voice loop (VAD, Whisper, router, Piper)
+After=sound.target mosquitto.service spider-gateway.service ollama.service
+Wants=mosquitto.service spider-gateway.service ollama.service
+
+[Service]
+User=spider
+SupplementaryGroups=audio
+WorkingDirectory=/opt/spider/spider-robot/voice
+ExecStart=/opt/spider/spider-robot/voice/.venv/bin/spider-voice --config /etc/spider/voice.yaml
+Restart=always
+RestartSec=2
+CPUAffinity=1 2 3
+Nice=0
+MemoryMax=900M
+OOMScoreAdjust=300
+# Models are installed ahead of time, so this service never needs the network.
+Environment=HF_HOME=/opt/spider/models/hf
+Environment=HF_HUB_OFFLINE=1
+Environment=OMP_NUM_THREADS=3
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/spider/models/hf
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
