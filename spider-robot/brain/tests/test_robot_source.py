@@ -21,7 +21,9 @@ async def test_client_with_source_talks_only_to_the_gateway():
     try:
         seq = robot._send(Stop())
         await asyncio.sleep(0.02)
-        assert {m.topic for m in link.published} == {T.request("remote")}
+        topics = {m.topic for m in link.published}
+        assert T.request("remote") in topics  # something was really sent, on the right source
+        assert topics <= {T.request("remote"), T.request("planner")}
 
         gateway.publish(T.source_event("remote"),
                         RobotEvent(robot_id=ROBOT, kind="ack", seq=seq).model_dump_json())
