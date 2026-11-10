@@ -1,0 +1,23 @@
+[Unit]
+Description=Spider robot - camera capture (separate from the control process)
+After=mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+User=spider
+SupplementaryGroups=video
+WorkingDirectory=/opt/spider/spider-robot/body
+ExecStart=/opt/spider/spider-robot/body/.venv/bin/spider-camera --config /etc/spider/robot.yaml
+Restart=always
+RestartSec=2
+CPUAffinity=1 2 3
+Nice=5
+MemoryMax=256M
+OOMScoreAdjust=200
+Environment=OPENBLAS_NUM_THREADS=1
+ProtectHome=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

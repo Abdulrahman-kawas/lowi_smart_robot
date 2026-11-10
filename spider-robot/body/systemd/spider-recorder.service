@@ -1,0 +1,24 @@
+[Unit]
+Description=Spider robot - LiDAR recorder (idle until the brain requests a job)
+After=mosquitto.service spider-lidar.service
+Wants=mosquitto.service
+
+[Service]
+User=spider
+WorkingDirectory=/opt/spider/spider-robot/body
+ExecStart=/opt/spider/spider-robot/body/.venv/bin/spider-recorder --config /etc/spider/robot.yaml
+Restart=always
+RestartSec=5
+CPUAffinity=1 2 3
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=200M
+StateDirectory=spider
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/tmp
+NoNewPrivileges=yes
+OOMScoreAdjust=200
+
+[Install]
+WantedBy=multi-user.target
