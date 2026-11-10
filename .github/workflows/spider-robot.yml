@@ -1,0 +1,54 @@
+name: spider-robot
+on:
+  push:
+    paths: ["spider-robot/**", ".github/workflows/spider-robot.yml"]
+  pull_request:
+    paths: ["spider-robot/**", ".github/workflows/spider-robot.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [common, body, gateway, voice, brain]
+    defaults:
+      run:
+        working-directory: spider-robot/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.17"
+          python-version: "3.12"
+      - run: uv sync --all-extras --frozen
+      - run: uv run --all-extras --frozen ruff check .
+      - run: uv run --all-extras --frozen pytest -q
+
+  shell:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          find spider-robot/infra -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          for f in spider-robot/infra/aws/*.json spider-robot/infra/aws/worker/*.json; do
+            python3 -m json.tool "$f" > /dev/null
+          done
+      - name: No secrets in the repository
+        run: |
+          if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|[0-9]{8,10}:AA[0-9A-Za-z_-]{30,}|BEGIN (RSA |EC )?PRIVATE KEY' -- spider-robot ':!*.lock'; then
+            echo "Possible secret committed"; exit 1
+          fi
+
+  bridge:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake libzmq3-dev
+      - run: |
+          git clone https://github.com/unitreerobotics/unilidar_sdk2 /tmp/sdk
+          git -C /tmp/sdk checkout -q 0e3c51f512e6b8ff60b8c32f160b412cb48445c2
+      - run: >
+          cmake -S spider-robot/body/lidar_bridge -B /tmp/build
+          -DUNILIDAR_SDK_DIR=/tmp/sdk/unitree_lidar_sdk
+      - run: cmake --build /tmp/build -j4

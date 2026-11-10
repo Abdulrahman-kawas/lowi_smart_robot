@@ -8,6 +8,7 @@ AWS) or Liquid AI LFM2.5 (phase 2, local) and sees with Liquid AI LFM2.5-VL.
 common/   wire protocol + MQTT link (shared)
 body/     runs on the Pi: servos, IK, gait, LiDAR safety reflexes, camera, cloud link
 gateway/  runs on the Pi: the only sender of commands to the body
+voice/    runs on the Pi: VAD, speech recognition, stop words, grammar, router, speech
 brain/    runs on EC2 or a local PC: LangGraph planner, tools, vision, supervision dashboard
 infra/    AWS IoT, EC2, Raspberry Pi and local-broker setup scripts
 ```
@@ -27,5 +28,5 @@ cd brain && uv sync && uv run spider-brain teleop
 ## Tests
 
 ```bash
-for p in common body gateway brain; do (cd $p && uv sync && uv run pytest -q); done
+for p in common body gateway voice brain; do (cd $p && uv sync && uv run pytest -q); done
 ```
