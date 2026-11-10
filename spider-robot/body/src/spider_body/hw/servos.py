@@ -134,6 +134,10 @@ class PcaServoBank:
             board.all_off()
 
 
+# 18 channels x len("#31P2500") + len("T40\r"): the longest group move this code sends.
+MAX_GROUP_BYTES = 18 * 8 + 4
+
+
 class FakeServoBank:
     """Records commands; used by tests and the simulator."""
 
@@ -166,11 +170,15 @@ class SscServoBank:
         if port is None:
             import serial  # pyserial
 
-            port = serial.Serial(cfg.ssc.port, cfg.ssc.baud, timeout=0.3, write_timeout=0.1)
+            # A short write timeout: a stalled USB link must not hold up the 20 ms control tick.
+            port = serial.Serial(cfg.ssc.port, cfg.ssc.baud, timeout=0.3, write_timeout=0.01)
         self.cfg = cfg
         self.ser = port
         self.clock = clock
         self.interval = 1.0 / cfg.ssc.update_hz
+        # A tick that wakes 0.1 ms early against the last one must still send, or the group move
+        # slips a whole tick and servos rest between glides. Tolerate up to about a quarter.
+        self.min_gap = self.interval * 0.76
         self.servos: dict[str, ServoCfg] = {
             f"{leg.name}.{j}": getattr(leg, j) for leg in cfg.legs for j in JOINTS
         }
@@ -191,7 +199,9 @@ class SscServoBank:
             else:
                 self._pending.pop(s.channel, None)
         now = self.clock()
-        if self._pending and now - self._last_send >= self.interval * 0.999:
+        if self._pending and now - self._last_send >= self.min_gap:
+            if getattr(self.ser, "out_waiting", 0) > 2 * MAX_GROUP_BYTES:
+                return  # the USB link is behind: skip this frame instead of queueing stale poses
             self._send(self._pending, int(round(self.interval * 1000)))
             self._last_send = now
 

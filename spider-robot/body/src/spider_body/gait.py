@@ -97,6 +97,11 @@ class GaitEngine:
         """Continue from the frozen pose; the velocity then ramps down smoothly."""
         self.frozen = False
 
+    @property
+    def has_pose(self) -> bool:
+        """False after a restart: where the feet really are is not known until the first step."""
+        return self._last_feet is not None
+
     def is_idle(self) -> bool:
         return self.current.is_zero() and self.target.is_zero() and self.lift_gain <= 0.0
 
