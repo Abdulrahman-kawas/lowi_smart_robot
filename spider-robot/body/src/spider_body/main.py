@@ -2,6 +2,7 @@
 
   spider-body --config config/robot.yaml            # real robot (Pi, servos, LiDAR, camera)
   spider-body --config config/robot.sim.yaml --sim  # simulator: fake servos/LiDAR/camera
+  spider-body --config ... --jitter-seconds 3600    # run, then print the timing histograms
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import argparse
 import asyncio
 import contextlib
 import gc
+import json
 import logging
 import os
 import signal
@@ -17,14 +19,18 @@ import socket
 import time
 
 from pydantic import ValidationError
-from spider_common.link import Link, MqttLink, MqttSettings
+from spider_common.link import Link, MqttLink
+from spider_common.obs import setup_logging
 from spider_common.protocol import RobotEvent, parse_command
 
-from .config import BodyConfig, load_config
+from .config import BodyConfig, broker_settings, load_config
 from .hw.camera import FakeCamera, make_camera
+from .hw.kick import make_kick
 from .hw.lidar import LidarFeed, NoLidar, SimLidar, SimWorld
 from .hw.servos import FakeServoBank, make_servo_bank
 from .robot import Robot
+from .rt import enable_fifo, pin_cpu, set_gil_interval
+from .safety import EStopLatch
 
 log = logging.getLogger("spider_body")
 
@@ -34,10 +40,8 @@ def build_link(cfg: BodyConfig) -> Link:
 
     t = Topics(cfg.robot_id)
     will = RobotEvent(robot_id=cfg.robot_id, kind="offline", detail="connection lost")
-    m = cfg.mqtt
     return MqttLink(
-        MqttSettings(host=m.host, port=m.port, client_id=cfg.robot_id, tls=m.tls,
-                     ca_path=m.ca_path, cert_path=m.cert_path, key_path=m.key_path),
+        broker_settings(cfg.mqtt, cfg.robot_id),
         subscriptions=[t.cmd],
         will=(t.event, will.model_dump_json().encode()),
     )
@@ -65,8 +69,11 @@ async def control_loop(robot: Robot, world: SimWorld | None = None) -> None:
     sd_notify("READY=1")
     while True:
         started = time.perf_counter()
+        late_ms = max(0.0, (loop.time() - next_t) * 1000.0)  # how late this tick started
+        robot.note_wakeup(late_ms)
         try:
             robot.tick(dt)
+            robot.kick.toggle()  # only after a good tick: no kick, and the relay drops
             errors = 0
         except Exception as exc:  # one bad I2C write must not make the robot collapse
             errors += 1
@@ -78,7 +85,9 @@ async def control_loop(robot: Robot, world: SimWorld | None = None) -> None:
                 with contextlib.suppress(Exception):
                     robot.servos.relax()
                 raise
-        robot.loop_max_ms = max(robot.loop_max_ms, (time.perf_counter() - started) * 1000)
+        tick_ms = (time.perf_counter() - started) * 1000
+        robot.tick_hist.record(tick_ms)
+        robot.loop_max_ms = max(robot.loop_max_ms, tick_ms)
         if world is not None:
             e = robot.gait.effective
             world.integrate(e.vx, e.vy, e.wz, dt)
@@ -121,16 +130,22 @@ async def state_loop(robot: Robot, link: Link) -> None:
             if not idle or now - last_sent >= IDLE_PERIOD_S:
                 link.publish(robot.topics.state, robot.state().model_dump_json())
                 robot.loop_max_ms = 0.0
+                robot.loop_late_max_ms = 0.0
                 last_sent = now
         was_connected = link.connected.is_set()
         await asyncio.sleep(period)
 
 
 async def sit_and_relax(robot: Robot, timeout_s: float = 4.0) -> None:
-    """Graceful shutdown: stop, sit down slowly, then cut the servo pulses."""
+    """Graceful shutdown: stop, sit down slowly, then cut the servo pulses.
+
+    Never under a latched E-stop: the robot must not move, and the latch must stay set for the
+    next process. In that case the servos keep their last position until power is cut.
+    """
     robot._cancel_move()
-    if robot.mode in ("standing", "walking", "estop"):
-        robot.estop = False
+    if robot.estop:
+        return
+    if robot.mode in ("standing", "walking"):
         robot.mode = "sitting"
         robot.target_height = robot.cfg.geometry.sit_height_m
         robot.pose_target = [0.0, 0.0, 0.0]
@@ -141,7 +156,22 @@ async def sit_and_relax(robot: Robot, timeout_s: float = 4.0) -> None:
     robot.servos.relax()
 
 
-async def run(cfg: BodyConfig, sim: bool) -> None:
+async def jitter_report(robot: Robot, seconds: float, stop: asyncio.Event) -> None:
+    """Bench measurement: run for a fixed time, print the histograms as one JSON line, exit."""
+    await asyncio.sleep(seconds)
+    print(json.dumps({
+        "late_ms": robot.late_hist.snapshot(),
+        "tick_ms": robot.tick_hist.snapshot(),
+        "overruns": robot.loop_overruns,
+        "rt_ok": robot.rt_ok,
+    }), flush=True)
+    stop.set()
+
+
+async def run(cfg: BodyConfig, sim: bool, jitter_seconds: float | None = None) -> None:
+    pinned = (not sim) and pin_cpu(cfg.rt)  # before any thread starts, so all of them inherit it
+    if not sim:
+        set_gil_interval(cfg.rt)
     world: SimWorld | None = None
     if sim:
         world = SimWorld()
@@ -158,8 +188,16 @@ async def run(cfg: BodyConfig, sim: bool) -> None:
         camera = make_camera(cfg.camera)
 
     link = build_link(cfg)
-    robot = Robot(cfg, servos, lidar, camera, link)
+    latch = EStopLatch(cfg.estop_latch_path) if cfg.estop_latch_path else None
+    robot = Robot(cfg, servos, lidar, camera, link, latch=latch)
+    robot.kick = make_kick(None if sim else cfg.watchdog_gpio)
+    if not robot.estop:
+        # The SSC-32U keeps its last pulses when the previous process dies. Start from "no torque"
+        # so the mode matches reality and a later stand cannot jump from an unknown pose.
+        servos.relax()
     await link.start()
+    # After link.start(): the MQTT thread already exists, so it stays out of the FIFO class.
+    robot.rt_ok = bool(pinned) and (not sim) and enable_fifo(cfg.rt)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -172,10 +210,13 @@ async def run(cfg: BodyConfig, sim: bool) -> None:
         asyncio.create_task(state_loop(robot, link), name="state"),
         asyncio.create_task(lidar.run(), name="lidar"),
     ]
+    if jitter_seconds is not None:
+        tasks.append(asyncio.create_task(jitter_report(robot, jitter_seconds, stop), name="jitter"))
     # Freeze everything allocated at startup out of the garbage collector: a full collection
     # of numpy/cv2/paho objects takes ~40 ms on a Pi 4 (two missed control ticks).
     gc.collect()
     gc.freeze()
+    gc.set_threshold(20000, 50, 100)  # rarer collections; everything long-lived is frozen above
     log.info("spider-body running (robot_id=%s, sim=%s)", cfg.robot_id, sim)
     waiter = asyncio.create_task(stop.wait())
     done, _ = await asyncio.wait([waiter, *tasks], return_when=asyncio.FIRST_COMPLETED)
@@ -202,12 +243,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--calibration", default=None)
     parser.add_argument("--sim", action="store_true", help="fake hardware (no Pi needed)")
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument("--jitter-seconds", type=float, default=None)
+    parser.add_argument("--text-logs", action="store_true", help="human logs instead of JSON")
     args = parser.parse_args(argv)
-    logging.basicConfig(
-        level=args.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    setup_logging(args.log_level, json_logs=not args.text_logs)
     cfg = load_config(args.config, args.calibration)
-    asyncio.run(run(cfg, args.sim))
+    asyncio.run(run(cfg, args.sim, args.jitter_seconds))
     return 0
 
 
