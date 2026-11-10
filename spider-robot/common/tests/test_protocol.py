@@ -1,10 +1,23 @@
 import asyncio
+import json
+import logging
 
 import pytest
 from pydantic import ValidationError
 
 from spider_common.link import InMemoryHub, topic_matches
-from spider_common.protocol import Move, Snapshot, Topics, parse_command
+from spider_common.obs import Histogram, JsonFormatter
+from spider_common.protocol import (
+    EStopRelease,
+    GatewayStatus,
+    HealthReport,
+    Move,
+    Snapshot,
+    SourceStatus,
+    Topics,
+    VoiceTurn,
+    parse_command,
+)
 
 
 def test_parse_move_roundtrip():
@@ -47,3 +60,48 @@ async def test_in_memory_hub_routes_by_subscription():
     msg = await asyncio.wait_for(anext(body.messages()), 1)
     assert msg.topic == t.cmd
     assert brain.inbox.queue.empty()
+
+
+def test_v2_source_command_still_parses():
+    # A not-yet-upgraded brain sends v2 with no trace field; the gateway must still understand it.
+    cmd = parse_command('{"v":2,"type":"move","vx":0.05,"duration_s":1,"session":"a","seq":1}')
+    assert cmd.v == 2 and cmd.trace == ""
+
+
+def test_v3_fields_roundtrip():
+    release = parse_command(
+        EStopRelease(challenge="c1", frame_sha256="ab", trace="t1").model_dump_json()
+    )
+    assert isinstance(release, EStopRelease)
+    assert (release.challenge, release.frame_sha256, release.trace) == ("c1", "ab", "t1")
+
+
+def test_status_models_serialise():
+    s = GatewayStatus(robot_id="r", sources={"voice": SourceStatus(alive=True)})
+    assert GatewayStatus.model_validate_json(s.model_dump_json()).sources["voice"].alive
+    assert VoiceTurn(trace="t", route="stop").route == "stop"
+    assert HealthReport(robot_id="r", service="voice").level == "ok"
+
+
+def test_health_topics():
+    t = Topics("spider-01")
+    assert t.health("voice") == "spider/spider-01/health/voice"
+    assert topic_matches(t.health_filter, t.health("camera"))
+    assert t.gateway_status == "spider/spider-01/gw/status"
+
+
+def test_histogram_percentiles_are_conservative():
+    h = Histogram()
+    for v in [0.05] * 99 + [50.0]:
+        h.record(v)
+    assert h.percentile(0.50) == 0.1
+    assert h.percentile(0.999) == 60.0
+    assert h.snapshot()["max_ms"] == 50.0
+    assert Histogram().percentile(0.5) == 0.0
+
+
+def test_json_formatter_merges_fields():
+    record = logging.LogRecord("x", logging.INFO, "f", 1, "hello", None, None)
+    record.fields = {"trace": "abc", "stage": "stt"}
+    out = json.loads(JsonFormatter().format(record))
+    assert out["msg"] == "hello" and out["trace"] == "abc" and out["stage"] == "stt"
