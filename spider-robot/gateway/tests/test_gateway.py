@@ -61,8 +61,8 @@ def stop(seq=2, session="s", ts=1100.0):
     return Stop(seq=seq, session=session, ts=ts).model_dump_json()
 
 
-def beat():
-    return Heartbeat(ts=1100.0).model_dump_json()
+def beat(ts=1100.0):
+    return Heartbeat(ts=ts).model_dump_json()
 
 
 async def test_all_sources_become_one_session_with_rising_seq(rig):
@@ -76,13 +76,13 @@ async def test_all_sources_become_one_session_with_rising_seq(rig):
 
 async def test_voice_takes_over_and_planner_waits_until_it_ends(rig):
     gw, link, clock = rig
-    gw.on_request("voice", move(duration=2.0))
-    gw.on_request("planner", move(seq=9, session="p"))
+    gw.on_request("voice", move(duration=2.0, ts=1000.0 + clock.now))
+    gw.on_request("planner", move(seq=9, session="p", ts=1000.0 + clock.now))
     assert len(sent(link)) == 1
     refused = replies(link, "planner")[-1]
     assert (refused["kind"], refused["seq"]) == ("rejected", 9)
     clock.now += 2.1
-    gw.on_request("planner", move(seq=10, session="p"))
+    gw.on_request("planner", move(seq=10, session="p", ts=1000.0 + clock.now))
     assert len(sent(link)) == 2
 
 
@@ -121,16 +121,17 @@ async def test_move_sent_before_another_sources_stop_is_refused(rig):
 async def test_stop_with_future_clock_does_not_block_other_sources(rig):
     gw, link, clock = rig
     gw.on_request("voice", stop(ts=99999.0, session="v"))
+    clock.now += gw.config.stop_holdoff_s + 0.1  # only the hold-off applies, whatever the clock
     gw.on_request("remote", move(ts=1000.0 + clock.now, session="r"))
     assert sent(link)[-1]["type"] == "move"
 
 
 async def test_lost_owner_stops_robot_and_voice_keeps_the_link(rig):
     gw, link, clock = rig
-    gw.on_request("voice", beat())
-    gw.on_request("remote", move(duration=9.0))
+    gw.on_request("voice", beat(ts=1000.0 + clock.now))
+    gw.on_request("remote", move(duration=9.0, ts=1000.0 + clock.now))
     clock.now += 1.0
-    gw.on_request("voice", beat())
+    gw.on_request("voice", beat(ts=1000.0 + clock.now))
     clock.now += 1.0  # remote silent for 2 s, voice for 1 s
     gw.tick()
     types = [c["type"] for c in sent(link)]
@@ -142,9 +143,9 @@ async def test_lost_owner_stops_robot_and_voice_keeps_the_link(rig):
 
 async def test_live_owner_keeps_moving_and_gets_heartbeats(rig):
     gw, link, clock = rig
-    gw.on_request("remote", move(duration=9.0))
-    clock.now += 1.0
-    gw.on_request("remote", beat())
+    gw.on_request("remote", move(duration=9.0, ts=1000.0 + clock.now))
+    clock.now += 0.5
+    gw.on_request("remote", beat(ts=1000.0 + clock.now))
     gw.tick()
     assert [c["type"] for c in sent(link)] == ["move", "heartbeat"]
 
@@ -157,14 +158,14 @@ async def test_no_heartbeat_when_every_source_is_gone(rig):
     assert sent(link) == []
 
 
-async def test_only_owner_side_sources_can_release_estop(rig):
+async def test_release_without_a_confirmed_frame_is_refused_for_every_source(rig):
     gw, link, _ = rig
     gw.on_request("voice", EStop(seq=1, session="v", ts=1100.0).model_dump_json())
     release = EStopRelease(seq=2, session="p", ts=1200.0).model_dump_json()
-    gw.on_request("planner", release)
+    for source in ("planner", "remote", "voice"):
+        gw.on_request(source, release)
+        assert replies(link, source)[-1]["kind"] == "rejected"
     assert [c["type"] for c in sent(link)] == ["estop"]
-    gw.on_request("remote", release)
-    assert [c["type"] for c in sent(link)] == ["estop", "estop_release"]
 
 
 async def test_invalid_command_is_rejected_to_its_source(rig):
@@ -225,22 +226,25 @@ async def test_simulated_body_stops_when_remote_source_disappears():
                   body_link)
     gw_link = hub.endpoint(Gateway.subscriptions(ROBOT))
     remote = hub.endpoint([T.source_event("remote")])
-    for link in (body_link, gw_link, remote):
+    voice = hub.endpoint([T.source_event("voice")])
+    for link in (body_link, gw_link, remote, voice):
         await link.start()
     gateway = Gateway(gw_link, ROBOT, source_timeout_s=0.4)
     tasks = [asyncio.create_task(c) for c in (
         control_loop(robot, world), command_loop(robot, body_link), state_loop(robot, body_link),
         robot.lidar.run(), gateway.run(tick_hz=20.0))]
     heart = asyncio.create_task(_beats(remote, "remote"))
+    voice_heart = asyncio.create_task(_beats(voice, "voice"))  # as the real voice client does
     try:
-        remote.publish(T.request("remote"), Posture(
-            seq=7, session="r", ts=time.time(), posture="stand").model_dump_json())
+        voice.publish(T.request("voice"), Posture(  # someone local wakes it: remote may not
+            seq=7, session="v", ts=time.time(), posture="stand").model_dump_json())
         assert await _until(lambda: robot.mode == "standing" and robot._height_reached(), 15.0)
         events = []
-        while not remote.inbox.queue.empty():  # "online" is broadcast too, so look for the ack
-            events.append(RobotEvent.model_validate_json(remote.inbox.queue.get_nowait().payload))
+        while not voice.inbox.queue.empty():  # "online" is broadcast too, so look for the ack
+            events.append(RobotEvent.model_validate_json(voice.inbox.queue.get_nowait().payload))
         assert ("ack", 7) in [(ev.kind, ev.seq) for ev in events]
 
+        assert await _until(lambda: gateway._owner is None, 3.0)  # voice's pose hold has ended
         remote.publish(T.request("remote"), Move(
             seq=8, session="r", ts=time.time(), vx=0.05, duration_s=9.0).model_dump_json())
         assert await _until(lambda: robot.move is not None, 3.0)
@@ -249,6 +253,7 @@ async def test_simulated_body_stops_when_remote_source_disappears():
         assert await _until(lambda: robot.move is None, 2.0)
     finally:
         heart.cancel()
+        voice_heart.cancel()
         for task in tasks:
             task.cancel()
-        await asyncio.gather(heart, *tasks, return_exceptions=True)
+        await asyncio.gather(heart, voice_heart, *tasks, return_exceptions=True)
