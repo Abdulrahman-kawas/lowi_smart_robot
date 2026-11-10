@@ -1,0 +1,19 @@
+[Unit]
+Description=Spider robot brain (dashboard, Telegram, alerts, memory, voice workers)
+After=network-online.target llama-vision.service llama-planner.service tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__SR__/brain
+Environment=SB_ENV_FILE=/etc/spider-brain/brain.env
+EnvironmentFile=/etc/spider-brain/secrets.env
+ExecStart=__SR__/brain/.venv/bin/spider-brain serve
+Restart=always
+RestartSec=5
+MemoryHigh=1800M
+MemoryMax=2G
+OOMScoreAdjust=-200
+
+[Install]
+WantedBy=multi-user.target

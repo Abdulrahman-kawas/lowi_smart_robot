@@ -1,0 +1,10 @@
+# Point-LIO for the Unitree L2. Pin the source to a commit before first use: this file is
+# NOT VERIFIED until the M7 gate has been run on real recordings.
+FROM ros:noetic-ros-base-focal
+RUN apt-get update && apt-get install -y build-essential git libeigen3-dev libpcl-dev \
+    ros-noetic-pcl-ros ros-noetic-tf ros-noetic-eigen-conversions
+RUN mkdir -p /catkin_ws/src && cd /catkin_ws/src && \
+    git clone https://github.com/unitreerobotics/point_lio_unilidar.git
+RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && cd /catkin_ws && catkin_make -DCMAKE_BUILD_TYPE=Release"
+COPY run_slam.sh /run_slam.sh
+RUN chmod +x /run_slam.sh
