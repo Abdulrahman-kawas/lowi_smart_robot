@@ -13,9 +13,16 @@ dependencies = [
     "smbus2>=0.5",  # pure Python I2C for the PCA9685 alternative
 ]
 
+[project.optional-dependencies]
+# Hardware watchdog pin. Linux only, so development machines skip it.
+gpio = ["gpiod>=2.2; sys_platform == 'linux'"]
+
 [project.scripts]
 spider-body = "spider_body.main:main"
 spider-calibrate = "spider_body.calibrate:main"
+spider-camera = "spider_body.camera_service:main"
+spider-recorder = "spider_body.recorder:main"
+spider-sysmon = "spider_body.sysmon:main"
 
 [dependency-groups]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.7"]
