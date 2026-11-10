@@ -147,7 +147,8 @@ def test_relax_only_from_sitting(cfg):
 async def test_snapshot_publishes_jpeg(cfg):
     robot, servos, lidar, world, brain, clock = make(cfg)
     robot.handle(Snapshot(request_id="abc", ts=5000.0))
-    msg = await asyncio.wait_for(anext(brain.messages()), 5)
+    # The first use imports OpenCV, which takes seconds on a cold, busy machine.
+    msg = await asyncio.wait_for(anext(brain.messages()), 60)
     assert msg.topic.endswith("/camera/abc")
     assert msg.payload[:2] == b"\xff\xd8"  # JPEG magic
 
