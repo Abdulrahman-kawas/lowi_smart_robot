@@ -30,6 +30,19 @@ class Topics:
         self.state = f"{base}/state"  # body -> brain (periodic)
         self.event = f"{base}/event"  # body -> brain (acks, safety trips)
         self.camera_prefix = f"{base}/camera"  # body -> brain (JPEG bytes)
+        self._gateway = f"{base}/gw"  # command sources <-> the gateway on the Pi
+
+    def request(self, source: str) -> str:
+        """Where a command source (voice, remote, planner) sends commands for the gateway."""
+        return f"{self._gateway}/{source}/cmd"
+
+    @property
+    def request_filter(self) -> str:
+        return f"{self._gateway}/+/cmd"
+
+    def source_event(self, source: str) -> str:
+        """Events the gateway returns to one source, with that source's own seq numbers."""
+        return f"{self._gateway}/{source}/event"
 
     def camera(self, request_id: str) -> str:
         return f"{self.camera_prefix}/{request_id}"

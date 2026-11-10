@@ -36,7 +36,7 @@ TELEOP_HELP = """commands (then Enter):
 
 async def _connect(settings: Settings, role: str) -> tuple[RobotClient, list[asyncio.Task]]:
     link = build_link(settings, role)
-    robot = RobotClient(link, settings.robot_id)
+    robot = RobotClient(link, settings.robot_id, source=settings.robot_source)
     await link.start()
     tasks = [asyncio.create_task(robot.run()),
              asyncio.create_task(robot.heartbeat_loop(settings.heartbeat_hz))]

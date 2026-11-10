@@ -30,4 +30,6 @@ issue() {  # <name> <CN> [subjectAltName]
 issue server "$HOST" "DNS:$HOST,IP:$IP"
 issue spider-01 spider-01
 issue spider-brain spider-brain
+issue spider-gateway spider-gateway
+issue spider-voice spider-voice
 echo "Certificates in $OUT. Keep ca.key offline."

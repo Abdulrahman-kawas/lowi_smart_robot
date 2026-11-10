@@ -1,13 +1,29 @@
-# Mosquitto ACL (identity = client certificate CN). Mirrors infra/aws/*-policy.json.
+# Mosquitto ACL (identity = client certificate CN).
 # Every robot (CN = robot id, e.g. spider-01) may use only its own topics:
 pattern write spider/%u/state
 pattern write spider/%u/event
 pattern write spider/%u/camera/#
 pattern read spider/%u/cmd
 
-# The brain (CN = spider-brain) commands robots and reads their telemetry.
-user spider-brain
+# The gateway on the Pi is the only client that commands the body.
+user spider-gateway
 topic write spider/+/cmd
-topic read spider/+/state
+topic read spider/+/gw/+/cmd
 topic read spider/+/event
+topic write spider/+/gw/+/event
+
+# The brain sends through the gateway (set SB_ROBOT_SOURCE) and reads telemetry.
+user spider-brain
+topic write spider/+/gw/remote/cmd
+topic write spider/+/gw/planner/cmd
+topic read spider/+/gw/remote/event
+topic read spider/+/gw/planner/event
+topic read spider/+/state
+topic read spider/+/camera/#
+
+# The voice loop on the Pi.
+user spider-voice
+topic write spider/+/gw/voice/cmd
+topic read spider/+/gw/voice/event
+topic read spider/+/state
 topic read spider/+/camera/#

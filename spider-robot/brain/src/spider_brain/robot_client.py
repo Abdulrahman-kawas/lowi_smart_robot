@@ -77,9 +77,13 @@ def cone_min(lidar: LidarSummary, bearing: float, half: float = 22.5) -> float:
 
 
 class RobotClient:
-    def __init__(self, link: Link, robot_id: str, bus: EventBus | None = None) -> None:
+    def __init__(
+        self, link: Link, robot_id: str, bus: EventBus | None = None, source: str | None = None
+    ) -> None:
         self.link = link
         self.topics = Topics(robot_id)
+        self._cmd_topic = self.topics.request(source) if source else self.topics.cmd
+        self._event_topic = self.topics.source_event(source) if source else self.topics.event
         self.bus = bus
         self.state: RobotState | None = None
         self.state_rx: float | None = None
@@ -96,9 +100,9 @@ class RobotClient:
         self._event_arrived = asyncio.Event()
 
     @staticmethod
-    def subscriptions(robot_id: str) -> list[str]:
+    def subscriptions(robot_id: str, source: str | None = None) -> list[str]:
         t = Topics(robot_id)
-        return [t.state, t.event, t.camera_filter]
+        return [t.state, t.source_event(source) if source else t.event, t.camera_filter]
 
     # ------------------------------------------------------------------ inbound
     async def run(self) -> None:
@@ -106,7 +110,7 @@ class RobotClient:
             try:
                 if msg.topic == self.topics.state:
                     self._on_state(RobotState.model_validate_json(msg.payload))
-                elif msg.topic == self.topics.event:
+                elif msg.topic == self._event_topic:
                     self._on_event(RobotEvent.model_validate_json(msg.payload))
                 elif topic_matches(self.topics.camera_filter, msg.topic):
                     rid = msg.topic.rsplit("/", 1)[-1]
@@ -144,7 +148,7 @@ class RobotClient:
     async def heartbeat_loop(self, hz: float) -> None:
         while True:
             if self.link.connected.is_set():
-                self.link.publish(self.topics.cmd, Heartbeat(ts=time.time()).model_dump_json())
+                self.link.publish(self._cmd_topic, Heartbeat(ts=time.time()).model_dump_json())
             await asyncio.sleep(1.0 / hz)
 
     async def wait_online(self, timeout_s: float) -> bool:
@@ -168,7 +172,7 @@ class RobotClient:
         """Send one command. Returns its seq, or -1 if it could not be sent (link down)."""
         seq = next(self._seq)
         cmd = cmd.model_copy(update={"seq": seq, "ts": time.time(), "session": self.session})
-        ok = self.link.publish(self.topics.cmd, cmd.model_dump_json(), qos=qos)
+        ok = self.link.publish(self._cmd_topic, cmd.model_dump_json(), qos=qos)
         return seq if ok else -1
 
     def stop(self) -> None:

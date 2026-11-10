@@ -23,6 +23,9 @@ class Settings(BaseSettings):
 
     # Robot link ---------------------------------------------------------------
     robot_id: str = "spider-01"
+    # "remote" or "planner" = send through the command gateway on the Pi; None = straight to the
+    # body. The local broker's ACL requires the gateway.
+    robot_source: Literal["remote", "planner"] | None = None
     mqtt_host: str = "127.0.0.1"
     mqtt_port: int = 1884  # the simulator broker (infra/local/mosquitto-sim.conf)
     mqtt_tls: bool = False

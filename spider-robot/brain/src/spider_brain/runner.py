@@ -26,7 +26,7 @@ def build_link(settings: Settings, role: str = "run") -> MqttLink:
             tls=settings.mqtt_tls, ca_path=settings.mqtt_ca_path,
             cert_path=settings.mqtt_cert_path, key_path=settings.mqtt_key_path,
         ),
-        subscriptions=RobotClient.subscriptions(settings.robot_id),
+        subscriptions=RobotClient.subscriptions(settings.robot_id, settings.robot_source),
     )
 
 

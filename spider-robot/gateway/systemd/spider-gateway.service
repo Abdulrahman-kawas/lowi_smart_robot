@@ -1,0 +1,19 @@
+[Unit]
+Description=Spider robot - command gateway (the only sender of commands to the body)
+After=network-online.target mosquitto.service
+Wants=network-online.target mosquitto.service
+
+[Service]
+User=spider
+WorkingDirectory=/opt/spider/spider-robot/gateway
+# SG_MQTT_HOST, SG_MQTT_PORT, SG_MQTT_TLS, SG_MQTT_CA_PATH, SG_MQTT_CERT_PATH, SG_MQTT_KEY_PATH
+EnvironmentFile=-/etc/spider/gateway.env
+ExecStart=/opt/spider/spider-robot/gateway/.venv/bin/spider-gateway
+Restart=always
+RestartSec=1
+# Core 0 belongs to the balance loop.
+CPUAffinity=1 2 3
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

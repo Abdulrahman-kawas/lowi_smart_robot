@@ -79,7 +79,7 @@ class BrainService:
         self.bus = EventBus()
         self.supervisor = TaskSupervisor(self.bus)
         self.link = link or build_link(settings, role)
-        self.robot = RobotClient(self.link, settings.robot_id, self.bus)
+        self.robot = RobotClient(self.link, settings.robot_id, self.bus, settings.robot_source)
         self.vision = vision if vision is not None else make_vision(settings)
         self.skills = SkillLibrary(resolve_dirs(settings.skills_dirs), settings.always_on_skills)
         mem_path = Path(settings.memory_path).expanduser()
