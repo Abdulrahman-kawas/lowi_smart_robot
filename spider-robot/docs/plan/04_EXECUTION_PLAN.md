@@ -16443,7 +16443,7 @@ git commit -q -m "Record HW1 LiDAR commissioning results"
 >
 > The script below starts `spider-body`, so the owner runs it and the executor does not. Each run takes an hour. **First confirm servo power is physically disconnected.**
 > 1. Start a `tmux` session, so the runs survive a dropped SSH connection.
-> 2. `/opt/spider/spider-robot/body/.venv/bin/python -c "import yaml; d = yaml.safe_load(open('/etc/spider/robot.yaml')); d['rt'] = {'enabled': False}; yaml.safe_dump(d, open('/tmp/robot-nort.yaml', 'w'))"`
+> 2. `sudo /opt/spider/spider-robot/body/.venv/bin/python -c "import yaml; d = yaml.safe_load(open('/etc/spider/robot.yaml')); d['rt'] = {'enabled': False}; yaml.safe_dump(d, open('/tmp/robot-nort.yaml', 'w'))"`, then `sudo chmod 644 /tmp/robot-nort.yaml`
 > 3. First run, FIFO and mlock off: `sudo bash bench_jitter.sh 3600 /tmp/robot-nort.yaml`
 > 4. Second run, the shipped setting: `sudo bash bench_jitter.sh 3600 /etc/spider/robot.yaml`. Each run prints one JSON line.
 > 5. During the second run, record Core 0 load (`mpstat -P 0 5`) and a `/proc/interrupts` diff, which also shows the camera's interrupt rate. Limits: Core 0 at most 40% average, `cyclictest -a 0 -p 80 -m -D 1h` max at most 2 ms.

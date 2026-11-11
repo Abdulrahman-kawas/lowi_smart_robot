@@ -8,3 +8,6 @@
 - Fix applied on the Pi by the owner: /dev/ttyUSB0 (SSC-32U, FTDI 0403:6001) was group plugdev and spider-body could not open it. Added /etc/udev/rules.d/99-spider-ssc32u.rules setting GROUP="dialout", MODE="0660". Needs adding to the repo (follow-up).
 - Low and narrow object test: inconclusive. Cluttered room, the LiDAR was at REPLACE_HEIGHT cm, and the operator's body near the sensor dominated the readings. To repeat after mounting on the robot (P09).
 - Mount decision: deferred to the robot build; inverted mast mount recommended, plus downward cliff sensors as a planned addition.
+## P06, 2026-11-11
+
+P06 RT1 deferred. Run 1 (rt disabled, 10 min): not completed. The shipped-setting run is still to do and must pass before P08.

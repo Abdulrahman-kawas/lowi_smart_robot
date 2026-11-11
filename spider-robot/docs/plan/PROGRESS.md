@@ -27,3 +27,4 @@ P02 done
 P03 done
 P04 done
 P05 done
+P06 deferred
