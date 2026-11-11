@@ -30,6 +30,7 @@ fi
 # Service user and folders
 id spider >/dev/null 2>&1 || sudo useradd --system --create-home --home-dir /opt/spider spider
 sudo usermod -aG dialout,i2c,video,audio,gpio spider
+sudo chmod 755 /opt/spider   # useradd makes it 0700; the installing user must build and sync inside it
 sudo mkdir -p /etc/spider /opt/spider/bin /opt/spider/models/hf /var/lib/spider/rec
 sudo chown -R spider:spider /etc/spider /var/lib/spider
 
