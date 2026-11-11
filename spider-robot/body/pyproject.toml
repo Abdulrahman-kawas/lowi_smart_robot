@@ -23,6 +23,7 @@ spider-calibrate = "spider_body.calibrate:main"
 spider-camera = "spider_body.camera_service:main"
 spider-recorder = "spider_body.recorder:main"
 spider-sysmon = "spider_body.sysmon:main"
+spider-sim-view = "spider_body.viz.server:main"
 
 [dependency-groups]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.7"]
@@ -36,6 +37,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spider_body"]
+# Package data: the viewer page is served from the installed package.
+artifacts = ["src/spider_body/viz/static/*.html"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

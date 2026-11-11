@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spider Sim View</title>
+<style>
+  :root {
+    --bg: #14171c; --panel: #1c2027; --line: #2c323c; --text: #e6e8eb; --muted: #8b93a1;
+    --accent: #4ea1ff; --ok: #3ecf8e; --warn: #f5b84a; --bad: #ff5d5d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { display: grid; grid-template-columns: 1fr 340px; height: 100vh; overflow: hidden; }
+  #view { position: relative; min-width: 0; min-height: 0; }
+  #view canvas { display: block; width: 100%; height: 100%; }
+  #overlay { position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 12px;
+    pointer-events: none; }
+  #overlay label { pointer-events: auto; cursor: pointer; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto;
+    padding: 14px 16px 24px; }
+  h1 { font-size: 15px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 18px 0 6px; }
+  .pill { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px;
+    background: var(--line); color: var(--muted); }
+  .pill.ok { background: #173a2b; color: var(--ok); }
+  .pill.bad { background: #431c1c; color: var(--bad); }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .estop-on { color: var(--bad); font-weight: 700; }
+  .warn { color: var(--warn); }
+  button { font: inherit; color: var(--text); background: #262b34; border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 0; cursor: pointer; user-select: none; touch-action: none; }
+  button:hover { border-color: #46505e; }
+  button:active, button.held { background: #2f3a4a; border-color: var(--accent); }
+  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 6px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
+  .pad .spacer { visibility: hidden; }
+  #estop { background: #6b1d1d; border-color: #a33; font-weight: 700; }
+  #release { grid-column: span 2; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 4px 0 8px; }
+  .fields label { display: flex; flex-direction: column; gap: 2px; color: var(--muted);
+    font-size: 11px; }
+  input, select { font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; width: 100%; }
+  .hint { color: var(--muted); font-size: 11px; margin: 6px 0 0; }
+  #reply { min-height: 1.4em; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  #reply.bad { color: var(--bad); }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 2px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+    margin-right: 5px; vertical-align: -1px; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  ol li { padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+  ol li .k { font-weight: 600; margin: 0 6px; }
+  ol li .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .k.ack, .k.move_done, .k.online { color: var(--ok); }
+  .k.rejected, .k.obstacle_stop, .k.estop, .k.error, .k.link_lost, .k.fallen, .k.tilt {
+    color: var(--bad); }
+  #cdn-error { display: none; position: absolute; inset: 0; place-items: center; padding: 16px;
+    color: var(--warn); text-align: center; }
+  @media (max-width: 800px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 55vh auto; overflow: auto;
+      height: auto; }
+    #view { height: 55vh; }
+    aside { border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="view">
+  <div id="cdn-error">three.js could not be loaded from cdn.jsdelivr.net.
+    The 3D view needs internet once; the buttons below still work.</div>
+  <div id="overlay">Drag to orbit, scroll to zoom, right-drag to pan.
+    <label><input type="checkbox" id="follow" checked style="width:auto"> follow robot</label>
+    <label><input type="checkbox" id="trail" checked style="width:auto"> trail</label>
+  </div>
+</div>
+<aside>
+  <h1>Spider sim <span id="conn" class="pill">connecting</span></h1>
+  <dl>
+    <dt>Mode</dt><dd id="mode">-</dd>
+    <dt>E-stop</dt><dd id="estop-state">-</dd>
+    <dt>Limiter</dt><dd id="limiter">-</dd>
+    <dt>Servos</dt><dd id="servos-state">-</dd>
+    <dt>World</dt><dd id="world">-</dd>
+    <dt>Velocity</dt><dd id="velocity">-</dd>
+    <dt>Body</dt><dd id="body">-</dd>
+    <dt>Nearest</dt><dd id="nearest">-</dd>
+  </dl>
+
+  <h2>Commands</h2>
+  <div class="row">
+    <button data-posture="stand">Stand</button>
+    <button data-posture="sit">Sit</button>
+    <button data-posture="relax">Relax</button>
+  </div>
+  <div class="pad">
+    <button data-move="tl" title="Q">Turn left</button>
+    <button data-move="fwd" title="W">Forward</button>
+    <button data-move="tr" title="E">Turn right</button>
+    <button data-move="left" title="A">Left</button>
+    <button id="stop" title="Space">Stop</button>
+    <button data-move="right" title="D">Right</button>
+    <span class="spacer"></span>
+    <button data-move="back" title="S">Back</button>
+    <span class="spacer"></span>
+  </div>
+  <div class="fields">
+    <label>Speed m/s<input id="lin" type="number" value="0.06" min="0" max="0.5" step="0.01">
+    </label>
+    <label>Turn rad/s<input id="ang" type="number" value="0.4" min="0" max="2" step="0.05">
+    </label>
+    <label>Gait<select id="gait">
+      <option>tripod</option><option>ripple</option><option>wave</option></select></label>
+  </div>
+  <div class="row">
+    <button id="estop" title="Esc">E-stop</button>
+    <button id="release">Release E-stop</button>
+  </div>
+  <p class="hint">A click walks for 1 s; hold a button (or key) to keep walking.
+    Keys: W/S forward/back, A/D left/right, Q/E turn, Space stop, Esc E-stop.</p>
+  <div id="reply"></div>
+
+  <h2>Servo degrees (sent)</h2>
+  <table>
+    <thead><tr><th>Leg</th><th>coxa</th><th>femur</th><th>tibia</th></tr></thead>
+    <tbody id="servo-table"></tbody>
+  </table>
+
+  <h2>Events</h2>
+  <ol id="events"></ol>
+</aside>
+
+<script type="module">
+// ------------------------------------------------------------------ commands and panel
+// This part needs no three.js, so the controls work even if the CDN is unreachable.
+const $ = (id) => document.getElementById(id);
+const LEGS = ['LF', 'LM', 'LR', 'RF', 'RM', 'RR'];
+const LEG_COLOR = { LF: '#8fd0ff', LM: '#4ea1ff', LR: '#2a6fd0',
+                    RF: '#ffd08a', RM: '#ff9f43', RR: '#d9701c' };
+
+function num(id, fallback) {
+  const v = parseFloat($(id).value);
+  return Number.isFinite(v) ? Math.max(0, v) : fallback;
+}
+
+async function send(cmd) {
+  const reply = $('reply');
+  try {
+    const res = await fetch('/cmd', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cmd),
+    });
+    const j = await res.json();
+    if (res.ok) {
+      reply.className = '';
+      reply.textContent = `sent ${j.type} #${j.seq}`;
+    } else {
+      reply.className = 'bad';
+      const first = j.details && j.details[0];
+      reply.textContent = `refused: ${j.error}` +
+        (first ? ` (${(first.loc || []).join('.')}: ${first.msg})` : '');
+    }
+  } catch (e) {
+    reply.className = 'bad';
+    reply.textContent = 'server not reachable';
+  }
+}
+
+function moveCmd(kind) {
+  const v = num('lin', 0.06), w = num('ang', 0.4);
+  const t = { fwd: [v, 0, 0], back: [-v, 0, 0], left: [0, v, 0], right: [0, -v, 0],
+              tl: [0, 0, w], tr: [0, 0, -w] }[kind];
+  return { type: 'move', vx: t[0], vy: t[1], wz: t[2], duration_s: 1.0, gait: $('gait').value };
+}
+
+// A held button or key renews the 1 s Move twice a second; the body keeps walking smoothly.
+const held = new Map();
+function startMove(key, kind, el) {
+  if (held.has(key)) return;
+  send(moveCmd(kind));
+  held.set(key, { timer: setInterval(() => send(moveCmd(kind)), 500), el });
+  if (el) el.classList.add('held');
+}
+function endMove(key) {
+  const h = held.get(key);
+  if (!h) return;
+  clearInterval(h.timer);
+  if (h.el) h.el.classList.remove('held');
+  held.delete(key);
+}
+
+document.querySelectorAll('[data-move]').forEach((b) => {
+  const key = 'btn:' + b.dataset.move;
+  b.addEventListener('pointerdown', (e) => {
+    b.setPointerCapture(e.pointerId);
+    startMove(key, b.dataset.move, b);
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    b.addEventListener(ev, () => endMove(key));
+  }
+});
+document.querySelectorAll('[data-posture]').forEach((b) => {
+  b.addEventListener('click', () => send({ type: 'posture', posture: b.dataset.posture }));
+});
+$('stop').addEventListener('click', () => send({ type: 'stop' }));
+$('estop').addEventListener('click', () => send({ type: 'estop' }));
+$('release').addEventListener('click', () => send({ type: 'estop_release' }));
+
+const KEYS = { w: 'fwd', s: 'back', a: 'left', d: 'right', q: 'tl', e: 'tr' };
+window.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, select') || e.metaKey || e.ctrlKey) return;
+  const k = e.key.toLowerCase();
+  if (KEYS[k]) { e.preventDefault(); startMove('key:' + k, KEYS[k], null); }
+  else if (k === ' ') { e.preventDefault(); if (!e.repeat) send({ type: 'stop' }); }
+  else if (k === 'escape') { e.preventDefault(); if (!e.repeat) send({ type: 'estop' }); }
+});
+window.addEventListener('keyup', (e) => endMove('key:' + e.key.toLowerCase()));
+window.addEventListener('blur', () => [...held.keys()].forEach(endMove));
+
+// servo table rows
+const tbody = $('servo-table');
+for (const leg of LEGS) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><span class="swatch" style="background:${LEG_COLOR[leg]}"></span>${leg}</td>` +
+    ['coxa', 'femur', 'tibia'].map((j) => `<td id="sv-${leg}-${j}">-</td>`).join('');
+  tbody.appendChild(tr);
+}
+
+const fmt = (v, n = 3) => (v === null || v === undefined ? '-' : Number(v).toFixed(n));
+const deg = (rad) => (rad * 180 / Math.PI).toFixed(1);
+
+function updatePanel(f) {
+  $('mode').textContent = f.mode;
+  const es = $('estop-state');
+  es.textContent = f.estop ? 'LATCHED' : 'off';
+  es.className = f.estop ? 'estop-on' : '';
+  const lim = $('limiter');
+  lim.textContent = f.limiter || 'none';
+  lim.className = f.limiter ? 'warn' : '';
+  $('servos-state').textContent = f.servos_relaxed ? 'relaxed (no torque)' :
+    `holding, ${Object.keys(f.legs).length}/6 legs`;
+  $('world').textContent = `x ${fmt(f.world.x)}  y ${fmt(f.world.y)}  yaw ${deg(f.world.yaw)}°`;
+  $('velocity').textContent =
+    `vx ${fmt(f.velocity.vx)}  vy ${fmt(f.velocity.vy)}  wz ${fmt(f.velocity.wz, 2)}`;
+  $('body').textContent = `z ${fmt(f.pose.body_z_m)} m  r/p/y ${f.pose.roll_deg}/` +
+    `${f.pose.pitch_deg}/${f.pose.yaw_deg}°`;
+  const s = f.lidar.sectors_m;
+  if (s.length) {
+    let i = 0;
+    s.forEach((v, k) => { if (v < s[i]) i = k; });
+    const b = i * f.lidar.sector_deg;
+    $('nearest').textContent = `${s[i].toFixed(2)} m at ${b <= 180 ? b : b - 360}°`;
+  }
+  for (const leg of LEGS) {
+    for (const j of ['coxa', 'femur', 'tibia']) {
+      const v = f.servo_deg[`${leg}.${j}`];
+      $(`sv-${leg}-${j}`).textContent = v === undefined ? '-' : v.toFixed(1);
+    }
+  }
+  const ol = $('events');
+  const key = f.events.map((e) => `${e.ts}${e.kind}`).join('|');
+  if (ol.dataset.key !== key) {
+    ol.dataset.key = key;
+    ol.innerHTML = '';
+    for (const e of [...f.events].reverse()) {
+      const li = document.createElement('li');
+      const t = new Date(e.ts * 1000).toLocaleTimeString([], { hour12: false });
+      li.innerHTML = `<span class="t"></span><span class="k"></span><span class="d"></span>`;
+      li.querySelector('.t').textContent = t;
+      li.querySelector('.k').textContent = e.kind + (e.seq !== null ? ` #${e.seq}` : '');
+      li.querySelector('.k').classList.add(e.kind);
+      li.querySelector('.d').textContent = e.detail;
+      ol.appendChild(li);
+    }
+  }
+}
+
+// ------------------------------------------------------------------ 3D scene
+let drawFrame = () => {};
+let latest = null;
+
+const es = new EventSource('/events');
+es.onopen = () => { $('conn').textContent = 'live'; $('conn').className = 'pill ok'; };
+es.onerror = () => { $('conn').textContent = 'disconnected'; $('conn').className = 'pill bad'; };
+es.onmessage = (msg) => {
+  latest = JSON.parse(msg.data);
+  updatePanel(latest);
+  drawFrame(latest);
+};
+
+try {
+  const THREE = await import('three');
+  const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+  drawFrame = setupScene(THREE, OrbitControls);
+  if (latest) drawFrame(latest);
+} catch (err) {
+  console.error(err);
+  $('cdn-error').style.display = 'grid';
+}
+
+function setupScene(THREE, OrbitControls) {
+  THREE.Object3D.DEFAULT_UP.set(0, 0, 1);  // z up, as in the body frame
+  const view = $('view');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  view.prepend(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x14171c);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 60);
+  camera.position.set(-0.75, -0.85, 0.6);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0.06);
+  controls.enableDamping = true;
+  scene.add(new THREE.HemisphereLight(0xdde6ff, 0x30343c, 1.4));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  sun.position.set(1.5, -2, 4);
+  scene.add(sun);
+
+  // --- room: floor, 10 cm grid, walls, obstacles, world axes
+  let room = null, roomKey = '';
+  function buildRoom(h, obstacles) {
+    if (room) scene.remove(room);
+    room = new THREE.Group();
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * h, 2 * h),
+      new THREE.MeshStandardMaterial({ color: 0x252a32, roughness: 1 }));
+    room.add(floor);
+    const grid = new THREE.GridHelper(2 * h, Math.round(20 * h), 0x3a4250, 0x2c323c);
+    grid.rotation.x = Math.PI / 2;
+    grid.position.z = 0.0005;
+    room.add(grid);
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x6a7686, transparent: true,
+      opacity: 0.35 });
+    const H = 0.3, T = 0.02;
+    for (const [x, y, w, d] of [[h + T / 2, 0, T, 2 * h + 2 * T], [-h - T / 2, 0, T, 2 * h + 2 * T],
+                                [0, h + T / 2, 2 * h, T], [0, -h - T / 2, 2 * h, T]]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(w, d, H), wallMat);
+      wall.position.set(x, y, H / 2);
+      room.add(wall);
+    }
+    const obsMat = new THREE.MeshStandardMaterial({ color: 0xb35c4a, roughness: 0.7 });
+    for (const [x, y, r] of obstacles) {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 40), obsMat);
+      c.rotation.x = Math.PI / 2;
+      c.position.set(x, y, 0.15);
+      room.add(c);
+    }
+    const axes = new THREE.AxesHelper(0.25);  // world x red, y green
+    axes.position.z = 0.001;
+    room.add(axes);
+    scene.add(room);
+  }
+
+  // --- robot: body plate from the six coxa joints, legs as segments with joints
+  const robot = new THREE.Group();
+  scene.add(robot);
+  const plateGeom = new THREE.BufferGeometry();
+  plateGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6 * 3 * 3), 3));
+  const plateMat = new THREE.MeshStandardMaterial({ color: 0x9aa4b2, side: THREE.DoubleSide,
+    transparent: true, opacity: 0.9 });
+  const plate = new THREE.Mesh(plateGeom, plateMat);
+  robot.add(plate);
+  const heading = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0.012),
+    0.16, 0xffffff, 0.04, 0.03);
+  robot.add(heading);
+
+  const footprint = new THREE.LineLoop(new THREE.BufferGeometry(),
+    new THREE.LineDashedMaterial({ color: 0x5b6574, dashSize: 0.02, gapSize: 0.015 }));
+  robot.add(footprint);
+
+  const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 14);
+  const unitSphere = new THREE.SphereGeometry(1, 16, 12);
+  const Y = new THREE.Vector3(0, 1, 0);
+  const legs = {};
+  for (const name of LEGS) {
+    const mat = new THREE.MeshStandardMaterial({ color: LEG_COLOR[name], roughness: 0.5 });
+    const jointMat = new THREE.MeshStandardMaterial({ color: 0xe6e8eb, roughness: 0.4 });
+    const footMat = new THREE.MeshStandardMaterial({ color: LEG_COLOR[name], roughness: 0.4,
+      emissive: 0x000000 });
+    const segs = [0, 1, 2].map(() => new THREE.Mesh(unitCyl, mat));
+    const joints = [0, 1, 2].map(() => new THREE.Mesh(unitSphere, jointMat));
+    const foot = new THREE.Mesh(unitSphere, footMat);
+    const g = new THREE.Group();
+    [...segs, ...joints, foot].forEach((m) => g.add(m));
+    robot.add(g);
+    legs[name] = { g, segs, joints, foot, mat, footMat };
+  }
+  const SEG_R = [0.009, 0.008, 0.006];
+
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3();
+  function placeSeg(mesh, p, q, r) {
+    a.fromArray(p); b.fromArray(q);
+    d.subVectors(b, a);
+    const len = d.length();
+    mesh.visible = len > 1e-6;
+    if (!mesh.visible) return;
+    mesh.position.copy(a).addScaledVector(d, 0.5);
+    mesh.quaternion.setFromUnitVectors(Y, d.divideScalar(len));
+    mesh.scale.set(r, len, r);
+  }
+
+  // --- LiDAR sector rays (a separate group: it rides at the LiDAR height, not the body's)
+  const lidarGroup = new THREE.Group();
+  scene.add(lidarGroup);
+  const rayGeom = new THREE.BufferGeometry();
+  const rays = new THREE.LineSegments(rayGeom, new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.45 }));
+  lidarGroup.add(rays);
+  const hits = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({
+    color: 0x7fe3ff, size: 0.025, transparent: true, opacity: 0.8 }));
+  lidarGroup.add(hits);
+
+  // --- trail of the robot centre on the floor
+  const TRAIL_MAX = 4000;
+  const trailPos = new Float32Array(TRAIL_MAX * 3);
+  const trailGeom = new THREE.BufferGeometry();
+  trailGeom.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+  trailGeom.setDrawRange(0, 0);
+  const trail = new THREE.Line(trailGeom, new THREE.LineBasicMaterial({ color: 0x3ecf8e }));
+  scene.add(trail);
+  let trailN = 0;
+  const lastTrail = new THREE.Vector2(NaN, NaN);
+
+  const nearCol = new THREE.Color(0xff5d5d), farCol = new THREE.Color(0x4ea1ff);
+  const followTarget = new THREE.Vector3();
+  let firstFrame = true;
+
+  function draw(f) {
+    const key = JSON.stringify([f.world.half_size, f.obstacles]);
+    if (key !== roomKey) { roomKey = key; buildRoom(f.world.half_size, f.obstacles); }
+    const bz = f.pose.body_z_m;
+    robot.position.set(f.world.x, f.world.y, bz);
+    robot.rotation.set(0, 0, f.world.yaw);
+
+    // legs (level frame, relative to the body centre)
+    const bases = [];
+    for (const name of LEGS) {
+      const L = legs[name], pts = f.legs[name];
+      L.g.visible = !!pts;
+      if (!pts) continue;
+      bases.push(pts[0]);
+      for (let i = 0; i < 3; i++) placeSeg(L.segs[i], pts[i], pts[i + 1], SEG_R[i]);
+      for (let i = 0; i < 3; i++) {
+        L.joints[i].position.fromArray(pts[i]);
+        L.joints[i].scale.setScalar(0.012 - 0.002 * i);
+      }
+      L.foot.position.fromArray(pts[3]);
+      L.foot.scale.setScalar(0.011);
+      const inAir = pts[3][2] + bz > 0.004;  // swing phase: highlight the foot
+      L.footMat.emissive.set(inAir ? 0x666666 : 0x000000);
+      L.mat.opacity = f.servos_relaxed ? 0.35 : 1;
+      L.mat.transparent = f.servos_relaxed;
+    }
+    plate.visible = bases.length === 6;
+    if (plate.visible) {
+      bases.sort((p, q) => Math.atan2(p[1], p[0]) - Math.atan2(q[1], q[0]));
+      const c = [0, 1, 2].map((k) => bases.reduce((s, p) => s + p[k], 0) / 6);
+      const arr = plateGeom.attributes.position.array;
+      for (let i = 0; i < 6; i++) {
+        const p = bases[i], q = bases[(i + 1) % 6];
+        arr.set([...c, ...p, ...q], i * 9);
+      }
+      plateGeom.attributes.position.needsUpdate = true;
+      plateGeom.computeVertexNormals();
+      plateGeom.computeBoundingSphere();
+    }
+    plateMat.color.set(f.estop ? 0xd04848 : (f.servos_relaxed ? 0x5d6470 : 0x9aa4b2));
+    const fx = f.geometry.footprint_x_m, fy = f.geometry.footprint_y_m, fz = -bz + 0.002;
+    footprint.geometry.setFromPoints([new THREE.Vector3(fx, fy, fz), new THREE.Vector3(-fx, fy, fz),
+      new THREE.Vector3(-fx, -fy, fz), new THREE.Vector3(fx, -fy, fz)]);
+    footprint.computeLineDistances();
+
+    // LiDAR: sector i points i * sector_deg counter-clockwise from the robot's heading
+    lidarGroup.position.set(f.world.x, f.world.y,
+      f.geometry.lidar_height_m + bz - f.geometry.body_height_m);
+    lidarGroup.rotation.set(0, 0, f.world.yaw);
+    const s = f.lidar.sectors_m, n = s.length;
+    const pos = new Float32Array(n * 6), col = new Float32Array(n * 6), hp = new Float32Array(n * 3);
+    const stopR = Math.hypot(fx, fy) + 0.2;
+    for (let i = 0; i < n; i++) {
+      const ang = i * f.lidar.sector_deg * Math.PI / 180, r = Math.min(s[i], 6);
+      const x = Math.cos(ang) * r, y = Math.sin(ang) * r;
+      pos.set([0, 0, 0, x, y, 0], i * 6);
+      const cc = s[i] < stopR ? nearCol : farCol;
+      col.set([cc.r, cc.g, cc.b, cc.r, cc.g, cc.b], i * 6);
+      hp.set([x, y, 0], i * 3);
+    }
+    rayGeom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    rayGeom.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    hits.geometry.setAttribute('position', new THREE.BufferAttribute(hp, 3));
+
+    // trail
+    trail.visible = $('trail').checked;
+    if (!(Math.hypot(f.world.x - lastTrail.x, f.world.y - lastTrail.y) < 0.005)) {
+      if (trailN === TRAIL_MAX) { trailPos.copyWithin(0, 3); trailN--; }
+      trailPos.set([f.world.x, f.world.y, 0.002], trailN * 3);
+      trailN++;
+      lastTrail.set(f.world.x, f.world.y);
+      trailGeom.setDrawRange(0, trailN);
+      trailGeom.attributes.position.needsUpdate = true;
+      trailGeom.computeBoundingSphere();
+    }
+
+    followTarget.set(f.world.x, f.world.y, 0.06);
+    if (firstFrame) {
+      camera.position.add(followTarget.clone().sub(controls.target));
+      controls.target.copy(followTarget);
+      firstFrame = false;
+    }
+  }
+
+  function resize() {
+    const w = view.clientWidth, h = view.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / Math.max(1, h);
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(view);
+  resize();
+
+  const delta = new THREE.Vector3();
+  renderer.setAnimationLoop(() => {
+    if ($('follow').checked && !firstFrame) {
+      delta.subVectors(followTarget, controls.target).multiplyScalar(0.15);
+      controls.target.add(delta);
+      camera.position.add(delta);
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  });
+  return draw;
+}
+</script>
+</body>
+</html>
