@@ -93,6 +93,7 @@ ROBOT_ID="$ROBOT_ID" bash "$SR/infra/pi/mqtt_passwords.sh"
 sudo install -D -m 644 "$SR/infra/pi/files/spider-cpus.conf" /etc/systemd/system.conf.d/10-spider-cpus.conf
 sudo install -D -m 644 "$SR/infra/pi/files/journald-spider.conf" /etc/systemd/journald.conf.d/10-spider.conf
 sudo install -D -m 644 "$SR/infra/pi/files/wifi-powersave.conf" /etc/NetworkManager/conf.d/10-spider-wifi.conf
+sudo install -m 644 "$SR/infra/pi/files/99-spider-ssc32u.rules" /etc/udev/rules.d/99-spider-ssc32u.rules  # the SSC-32U came up as group plugdev
 sudo install -D -m 644 "$SR/infra/pi/files/nftables-spider.conf" /etc/nftables.d/spider.conf
 grep -q 'nftables.d/spider.conf' /etc/nftables.conf || echo 'include "/etc/nftables.d/spider.conf"' | sudo tee -a /etc/nftables.conf
 sudo install -m 755 "$SR/infra/pi/spider-tune.sh" /usr/local/sbin/spider-tune.sh

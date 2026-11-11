@@ -11,7 +11,7 @@ Environment=LOCAL_IP=192.168.1.2
 Environment=ZMQ_ENDPOINT=ipc:///tmp/spider_lidar.ipc
 Environment=ZMQ_RECORD_ENDPOINT=ipc:///tmp/spider_lidar_rec.ipc
 Environment=POINT_STRIDE=2
-Environment=IMU_DECIMATE=10
+Environment=IMU_DECIMATE=20
 ExecStart=/opt/spider/bin/lidar_bridge
 Restart=always
 RestartSec=2
