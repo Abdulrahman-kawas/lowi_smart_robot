@@ -11,3 +11,14 @@
 ## P06, 2026-11-11
 
 P06 RT1 deferred. Run 1 (rt disabled, 10 min): not completed. The shipped-setting run is still to do and must pass before P08.
+## P07, 2026-11-11
+
+- B-F1 PASS: Wi-Fi off, clock 2000-01-01. All local services active (mosquitto, spider-gateway, spider-lidar, spider-sysmon), spider-body active with rt_ok=True, a Stop sent by spider-robotctl reached the body (event kind ack, detail stopping), and the gateway boot chain has no network-online.target. Wi-Fi and NTP restored afterwards.
+- LiDAR after reboot: the new restart logic worked ("no clouds for 3 s; sent start rotation again", then clouds resumed); stable afterwards (4800 clouds continuous, 60 clouds and 252 imu per 5 s).
+- FI1 PASS: kill -9 spider-body, back after 4680 ms.
+- FI2 PARTIAL: kill -STOP spider-body, systemd restarted it after 5559 ms (target 2 s). Servos hold their last pose meanwhile; the M4 hardware watchdog covers this case. Follow-up: consider a shorter RestartSec.
+- FI3 PASS: kill -9 lidar_bridge, back after 2158 ms. The body's idle state period (5 s) was too slow to show the stale gap; stale-data blocking is covered by simulator tests.
+- FI4 PASS: kill -9 spider-gateway, offline last will published (1), gateway back active.
+- FI5 PASS: mosquitto stopped, the body logged the disconnect; after start, status shows mode=relaxed and gateway online.
+- B-F2: deferred by the owner (risk of SD/SSD corruption); to run before relying on the robot.
+Note: spider-robotctl is not on cron's PATH; use /usr/local/bin/spider-robotctl in boot scripts.
