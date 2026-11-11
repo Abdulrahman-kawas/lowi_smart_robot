@@ -97,6 +97,7 @@ class MotionCfg(_M):
     duration_s: float = 1.5
     gait: Literal["tripod", "ripple", "wave"] = "tripod"
     say_max_chars: int = 30  # while moving, speech stays short so the deaf window stays short
+    move_speed: float = Field(0.5, gt=0.0, le=1.0)  # expressive moves (dance, wave, ...)
 
 
 class VoiceConfig(_M):

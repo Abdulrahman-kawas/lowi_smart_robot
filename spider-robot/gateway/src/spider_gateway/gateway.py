@@ -18,6 +18,9 @@ gateway, which:
     a remote wake from limp
   * accepts one more release path that needs no network: a physical hold-to-release button
   * returns each source its events with its own seq numbers
+  * lets voice and bench start expressive moves (Perform, Reach), remote only with allow_moves,
+    and the planner never; offer_hand is for a person at the robot, so voice and bench only. A
+    move owns the motion like a Move until the body reports it done
 
 It adds to the body's limits and replaces none of them. If the gateway dies, its heartbeat stops
 and the body's own watchdog stops the robot.
@@ -52,7 +55,9 @@ from spider_common.protocol import (
     GatewayStatus,
     Heartbeat,
     Move,
+    Perform,
     Posture,
+    Reach,
     RobotEvent,
     RobotState,
     Snapshot,
@@ -75,7 +80,14 @@ STATUS_PERIOD_S = 1.0
 CLAMP_NOTICE_PERIOD_S = 2.0
 BUTTON_SOURCE = "button"  # the physical release button on the Pi: may only release an E-stop
 BUTTON_MAX_AGE_S = 1.0  # same machine, same clock: an older press is a stale message
-_SOURCE_ONLY: frozenset[str] = frozenset({"ack", "rejected", "move_done", "snapshot_failed"})
+_SOURCE_ONLY: frozenset[str] = frozenset({
+    "ack", "rejected", "move_done", "snapshot_failed", "perform_started", "perform_done",
+    "perform_rejected",
+})
+PERFORM_HOLD_S = 21.0  # the longest move (20 s), unless the body reports it done sooner
+_PERFORM_END = frozenset({"perform_done", "perform_rejected"})
+_LOCAL_ONLY_MOVES = frozenset({"offer_hand"})  # someone must be at the robot
+_LOCAL_SOURCES = frozenset({"voice", BENCH_SOURCE})
 _NEEDS_CONFIRM_TO_WAKE = frozenset({"remote", "planner"})
 
 
@@ -190,6 +202,7 @@ class Gateway:
         self._seen: dict[str, float] = {}
         self._owner: str | None = None
         self._owner_until = 0.0
+        self._performing = False  # the owner's motion is a Perform or Reach
         self._fence: dict[tuple[str, str], int] = {}  # (source, session) -> seq of its last Stop
         self._holdoff: dict[str, tuple[float, str]] = {}  # source -> (until, who stopped)
         self._clocks = {source: SourceClock() for source in self.priority}
@@ -261,6 +274,8 @@ class Gateway:
             self._on_release(cmd, source, now)
         elif isinstance(cmd, Move):
             self._on_move(cmd, source, now)
+        elif isinstance(cmd, (Perform, Reach)):
+            self._on_perform(cmd, source, now)
         elif isinstance(cmd, Posture):
             self._on_posture(cmd, source, now)
         elif isinstance(cmd, BodyPose):
@@ -294,6 +309,7 @@ class Gateway:
         self._fence[key] = max(self._fence.get(key, -1), cmd.seq)
         displaced = self._owner
         self._owner = None
+        self._performing = False
         rank = self.priority[source]
         for other, other_rank in self.priority.items():
             if other != source and other_rank <= rank:
@@ -320,6 +336,32 @@ class Gateway:
             self._busy(source, cmd.seq)
             return
         self._forward(limited, source)
+
+    def _on_perform(self, cmd: Perform | Reach, source: str, now: float) -> None:
+        name = cmd.name if isinstance(cmd, Perform) else "reach"
+        if source == "planner":
+            self._reply(source, cmd.seq, "rejected", "the planner may never start moves")
+            return
+        if not self.policies[source].allow_moves:
+            self._reply(source, cmd.seq, "rejected", f"{source} may not start moves "
+                        "(allow_moves is off)")
+            return
+        if name in _LOCAL_ONLY_MOVES and source not in _LOCAL_SOURCES:
+            self._reply(source, cmd.seq, "rejected",
+                        f"{name} needs someone at the robot: voice or bench only")
+            return
+        if cmd.seq <= self._fence.get((source, cmd.session), -1):
+            return  # sent before this source's own Stop: drop silently, as for a Move
+        held = self._holdoff.get(source)
+        if held is not None and now < held[0]:
+            self._count("held_off")
+            self._reply(source, cmd.seq, "rejected", f"held off after a stop from {held[1]}")
+            return
+        if not self._claim(source, cmd, now):
+            self._busy(source, cmd.seq)
+            return
+        self._performing = True
+        self._forward(cmd, source)
 
     def _cap(self, cmd: Move, source: str, now: float) -> Move:
         policy = self.policies[source]
@@ -362,15 +404,29 @@ class Gateway:
             return
         self._forward(cmd, source)
 
-    def _claim(self, source: str, cmd: Move | Posture | BodyPose, now: float) -> bool:
+    def _claim(
+        self, source: str, cmd: Move | Posture | BodyPose | Perform | Reach, now: float
+    ) -> bool:
         owner_active = self._owner is not None and now < self._owner_until
         if owner_active and self.priority[source] < self.priority[self._owner]:
             return False
-        if owner_active and self._owner != source and isinstance(cmd, Move):
+        if owner_active and self._owner != source and self._performing:
+            # A move of a lower source is running: it ends first (the body holds that pose).
+            self._forward(Stop(ts=self.wall()), None)
+        if owner_active and self._owner != source and (
+                isinstance(cmd, (Move, Perform, Reach)) or self._performing):
             self._count("preempted")
             self._reply(self._owner, None, "preempted", f"motion taken over by {source}")
+        if self._owner != source or not owner_active:
+            self._performing = False
         self._owner = source
-        self._owner_until = now + (cmd.duration_s if isinstance(cmd, Move) else POSE_HOLD_S)
+        if isinstance(cmd, Move):
+            hold = cmd.duration_s
+        elif isinstance(cmd, (Perform, Reach)):
+            hold = PERFORM_HOLD_S
+        else:
+            hold = POSE_HOLD_S
+        self._owner_until = now + hold
         return True
 
     def _forward(self, cmd: Command, source: str | None) -> None:
@@ -449,6 +505,9 @@ class Gateway:
                 self._reply(pending.source, pending.seq, "rejected",
                             f"could not take the confirmation frame: {ev.detail}")
         origin = self._origin.get(ev.seq) if ev.seq is not None else None
+        if ev.kind in _PERFORM_END and origin is not None and origin[0] == self._owner \
+                and self._performing:
+            self._owner, self._performing = None, False  # the move is over: motion is free
         if ev.kind in _SOURCE_ONLY:
             if origin is not None:
                 self._republish(ev, origin[0], origin[1])
@@ -498,6 +557,7 @@ class Gateway:
 
     def _halt_lost_owner(self) -> None:
         lost, self._owner = self._owner, None
+        self._performing = False
         log.warning("source %s went quiet while in control; stopping", lost)
         self._count("lost_owner")
         self._forward(Stop(ts=self.wall()), None)

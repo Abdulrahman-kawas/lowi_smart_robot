@@ -62,6 +62,21 @@
   .k.ack, .k.move_done, .k.online { color: var(--ok); }
   .k.rejected, .k.obstacle_stop, .k.estop, .k.error, .k.link_lost, .k.fallen, .k.tilt {
     color: var(--bad); }
+  #banner { display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    max-width: calc(100% - 32px); background: #7a1f1f; color: #fff; border: 1px solid #c44;
+    border-radius: 8px; padding: 8px 14px; font-weight: 600; box-shadow: 0 4px 16px #0008;
+    cursor: pointer; z-index: 2; }
+  #banner.show { display: block; }
+  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0; }
+  .moves button { padding: 6px 0; font-size: 12px; }
+  .moves button.running { border-color: var(--ok); color: var(--ok); }
+  .slider { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .slider input { flex: 1; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px;
+    overflow: hidden; }
+  .seg label { padding: 3px 10px; cursor: pointer; font-size: 12px; }
+  .seg input { display: none; }
+  .seg label:has(input:checked) { background: #2f3a4a; color: var(--accent); }
   #cdn-error { display: none; position: absolute; inset: 0; place-items: center; padding: 16px;
     color: var(--warn); text-align: center; }
   @media (max-width: 800px) {
@@ -82,6 +97,7 @@
 </head>
 <body>
 <div id="view">
+  <div id="banner" title="click to dismiss"></div>
   <div id="cdn-error">three.js could not be loaded from cdn.jsdelivr.net.
     The 3D view needs internet once; the buttons below still work.</div>
   <div id="overlay">Drag to orbit, scroll to zoom, right-drag to pan.
@@ -93,6 +109,7 @@
   <h1>Spider sim <span id="conn" class="pill">connecting</span></h1>
   <dl>
     <dt>Mode</dt><dd id="mode">-</dd>
+    <dt>Move</dt><dd id="perform">-</dd>
     <dt>E-stop</dt><dd id="estop-state">-</dd>
     <dt>Limiter</dt><dd id="limiter">-</dd>
     <dt>Servos</dt><dd id="servos-state">-</dd>
@@ -135,6 +152,17 @@
     Keys: W/S forward/back, A/D left/right, Q/E turn, Space stop, Esc E-stop.</p>
   <div id="reply"></div>
 
+  <h2>Moves</h2>
+  <div class="slider">Speed <input id="mspeed" type="range" min="0.1" max="1" step="0.05"
+    value="0.5"><span id="mspeed-v">0.50</span></div>
+  <div class="slider" style="margin-top:6px">Leading leg
+    <span class="seg"><label><input type="radio" name="leg" value="LF" checked>LF</label><label>
+      <input type="radio" name="leg" value="RF">RF</label></span>
+    <span style="font-size:11px">wave, hi, offer hand, reach</span></div>
+  <div class="moves" id="moves"></div>
+  <p class="hint">Moves run only standing, level, with fresh LiDAR and nothing within 0.35 m.
+    Stop holds the pose; Stand brings it back. Offer hand retracts on Stop.</p>
+
   <h2>Servo degrees (sent)</h2>
   <table>
     <thead><tr><th>Leg</th><th>coxa</th><th>femur</th><th>tibia</th></tr></thead>
@@ -174,6 +202,8 @@ async function send(cmd) {
       const first = j.details && j.details[0];
       reply.textContent = `refused: ${j.error}` +
         (first ? ` (${(first.loc || []).join('.')}: ${first.msg})` : '');
+      banner.textContent = 'Refused: ' + reply.textContent.slice(9);
+      banner.classList.add('show');
     }
   } catch (e) {
     reply.className = 'bad';
@@ -232,6 +262,51 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => endMove('key:' + e.key.toLowerCase()));
 window.addEventListener('blur', () => [...held.keys()].forEach(endMove));
 
+// expressive moves
+const MOVES = [
+  ['hi', 'Hi'], ['double_hi', 'Double hi'], ['offer_hand', 'Offer hand'],
+  ['wave', 'Wave'], ['bow', 'Bow'], ['dance', 'Dance'],
+  ['body_wave', 'Body wave'], ['shimmy', 'Shimmy'], ['leg_ripple', 'Leg ripple'],
+  ['stomp', 'Stomp'], ['crab_sway', 'Crab sway'], ['stretch', 'Stretch'],
+  ['attack_stance', 'Attack'], ['defense_stance', 'Defense'], ['alert', 'Alert'],
+  ['sleep', 'Sleep'], ['celebrate', 'Celebrate'], ['reach', 'Reach nearest'],
+];
+const SIDED = new Set(['wave', 'hi', 'offer_hand']);
+const mspeed = $('mspeed');
+mspeed.addEventListener('input', () => { $('mspeed-v').textContent = (+mspeed.value).toFixed(2); });
+const leg = () => document.querySelector('input[name=leg]:checked').value;
+const moveButtons = {};
+for (const [name, label] of MOVES) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.addEventListener('click', () => {
+    const speed = +mspeed.value;
+    if (name === 'reach') send({ type: 'reach', target: 'nearest', leg: leg(), speed });
+    else send({ type: 'perform', name, speed, ...(SIDED.has(name) ? { leg: leg() } : {}) });
+  });
+  $('moves').appendChild(b);
+  moveButtons[name] = b;
+}
+
+// red banner: the latest refusal, for 8 s or until clicked
+const banner = $('banner');
+let bannerKey = null, bannerTimer = null;
+banner.addEventListener('click', () => banner.classList.remove('show'));
+function showRefusal(events) {
+  const bad = [...events].reverse().find((e) =>
+    ['perform_rejected', 'rejected', 'obstacle_stop'].includes(e.kind));
+  if (!bad) return;
+  const key = `${bad.ts}${bad.kind}${bad.seq}`;
+  if (key === bannerKey) return;
+  const first = bannerKey === null;
+  bannerKey = key;
+  if (first && Date.now() / 1000 - bad.ts > 3) return;  // old news when the page opened
+  banner.textContent = (bad.kind === 'obstacle_stop' ? 'Stopped: ' : 'Refused: ') + bad.detail;
+  banner.classList.add('show');
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => banner.classList.remove('show'), 8000);
+}
+
 // servo table rows
 const tbody = $('servo-table');
 for (const leg of LEGS) {
@@ -246,6 +321,11 @@ const deg = (rad) => (rad * 180 / Math.PI).toFixed(1);
 
 function updatePanel(f) {
   $('mode').textContent = f.mode;
+  $('perform').textContent = f.perform || (f.holding ? 'holding pose (send Stand)' : 'none');
+  for (const [name, b] of Object.entries(moveButtons)) {
+    b.classList.toggle('running', f.perform === name);
+  }
+  showRefusal(f.events);
   const es = $('estop-state');
   es.textContent = f.estop ? 'LATCHED' : 'off';
   es.className = f.estop ? 'estop-on' : '';
@@ -444,7 +524,9 @@ function setupScene(THREE, OrbitControls) {
     const key = JSON.stringify([f.world.half_size, f.obstacles]);
     if (key !== roomKey) { roomKey = key; buildRoom(f.world.half_size, f.obstacles); }
     const bz = f.pose.body_z_m;
-    robot.position.set(f.world.x, f.world.y, bz);
+    const [sx, sy] = f.world.shift || [0, 0];  // a move shifts the body over its feet
+    const cy = Math.cos(f.world.yaw), syw = Math.sin(f.world.yaw);
+    robot.position.set(f.world.x + cy * sx - syw * sy, f.world.y + syw * sx + cy * sy, bz);
     robot.rotation.set(0, 0, f.world.yaw);
 
     // legs (level frame, relative to the body centre)
@@ -486,7 +568,7 @@ function setupScene(THREE, OrbitControls) {
     footprint.computeLineDistances();
 
     // LiDAR: sector i points i * sector_deg counter-clockwise from the robot's heading
-    lidarGroup.position.set(f.world.x, f.world.y,
+    lidarGroup.position.set(robot.position.x, robot.position.y,
       f.geometry.lidar_height_m + bz - f.geometry.body_height_m);
     lidarGroup.rotation.set(0, 0, f.world.yaw);
     const s = f.lidar.sectors_m, n = s.length;

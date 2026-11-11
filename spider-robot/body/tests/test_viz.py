@@ -251,3 +251,22 @@ async def test_sse_frame_and_cmd_endpoint(cfg):
         assert status == 404
     finally:
         await server.stop()
+
+
+def test_viewer_forwards_moves_and_shows_them(cfg):
+    s, clock = session(cfg)
+    s.command({"type": "posture", "posture": "stand"})
+    advance(s, clock, 3.0)
+    s.command({"type": "perform", "name": "hi", "speed": 0.5, "leg": "RF"})
+    advance(s, clock, 1.0)
+    f = s.frame()
+    assert f["perform"] == "hi" and f["holding"] is False
+    assert f["world"]["shift"][1] > 0.005  # shifted away from RF, to the left
+    assert f["legs"]["RF"][3][2] > f["legs"]["LF"][3][2] + 0.01  # RF foot is up
+    s.command({"type": "stop"})
+    advance(s, clock, 0.1)
+    assert s.frame()["holding"] is True
+    with pytest.raises(ValueError):
+        s.command({"type": "perform", "name": "moonwalk"})
+    s.command({"type": "reach", "target": "nearest"})
+    assert kinds(s)[-1] == "perform_rejected"

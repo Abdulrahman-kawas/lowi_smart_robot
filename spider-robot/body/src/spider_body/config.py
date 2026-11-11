@@ -141,6 +141,21 @@ class SafetyCfg(_M):
     fall_tilt_deg: float = 55.0  # relax servos (robot has fallen)
 
 
+class MovesCfg(_M):
+    """Expressive moves (moves.py). Every move is checked against these before it starts."""
+
+    clear_radius_m: float = Field(0.35, ge=0.0)  # nothing this close to the footprint edge
+    support_margin_m: float = Field(0.02, ge=0.0)  # body centre inside the feet polygon by this
+    max_joint_speed_dps: float = Field(240.0, gt=0.0, le=600.0)
+    max_duration_s: float = Field(20.0, gt=0.0, le=20.0)
+    max_shift_m: float = Field(0.03, gt=0.0, le=0.03)  # body translation from where it started
+    dance_bpm: float = Field(100.0, ge=60.0, le=140.0)
+    reach_touch_height_m: float = Field(0.06, ge=0.02, le=0.15)  # "nearest": touch at this height
+    # offer_hand: the foot goes to a fixed point this far ahead of the footprint edge, this high.
+    offer_hand_ahead_m: float = Field(0.10, ge=0.0, le=0.20)
+    offer_hand_height_m: float = Field(0.12, ge=0.04, le=0.20)
+
+
 class LidarCfg(_M):
     enabled: bool = True
     endpoint: str = "ipc:///tmp/spider_lidar.ipc"
@@ -215,6 +230,7 @@ class BodyConfig(_M):
     gait: GaitCfg = Field(default_factory=GaitCfg)
     safety: SafetyCfg = Field(default_factory=SafetyCfg)
     lidar: LidarCfg = Field(default_factory=LidarCfg)
+    moves: MovesCfg = Field(default_factory=MovesCfg)
     camera: CameraCfg = Field(default_factory=CameraCfg)
     rt: RtCfg = Field(default_factory=RtCfg)
     watchdog_gpio: WatchdogGpioCfg | None = None  # None until the relay board is fitted

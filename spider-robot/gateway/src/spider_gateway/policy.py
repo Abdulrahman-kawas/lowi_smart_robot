@@ -22,15 +22,16 @@ class SourcePolicy(BaseModel):
     may_release_estop: bool = False
     needs_frame_proof: bool = False  # release must name a fresh camera frame and be confirmed
     min_snapshot_period_s: float = Field(0.5, ge=0.0)
+    allow_moves: bool = False  # Perform and Reach (expressive moves); never for the planner
 
 
 # The bench source exists only while SG_BENCH=1, for a person at the robot during M3 and M4.
 BENCH_POLICY = SourcePolicy(max_speed_mps=0.12, max_wz_rps=0.6, max_duration_s=3.0,
-                            max_excess_delay_s=0.5)
+                            max_excess_delay_s=0.5, allow_moves=True)
 
 DEFAULT_POLICIES: dict[str, SourcePolicy] = {
     "voice": SourcePolicy(max_speed_mps=0.08, max_wz_rps=0.5, max_duration_s=2.0,
-                          max_excess_delay_s=0.5),
+                          max_excess_delay_s=0.5, allow_moves=True),
     "remote": SourcePolicy(max_speed_mps=0.05, max_wz_rps=0.3, max_duration_s=1.0,
                            max_excess_delay_s=0.75, may_release_estop=True,
                            needs_frame_proof=True),
@@ -50,6 +51,8 @@ def check_order(policies: dict[str, SourcePolicy]) -> None:
         raise ValueError("a remote E-stop release must require a fresh frame and confirmation")
     if policies["planner"].may_release_estop or voice.may_release_estop:
         raise ValueError("only the remote source may release an E-stop")
+    if policies["planner"].allow_moves:
+        raise ValueError("the planner may never start expressive moves")
 
 
 def load_policies(path: str | Path | None = None) -> dict[str, SourcePolicy]:

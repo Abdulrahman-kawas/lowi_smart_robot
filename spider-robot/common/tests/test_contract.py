@@ -104,3 +104,49 @@ def test_json_logs_carry_service_and_correlation_id():
     out = json.loads(fmt.format(rec))
     assert out["svc"] == "spider-test" and out["msg"] == "hello w" and out["trace"] == "abc"
     assert len(new_trace()) == 12
+
+
+# ------------------------------------------------------------------ expressive moves (v3, additive)
+def test_perform_and_reach_roundtrip():
+    from spider_common.protocol import MOVE_NAMES, Perform, Reach
+
+    for name in MOVE_NAMES:
+        cmd = parse_command(Perform(name=name, speed=1.0).model_dump_json())
+        assert isinstance(cmd, Perform) and cmd.name == name and cmd.leg is None
+    assert len(MOVE_NAMES) == 17 and "offer_hand" in MOVE_NAMES
+    reach = parse_command('{"type":"reach","target":[0.3,0.1,-0.03],"leg":"RF"}')
+    assert isinstance(reach, Reach) and reach.target == (0.3, 0.1, -0.03)
+    assert parse_command('{"type":"reach"}').target == "nearest"
+    assert parse_command('{"type":"perform","name":"hi"}').speed == 0.5
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"type":"perform","name":"moonwalk"}',  # not in the fixed list
+        '{"type":"perform","name":"dance","speed":1.5}',  # nothing runs above 1.0
+        '{"type":"perform","name":"dance","speed":0}',
+        '{"type":"perform","name":"wave","leg":"LM"}',  # front legs only
+        '{"type":"reach","leg":"RR"}',
+        '{"type":"reach","target":[2.0,0,0]}',  # bounded coordinates
+        '{"type":"reach","target":"farthest"}',
+        '{"type":"perform","name":"dance","keyframes":[]}',  # no trajectory upload
+    ],
+)
+def test_moves_reject_anything_outside_the_contract(payload):
+    with pytest.raises(ValidationError):
+        parse_command(payload)
+
+
+def test_move_events_and_state_field_are_additive():
+    from typing import get_args
+
+    from spider_common.protocol import EventKind, RobotMode
+
+    assert {"perform_started", "perform_done", "perform_rejected"} <= set(get_args(EventKind))
+    old = RobotState.model_validate_json('{"robot_id":"r","mode":"standing"}')
+    assert old.perform is None  # a body from the previous build still parses
+    assert RobotState(robot_id="r", mode="standing", perform="dance").perform == "dance"
+    # a move runs in mode "standing": no new mode value an older reader would refuse
+    assert set(get_args(RobotMode)) == {"relaxed", "sitting", "standing", "walking", "estop",
+                                        "fallen"}

@@ -16,7 +16,7 @@ within a version; removing or changing the meaning of a field bumps PROTOCOL_VER
 from __future__ import annotations
 
 import time
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -154,8 +154,40 @@ class ConfirmRequest(_Cmd):
     request_id: str = Field(min_length=1, max_length=64, pattern=PATTERN_ID)
 
 
+# Expressive moves run on the body from a fixed list: no source can upload a trajectory. The body
+# validates every one before it starts (support, reach, servo limits, joint speed) and refuses it
+# whole rather than clipping it. Stop and E-stop end any move within one control tick.
+MoveName = Literal[
+    "wave", "bow", "body_wave", "shimmy", "leg_ripple", "stomp", "dance",
+    "attack_stance", "defense_stance", "alert", "crab_sway", "stretch", "sleep", "celebrate",
+    "hi", "double_hi", "offer_hand",
+]
+MOVE_NAMES: tuple[str, ...] = get_args(MoveName)
+FrontLeg = Literal["LF", "RF"]
+_Coord = Annotated[float, Field(ge=-0.5, le=0.5)]  # body frame, metres
+
+
+class Perform(_Cmd):
+    """Run one built-in move. speed scales time only: 1.0 is the fastest, 0.5 the default."""
+
+    type: Literal["perform"] = "perform"
+    name: MoveName
+    speed: float = Field(0.5, gt=0.0, le=1.0)
+    leg: FrontLeg | None = None  # the leading leg of wave, hi and offer_hand (default LF)
+
+
+class Reach(_Cmd):
+    """Move a front foot to 1 cm short of a target and hold. The robot cannot feel: no pushing."""
+
+    type: Literal["reach"] = "reach"
+    leg: FrontLeg | None = None  # None: the front leg on the target's side
+    target: Literal["nearest"] | tuple[_Coord, _Coord, _Coord] = "nearest"
+    speed: float = Field(0.5, gt=0.0, le=1.0)
+
+
 Command = Annotated[
-    Move | Stop | Posture | BodyPose | Snapshot | Heartbeat | EStop | EStopRelease | ConfirmRequest,
+    Move | Stop | Posture | BodyPose | Snapshot | Heartbeat | EStop | EStopRelease | ConfirmRequest
+    | Perform | Reach,
     Field(discriminator="type"),
 ]
 _COMMAND: TypeAdapter[Command] = TypeAdapter(Command)
@@ -202,12 +234,13 @@ class RobotState(BaseModel):
     loop_late_p99_ms: float = 0.0  # p99 of tick start lateness since boot
     loop_late_hist: list[int] = Field(default_factory=list)  # since boot: <1,<2,<5,<10,<20,>=20 ms
     rt_ok: bool = False  # SCHED_FIFO and locked memory are really active
+    perform: str | None = None  # the move running now (mode stays "standing" while it runs)
 
 
 EventKind = Literal[
     "ack", "rejected", "obstacle_stop", "tilt", "fallen", "link_lost", "estop",
     "move_done", "online", "offline", "error", "snapshot_failed", "preempted", "challenge",
-    "clamped",
+    "clamped", "perform_started", "perform_done", "perform_rejected",
 ]
 
 

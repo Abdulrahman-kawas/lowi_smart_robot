@@ -33,7 +33,7 @@ from spider_common.protocol import VoiceRoute, VoiceTurn
 from .actions import to_command
 from .config import VoiceConfig
 from .echo import EchoGate
-from .grammar import CANNED_SAY, MOTION_ACTS, WakeGate, match
+from .grammar import CANNED_SAY, MOTION_ACTS, MOVE_ACTS, WakeGate, match
 from .gwclient import GatewayClient
 from .interfaces import STT, TTS, Answerer, AudioOut, Router, RouterDecision, Transcript, Vision
 from .routing import cross_check
@@ -249,7 +249,8 @@ class VoicePipeline:
                 body = self.wake.remove_from(better) if self.wake.enabled else better
                 grammar_hit = match(body, self.cfg.grammar_max_words)
         if grammar_hit is not None:
-            if grammar_hit.act in (MOTION_ACTS | _POSTURE_ACTS) and self._too_old(utterance):
+            if grammar_hit.act in (MOTION_ACTS | _POSTURE_ACTS | MOVE_ACTS) and \
+                    self._too_old(utterance):
                 self._record(trace, "ignored", text, reason="too_old", act=grammar_hit.act,
                              stt_ms=stt_ms, audio_s=audio_s)
                 return
@@ -284,7 +285,8 @@ class VoicePipeline:
         self.route_hist.record(route_ms)
         self.wake.extend(self.clock())
 
-        if decision.act in MOTION_ACTS and decision.act not in fired and self._too_old(utterance):
+        if decision.act in (MOTION_ACTS | MOVE_ACTS) and decision.act not in fired and \
+                self._too_old(utterance):
             self._record(trace, "ignored", text, reason="too_old", act=decision.act, stt_ms=stt_ms,
                          route_ms=route_ms, audio_s=audio_s)
             return
@@ -358,7 +360,7 @@ class VoicePipeline:
             return None
         if not already_sent:
             self._send_act(act, trace)
-        if act in MOTION_ACTS:
+        if act in (MOTION_ACTS | MOVE_ACTS):
             say = short_clause(say, self.cfg.motion.say_max_chars)
         return self._spawn(self.speak(say or SAY_DONE, trace))
 

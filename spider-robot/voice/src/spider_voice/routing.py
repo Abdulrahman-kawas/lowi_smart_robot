@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from .grammar import MOTION_ACTS, ROUTER_ACTS, acts_in, has_negation
+from .grammar import MOTION_ACTS, MOVE_ACTS, ROUTER_ACTS, acts_in, has_negation
 from .interfaces import RouterDecision
 
 MAX_SAY_CHARS = 60
@@ -48,8 +48,12 @@ def parse_decision(raw: str) -> RouterDecision:
 
 
 def cross_check(decision: RouterDecision, transcript: str) -> RouterDecision:
-    """A motion is accepted only if the owner's own words name it and do not negate it."""
-    if decision.act in MOTION_ACTS and (
+    """A motion is accepted only if the owner's own words name it and do not negate it.
+
+    The router has no move acts, so a move cannot come from it; if one ever did, it is checked
+    the same way as a walk.
+    """
+    if decision.act in (MOTION_ACTS | MOVE_ACTS) and (
         decision.act not in acts_in(transcript) or has_negation(transcript)
     ):
         return RouterDecision("none", decision.say)

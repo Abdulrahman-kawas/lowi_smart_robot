@@ -3,6 +3,11 @@
 Common commands are matched on the transcript in microseconds, without a model. The same lexicon
 checks anything the LLM router proposes: the router may only choose a motion whose words the owner
 actually said, so a hallucination or an injected instruction cannot invent a walk.
+
+Expressive moves (dance, wave, ...) come only from this grammar. They are not router acts at all,
+so the router cannot propose one, and cross_check refuses them like any motion. An entry of
+several words is a phrase: its words must follow each other, and they are not matched again as
+single words ("سلم علي" is offer_hand, not wave).
 """
 
 from __future__ import annotations
@@ -12,6 +17,10 @@ from dataclasses import dataclass
 from .text import tokens, word_matches
 
 MOTION_ACTS = frozenset({"forward", "back", "left", "right"})
+MOVE_ACTS = frozenset({
+    "dance", "wave", "bow", "reach", "attack_stance", "defense_stance", "alert", "sleep",
+    "celebrate", "hi", "offer_hand",
+})
 ROUTER_ACTS = ("forward", "back", "left", "right", "stop", "look", "none")
 
 LEXICON: dict[str, tuple[str, ...]] = {
@@ -22,6 +31,17 @@ LEXICON: dict[str, tuple[str, ...]] = {
     "stand": ("قوم", "انهض", "stand"),
     "sit": ("اقعد", "اجلس", "sit"),
     "look": ("شوف", "انظر", "بص", "look", "see"),
+    "dance": ("ارقص", "dance"),
+    "wave": ("سلّم", "باي"),
+    "bow": ("انحني",),
+    "reach": ("المس",),
+    "attack_stance": ("وضع الهجوم",),
+    "defense_stance": ("دافع", "وضع الدفاع"),
+    "alert": ("انتبه",),
+    "sleep": ("نام",),
+    "celebrate": ("احتفل",),
+    "hi": ("مرحبا", "هاي", "اهلا"),
+    "offer_hand": ("سلم علي", "صافحني", "مد ايدك"),
 }
 NEGATIONS = frozenset(tokens("لا ما مش مو بلاش dont not"))
 CANNED_SAY = {
@@ -32,6 +52,18 @@ CANNED_SAY = {
     "stand": "حاضر",
     "sit": "حاضر",
     "look": "لحظة أشوف",
+    # never a word of the lexicon or a stop word: the robot must not command itself
+    "dance": "يلا",
+    "wave": "مع السلامة",
+    "bow": "تفضلوا",
+    "reach": "ثواني",
+    "attack_stance": "جاهز",
+    "defense_stance": "بحمي حالي",
+    "alert": "عيني مفتوحة",
+    "sleep": "تصبح على خير",
+    "celebrate": "هيييه",
+    "hi": "أهلين",
+    "offer_hand": "تشرفنا",
 }
 
 
@@ -41,20 +73,32 @@ class GrammarHit:
     say: str
 
 
-def _lexicon_tokens(entries: tuple[str, ...]) -> tuple[str, ...]:
-    return tuple(t for entry in entries for t in tokens(entry))
-
-
-_NORMALISED = {act: _lexicon_tokens(words) for act, words in LEXICON.items()}
+# (act, entry tokens), phrases first so that they claim their words before single words do
+_ENTRIES = sorted(
+    ((act, tuple(tokens(entry))) for act, words in LEXICON.items() for entry in words),
+    key=lambda e: -len(e[1]),
+)
 
 
 def acts_in(transcript: str) -> set[str]:
     """Every act whose words appear in the transcript."""
     words = tokens(transcript)
-    return {
-        act for act, targets in _NORMALISED.items()
-        if any(word_matches(word, t) for word in words for t in targets)
-    }
+    used = [False] * len(words)
+    found: set[str] = set()
+    for act, entry in _ENTRIES:
+        n = len(entry)
+        for i in range(len(words) - n + 1):
+            span = range(i, i + n)
+            if n > 1 and any(used[k] for k in span):
+                continue
+            if n == 1 and used[i]:
+                continue
+            if all(word_matches(words[k], t) for k, t in zip(span, entry, strict=True)):
+                found.add(act)
+                if n > 1:
+                    for k in span:
+                        used[k] = True
+    return found
 
 
 def has_negation(transcript: str) -> bool:

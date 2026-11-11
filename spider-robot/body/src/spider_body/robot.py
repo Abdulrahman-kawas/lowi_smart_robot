@@ -10,6 +10,12 @@ Modes
            nothing to the servos and a release goes to relaxed.
   fallen   tilt past fall_tilt: servos limp until a new stand/sit command
 
+Expressive moves (moves.py) run while standing: Perform and Reach are validated whole before they
+start, then played by tick() one frame per tick through the same IK and servo path. The mode stays
+"standing" and state().perform names the move. Stop or E-stop ends a move within one tick: the
+body holds that frame (each frame is statically stable) until a stand or sit command brings it
+back to the neutral pose with a validated return. offer_hand retracts at once on a Stop instead.
+
 tick() runs at control_hz (50 Hz). Order inside one tick:
   link watchdog -> move deadline -> tilt -> obstacle/LiDAR limits -> posture ramps -> IK -> servos
 """
@@ -33,7 +39,9 @@ from spider_common.protocol import (
     EventKind,
     Heartbeat,
     Move,
+    Perform,
     Posture,
+    Reach,
     RobotEvent,
     RobotMode,
     RobotState,
@@ -49,6 +57,18 @@ from .hw.kick import NoKick
 from .hw.lidar import LidarSource
 from .hw.servos import ServoBank, clamp_servo
 from .kinematics import IKError, LegGeometry, body_to_leg, joint_to_servo_deg, leg_ik, rotate_rpy
+from .moves import (
+    DEFAULT_SPEED,
+    OFFER_CLEAR_M,
+    MoveError,
+    MoveLibrary,
+    MoveSpec,
+    Runner,
+    edge_clearance,
+    nearest_within,
+    raised_feet,
+    validate,
+)
 from .safety import EStopLatch, SafetyGuard
 
 log = logging.getLogger(__name__)
@@ -117,6 +137,10 @@ class Robot:
         self.tick_hist = Histogram()
         self.rt_ok = False
         self.kick = NoKick()  # the hardware watchdog pin, when a relay board is fitted
+        self.moves = MoveLibrary(cfg)
+        self.perform: Runner | None = None
+        self._frame = None  # (body, feet) of the move pose being sent, while it runs or holds
+        self._after_recover: str | None = None  # "sit": sit down once back in the stand pose
 
     # ------------------------------------------------------------------ events
     def emit(
@@ -152,7 +176,7 @@ class Robot:
             return  # sent before a Stop that already arrived: drop silently
 
         if isinstance(cmd, EStop):
-            self._cancel_move()
+            self._cancel_move("estop")
             self.gait.freeze()  # hold every foot where it is: no jump
             self.estop = True
             if self.mode in _ACTIVE:
@@ -163,7 +187,7 @@ class Robot:
         elif isinstance(cmd, EStopRelease):
             self._release_estop(cmd)
         elif isinstance(cmd, Stop):
-            self._cancel_move()
+            self._cancel_move("stop")
             self._hold_ramps()
             self.emit("ack", cmd.seq, "stopping", cmd.trace)
         elif isinstance(cmd, Snapshot):
@@ -172,6 +196,8 @@ class Robot:
             task = asyncio.get_running_loop().create_task(self._snapshot(cmd))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
+        elif isinstance(cmd, (Perform, Reach)):
+            self._handle_perform(cmd)
         elif self.estop:
             self.emit("rejected", cmd.seq, "estop is latched; send estop_release first")
         elif isinstance(cmd, Move):
@@ -213,7 +239,18 @@ class Robot:
     def _at_height(self, height: float) -> bool:
         return abs(self.gait.height - height) < _HEIGHT_TOL_M
 
+    def _move_busy(self) -> str | None:
+        if self.perform is not None:
+            return f"{self.perform.spec.name} is running; send stop first"
+        if self._frame is not None:
+            return "holding the last move pose; send stand first"
+        return None
+
     def _handle_move(self, cmd: Move) -> None:
+        busy = self._move_busy()
+        if busy:
+            self.emit("rejected", cmd.seq, busy)
+            return
         if self.mode not in ("standing", "walking"):
             self.emit("rejected", cmd.seq, f"cannot move while {self.mode}; stand first")
             return
@@ -231,6 +268,19 @@ class Robot:
             self.emit("ack", cmd.seq, "moving", cmd.trace)
 
     def _handle_posture(self, cmd: Posture) -> None:
+        if self.perform is not None:
+            self.emit("rejected", cmd.seq, f"{self.perform.spec.name} is running; send stop first")
+            return
+        if self._frame is not None:  # a move was stopped part way: return to the stand first
+            if cmd.posture == "relax":
+                self.emit("rejected", cmd.seq, "holding a move pose; send stand, then sit")
+                return
+            why = self._start_recover(cmd.seq, cmd.trace, then=cmd.posture)
+            if why:
+                self.emit("rejected", cmd.seq, why)
+            else:
+                self.emit("ack", cmd.seq, f"{cmd.posture}: back to the stand pose first")
+            return
         if cmd.posture == "relax":
             if self.mode == "relaxed":
                 self.emit("ack", cmd.seq, "already relaxed")
@@ -265,6 +315,10 @@ class Robot:
         self.emit("ack", cmd.seq, cmd.posture)
 
     def _handle_body_pose(self, cmd: BodyPose) -> None:
+        busy = self._move_busy()
+        if busy:
+            self.emit("rejected", cmd.seq, busy)
+            return
         if self.mode != "standing":
             self.emit("rejected", cmd.seq, "body pose needs standing (not walking)")
             return
@@ -283,10 +337,170 @@ class Robot:
             return
         self.link.publish(self.topics.camera(cmd.request_id), data, qos=1)
 
-    def _cancel_move(self) -> None:
+    def _cancel_move(self, reason: str = "stop") -> None:
         self.move = None
         self.move_deadline = None
         self.gait.stop()
+        if self.perform is not None:
+            self._interrupt(reason)
+
+    # ------------------------------------------------------------------ expressive moves
+    def _move_blocker(self) -> str | None:
+        """Why no move may start now, or None. Checked before anything is built."""
+        s = self.cfg.safety
+        if self.estop:
+            return "estop is latched; send estop_release first"
+        if self.mode != "standing":
+            return f"cannot start a move while {self.mode}; stand first"
+        busy = self._move_busy()
+        if busy:
+            return busy
+        if self.gait.moving:
+            return "stop walking first"
+        if self._wake_tick is not None:
+            return "still waking up"
+        if not self._at_height(self._stand_h()) or not self._height_reached():
+            return "not at the stand height; send stand first"
+        if max(abs(a) for a in (*self.pose, *self.pose_target)) > 1e-3:
+            return "the body pose is not neutral; send body_pose with zeros first"
+        roll, pitch = self.lidar.tilt()
+        if roll is None or pitch is None:
+            return "tilt unknown: IMU is not reporting"
+        if max(abs(roll), abs(pitch)) > s.max_level_deg:
+            return f"not level (roll {roll:.1f}, pitch {pitch:.1f} deg)"
+        summary, age = self.lidar.latest()
+        if summary is None or age is None or age > s.lidar_timeout_s:
+            return "LiDAR data is stale"
+        return None
+
+    def _obstacle_blocker(self, spec: MoveSpec, summary, own=None) -> str | None:
+        m = self.cfg.moves
+        if spec.guard == "clear":
+            d, bearing = edge_clearance(summary, self.moves.geo.footprint, own)
+            if d < m.clear_radius_m:
+                return (f"obstacle {d:.2f} m from the legs at {bearing:.0f} deg "
+                        f"(moves need {m.clear_radius_m:.2f} m clear)")
+        elif spec.guard == "offer" and spec.target is not None:
+            radius = math.hypot(spec.target[0], spec.target[1]) + OFFER_CLEAR_M
+            r = nearest_within(summary, radius, own)
+            if r is not None:
+                return (f"something {r:.2f} m away, within 5 cm of where the foot would go "
+                        f"({radius:.2f} m)")
+        elif spec.guard == "reach" and spec.watch is not None:
+            k, planned = spec.watch
+            if summary.sectors_m[k] < planned - 0.03:
+                return "the target moved closer"
+        return None
+
+    def _handle_perform(self, cmd: Perform | Reach) -> None:
+        what = cmd.name if isinstance(cmd, Perform) else "reach"
+
+        def refuse(reason: str) -> None:
+            self.emit("perform_rejected", cmd.seq, f"{what}: {reason}", cmd.trace)
+
+        why = self._move_blocker()
+        if why:
+            refuse(why)
+            return
+        summary, _ = self.lidar.latest()
+        assert summary is not None
+        try:
+            if isinstance(cmd, Perform):
+                spec = self.moves.get(cmd.name, cmd.leg)
+            elif cmd.target == "nearest":
+                spec, _ = self.moves.reach_nearest(cmd.leg, summary, cmd.speed)
+            else:
+                spec = self.moves.reach(cmd.leg, cmd.target)
+        except MoveError as exc:
+            refuse(str(exc))
+            return
+        why = self._obstacle_blocker(spec, summary)
+        if why:
+            refuse(why)
+            return
+        report = validate(self.moves.geo, spec, cmd.speed)
+        if not report.ok:
+            refuse(report.reason)
+            return
+        self.perform = Runner(spec, cmd.speed, cmd.seq, cmd.trace)
+        self._frame = self.perform.frame()
+        capped = f" (limited to {spec.max_speed:g})" if cmd.speed > spec.max_speed else ""
+        extra = f", {spec.detail}" if spec.detail else ""
+        self.emit("perform_started", cmd.seq,
+                  f"{what}: {report.duration_s:.1f} s at speed {report.speed:g}{capped}{extra}",
+                  cmd.trace)
+
+    def _start_recover(self, seq: int | None, trace: str, then: str | None = None) -> str | None:
+        """Back from a held move pose to the neutral stand, validated like any move."""
+        assert self._frame is not None
+        spec, report = self.moves.recovery(*self._frame)
+        if not report.ok:
+            return f"cannot plan a safe way back to stand ({report.reason}); lift the robot"
+        self.perform = Runner(spec, DEFAULT_SPEED, seq, trace)
+        self._after_recover = then
+        self.emit("perform_started", seq, f"recover: {report.duration_s:.1f} s", trace)
+        return None
+
+    def _interrupt(self, reason: str) -> None:
+        r = self.perform
+        assert r is not None
+        self.perform = None
+        self.emit("perform_done", r.seq, f"{r.spec.name} interrupted: {reason}", r.trace)
+        if reason == "fallen":
+            self._frame = None
+            return
+        if r.spec.retract_on_stop and reason != "estop" and self._frame is not None:
+            why = self._start_recover(r.seq, r.trace)
+            if why:
+                self.emit("error", r.seq, why)
+
+    def _guard_perform(self) -> None:
+        """Runtime checks while a move plays. Any failure ends it like a Stop."""
+        r = self.perform
+        assert r is not None and self._frame is not None
+        if r.spec.guard == "none":
+            return
+        s = self.cfg.safety
+        summary, age = self.lidar.latest()
+        roll, _ = self.lidar.tilt()
+        if summary is None or age is None or age > s.lidar_timeout_s:
+            seq = r.seq
+            self._cancel_move("LiDAR data is stale")
+            self.emit("error", seq, "LiDAR data is stale; move stopped")
+            return
+        if roll is None:
+            seq = r.seq
+            self._cancel_move("tilt unknown")
+            self.emit("error", seq, "tilt unknown: IMU is not reporting; move stopped")
+            return
+        if r.spec.guard == "offer" and not r.guarding:
+            return  # the hand is out: someone may come close now, the foot does not move to them
+        why = self._obstacle_blocker(r.spec, summary, raised_feet(self.moves.geo, *self._frame))
+        if why:
+            seq, trace = r.seq, r.trace
+            self._cancel_move("obstacle")
+            self.emit("obstacle_stop", seq, why, trace)
+
+    def _finish_perform(self) -> None:
+        r = self.perform
+        assert r is not None
+        self.perform = None
+        self._frame = None
+        self.pose = [0.0, 0.0, 0.0]
+        self.pose_target = [0.0, 0.0, 0.0]
+        self.gait.height = self.target_height = self.walk_height = self._stand_h()
+        then, self._after_recover = self._after_recover, None
+        if r.spec.name == "recover" and then == "sit":
+            self.target_height = self._sit_h()
+            self.mode = "sitting"
+        self.emit("perform_done", r.seq, f"{r.spec.name} done", r.trace)
+
+    @property
+    def body_shift(self) -> tuple[float, float]:
+        """Body translation of the move in progress (stance frame), for the viewer."""
+        if self._frame is None:
+            return (0.0, 0.0)
+        return (float(self._frame[0][4]), float(self._frame[0][5]))
 
     # ------------------------------------------------------------------ control loop
     def tick(self, dt: float) -> None:
@@ -299,8 +513,9 @@ class Robot:
                 self.emit("error", self.last_seq, "E-stop latch could not be saved to disk")
 
         # 1. link watchdog: the cloud went quiet while we were walking
-        if (self.move is not None or self.gait.moving) and now - self.last_link > s.link_timeout_s:
-            self._cancel_move()
+        if (self.move is not None or self.gait.moving or self.perform is not None) and \
+                now - self.last_link > s.link_timeout_s:
+            self._cancel_move("link lost")
             if not self._link_lost_reported:
                 self._link_lost_reported = True
                 self.emit("link_lost", self.last_seq, "no heartbeat; stopped")
@@ -315,15 +530,16 @@ class Robot:
         roll, pitch = self.lidar.tilt()
         tilt = self.guard.tilt_state(roll, pitch)
         if tilt == "fallen" and self.mode not in ("relaxed", "fallen"):
-            self._cancel_move()
+            self._cancel_move("fallen")
+            self._frame = None
             self.gait.halt_now()
             self.servos.relax()
             self.mode = "fallen"
             self._wake_tick = None
             self.emit("fallen", self.last_seq, f"roll={roll} pitch={pitch}; servos relaxed")
             return
-        if tilt == "tilt" and self.move is not None:
-            self._cancel_move()
+        if tilt == "tilt" and (self.move is not None or self.perform is not None):
+            self._cancel_move("tilt")
             if not self._tilt_reported:
                 self._tilt_reported = True
                 self.emit("tilt", self.last_seq, f"roll={roll:.0f} pitch={pitch:.0f}; stopped")
@@ -355,15 +571,25 @@ class Robot:
                 self.emit("error", self.move.seq, "LiDAR data is stale; not moving")
             else:
                 self.gait.set_velocity(lim.vx, lim.vy, lim.wz, self.move.gait)
+        elif self.perform is not None and not self.estop:
+            self.gait.stop()
+            self.limiter = None
+            self._guard_perform()
         else:
             self.gait.stop()
             if self.move is None:
-                self.limiter = None
+                self.limiter = None if self._frame is None else "holding a move pose; send stand"
+
+        # 4b. the move in progress: one frame per tick
+        if self.perform is not None and not self.estop:
+            self._frame = self.perform.advance(dt)
+            if self.perform.done:
+                self._finish_perform()
 
         # 5. posture ramps. Frozen during an E-stop (the body must not keep moving) and during a
         # staged wake (a leg not yet powered must first arrive at the sit pose).
         g = self.cfg.gait
-        if not self.estop and self._wake_tick is None:
+        if not self.estop and self._wake_tick is None and self._frame is None:
             self.gait.height = _approach(
                 self.gait.height, self.target_height, g.posture_speed_mps * dt
             )
@@ -377,10 +603,15 @@ class Robot:
         if self._cold_estop:
             return  # latched before this process started: the pose is unknown, send nothing
         if self.mode in _ACTIVE:
-            feet = self.gait.step(dt)
+            if self._frame is not None:  # a move frame (held still under an E-stop)
+                feet, self.pose, self.gait.height = self.moves.geo.to_robot(*self._frame)
+            else:
+                feet = self.gait.step(dt)
             angles = self.solve(feet)
             if angles is not None:
                 self.servos.write(self._staged(angles))
+            elif self.perform is not None:  # validated, so this is a bug: stop the move
+                self._cancel_move("IK failed")
 
     def _staged(self, angles: dict[str, float]) -> dict[str, float]:
         """After limp the SSC-32U ignores T on the first command, so each leg snaps to place."""
@@ -455,4 +686,5 @@ class Robot:
             loop_late_p99_ms=round(self.late_hist.percentile(0.99), 2),
             loop_late_hist=list(self.loop_late_hist),
             rt_ok=self.rt_ok,
+            perform=self.perform.spec.name if self.perform is not None else None,
         )

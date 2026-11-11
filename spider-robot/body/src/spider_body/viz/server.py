@@ -56,9 +56,10 @@ EVENT_LOG = 40
 EVENTS_PER_FRAME = 15
 SESSION = "viewer"
 # Snapshot and confirm_request need a camera or the gateway; the viewer has neither.
-VIEWER_COMMANDS = frozenset(
-    {"move", "stop", "posture", "body_pose", "estop", "estop_release", "heartbeat"}
-)
+VIEWER_COMMANDS = frozenset({
+    "move", "stop", "posture", "body_pose", "estop", "estop_release", "heartbeat", "perform",
+    "reach",
+})
 
 
 def _r(v: float, n: int = 4) -> float:
@@ -137,13 +138,17 @@ class SimSession:
         body_z = -min(feet_z) if feet_z else g.sit_height_m
         summary, age = self.lidar.latest()
         eff = r.gait.effective
+        sx, sy = r.body_shift
         return {
             "t": round(time.time(), 3),
             "mode": r.mode,
             "estop": r.estop,
             "limiter": r.limiter,
             "servos_relaxed": self.servos.relaxed,
-            "world": {"x": _r(w.x), "y": _r(w.y), "yaw": _r(w.yaw), "half_size": w.half_size},
+            "perform": r.perform.spec.name if r.perform is not None else None,
+            "holding": r.perform is None and r._frame is not None,
+            "world": {"x": _r(w.x), "y": _r(w.y), "yaw": _r(w.yaw), "half_size": w.half_size,
+                      "shift": [_r(sx), _r(sy)]},  # body shift of a move, robot frame
             "pose": {
                 "roll_deg": _r(math.degrees(roll), 2),
                 "pitch_deg": _r(math.degrees(pitch), 2),

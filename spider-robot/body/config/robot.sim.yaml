@@ -59,6 +59,14 @@ gait:
 
 state_hz: 4
 
+# Expressive moves (spider_body/moves.py). offer_hand puts the foot at a fixed point this far
+# ahead of the footprint edge. With these legs (coxa+femur+tibia = 25 cm) and the body shifted back
+# first, 6 cm at 12 cm height is the farthest LF can reach inside its servo limits; the default
+# 10 cm is refused as out of reach. Re-check with the validator after measuring the real legs.
+moves:
+  offer_hand_ahead_m: 0.06
+  offer_hand_height_m: 0.12
+
 # Leg mounts (body frame: x forward, y left). SSC-32U channels: coxa, femur, tibia = ch, ch+1, ch+2.
 # direction/trim come from calibration.yaml (spider-calibrate).
 legs:

@@ -145,11 +145,20 @@ async def sit_and_relax(robot: Robot, timeout_s: float = 4.0) -> None:
     robot._cancel_move()
     if robot.estop:
         return
+    loop = asyncio.get_running_loop()
+    if robot._frame is not None:  # stopped in a move pose: back to the stand, then sit
+        if robot.perform is None:
+            robot._start_recover(None, "", then="sit")
+        else:  # offer_hand is already retracting
+            robot._after_recover = "sit"
+        end = loop.time() + 10.0
+        while loop.time() < end and robot.perform is not None:
+            await asyncio.sleep(0.05)
     if robot.mode in ("standing", "walking"):
         robot.mode = "sitting"
         robot.target_height = robot.cfg.geometry.sit_height_m
         robot.pose_target = [0.0, 0.0, 0.0]
-        loop = asyncio.get_running_loop()
+    if robot.mode == "sitting" and robot._frame is None:
         end = loop.time() + timeout_s
         while loop.time() < end and not robot._height_reached():
             await asyncio.sleep(0.05)
