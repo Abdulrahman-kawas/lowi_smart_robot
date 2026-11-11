@@ -18,6 +18,7 @@
 #include <zmq.h>
 
 #include <algorithm>
+#include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
@@ -114,12 +115,16 @@ int main() {
   std::vector<float> buf;
   std::vector<float> rec_buf;
   uint64_t clouds = 0;
+  using Clock = std::chrono::steady_clock;
+  auto last_cloud = Clock::now();
+  auto last_start = Clock::now();
   float imu_sum[6] = {0, 0, 0, 0, 0, 0};  // gyro xyz, accel xyz
   int imu_count = 0;
 
   while (g_stop == 0) {
     const int type = reader->runParse();
     if (type == LIDAR_POINT_DATA_PACKET_TYPE && reader->getPointCloud(cloud)) {
+      last_cloud = Clock::now();
       buf.clear();
       buf.reserve(cloud.points.size() / stride * 4 + 4);
       for (size_t i = 0; i < cloud.points.size(); i += stride) {
@@ -183,6 +188,14 @@ int main() {
       }
     } else if (type == 0) {
       usleep(1000);  // nothing parsed: packets arrive at about 216 Hz, so 1 ms loses nothing
+    }
+    // A start command sent before the Ethernet link was up is lost, and the previous run stopped
+    // the rotation on exit. While no clouds arrive, ask again every 10 s.
+    const auto now = Clock::now();
+    if (now - last_cloud > std::chrono::seconds(3) && now - last_start > std::chrono::seconds(10)) {
+      reader->startLidarRotation();
+      last_start = now;
+      std::fprintf(stderr, "lidar_bridge: no clouds for 3 s; sent start rotation again\n");
     }
   }
 
