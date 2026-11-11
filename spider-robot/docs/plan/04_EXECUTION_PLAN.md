@@ -16375,7 +16375,7 @@ git commit -q -m "Record that P03 is done"
 ```bash
 . spider-robot/docs/plan/SITE.env
 SSC=$(ssh "$PI_USER@$PI_HOST" 'ls -1 /dev/serial/by-id/'); echo "$SSC"; [ "$(printf '%s\n' "$SSC" | wc -l | tr -d ' ')" = 1 ] && [ -n "$SSC" ] || { echo STOP-not-exactly-one-device; exit 1; }
-ssh "$PI_USER@$PI_HOST" "sudo -u spider sed -i '/^ssc:/,/^[a-z]/ s#^  port: .*#  port: /dev/serial/by-id/$SSC#' /etc/spider/robot.yaml && grep -A1 '^ssc:' /etc/spider/robot.yaml"
+ssh "$PI_USER@$PI_HOST" "sudo -u spider sed -i '/^ssc:/,/^[a-z]/ s#^  port: .*#  port: /dev/serial/by-id/$SSC#' /etc/spider/robot.yaml && sudo grep -A1 '^ssc:' /etc/spider/robot.yaml"
 ```
 
 - **Expected output:** one device path, then `ssc:` and a `port:` line holding that `/dev/serial/by-id/` path.
