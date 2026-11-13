@@ -51,6 +51,15 @@ class VisionClient:
         await self.http.aclose()
 
 
+class CompatVision(VisionClient):
+    """Any OpenAI-compatible vision endpoint with a key, such as NVIDIA NIM."""
+
+    def __init__(self, base_url: str, model: str, api_key: str, timeout_s: float = 30.0) -> None:
+        super().__init__(base_url, model, timeout_s)
+        if api_key:
+            self.http.headers["Authorization"] = f"Bearer {api_key}"
+
+
 class ClaudeVision:
     """Backup vision: the same question to a Claude model with the JPEG attached."""
 
@@ -107,4 +116,6 @@ def make_vision(settings) -> RoutedVision:
     kind, _, model = settings.vision_fallback.partition(":")
     if kind == "anthropic" and settings.anthropic_api_key:
         backup = ClaudeVision(model, settings.anthropic_api_key)
+    elif kind == "compat" and settings.compat_base_url:
+        backup = CompatVision(settings.compat_base_url, model, settings.compat_api_key)
     return RoutedVision(primary, backup)

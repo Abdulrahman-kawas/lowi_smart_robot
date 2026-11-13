@@ -1,0 +1,21 @@
+[Unit]
+Description=Spider robot - Pi health (undervoltage, temperature, memory, disk)
+After=mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+User=spider
+WorkingDirectory=/opt/spider/spider-robot/body
+ExecStart=/opt/spider/spider-robot/body/.venv/bin/spider-sysmon --config /etc/spider/robot.yaml
+Restart=always
+RestartSec=5
+CPUAffinity=1 2 3
+Nice=10
+MemoryMax=96M
+ProtectHome=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+OOMScoreAdjust=200
+
+[Install]
+WantedBy=multi-user.target

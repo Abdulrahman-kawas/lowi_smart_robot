@@ -36,7 +36,9 @@ class Link(Protocol):
 
     async def stop(self) -> None: ...
 
-    def publish(self, topic: str, payload: bytes | str, qos: int = 0) -> bool: ...
+    def publish(
+        self, topic: str, payload: bytes | str, qos: int = 0, retain: bool = False
+    ) -> bool: ...
 
     def messages(self) -> AsyncIterator[Message]: ...
 
@@ -50,10 +52,12 @@ class _Inbox:
 
     def __init__(self, maxsize: int = 1000) -> None:
         self.queue: asyncio.Queue[Message] = asyncio.Queue(maxsize=maxsize)
+        self.dropped = 0
 
     def put(self, msg: Message) -> None:
         if self.queue.full():
             self.queue.get_nowait()
+            self.dropped += 1
         self.queue.put_nowait(msg)
 
     async def iterate(self) -> AsyncIterator[Message]:
@@ -72,6 +76,9 @@ class MqttSettings:
     cert_path: str | None = None  # device certificate
     key_path: str | None = None  # device private key
     keepalive_s: int = 10  # last-will "offline" fires ~1.5x this after a silent drop
+    username: str | None = None  # plain loopback listener on the Pi (identity for the ACL)
+    password: str | None = None
+    reconnect_max_s: int = 30  # back-off ceiling; 2 for a broker on the same machine
 
 
 class MqttLink:
@@ -80,6 +87,7 @@ class MqttLink:
         settings: MqttSettings,
         subscriptions: list[str],
         will: tuple[str, bytes] | None = None,
+        will_retain: bool = False,
     ) -> None:
         self.settings = settings
         self._subs = list(subscriptions)
@@ -98,12 +106,14 @@ class MqttLink:
                 certfile=settings.cert_path,
                 keyfile=settings.key_path,
             )
+        if settings.username is not None:
+            client.username_pw_set(settings.username, settings.password)
         if will is not None:
-            client.will_set(will[0], will[1], qos=1)
+            client.will_set(will[0], will[1], qos=1, retain=will_retain)
         client.on_connect = self._on_connect
         client.on_disconnect = self._on_disconnect
         client.on_message = self._on_message
-        client.reconnect_delay_set(min_delay=1, max_delay=30)
+        client.reconnect_delay_set(min_delay=1, max_delay=settings.reconnect_max_s)
         # paho keeps QoS 1 messages published while offline and replays them after reconnect.
         # Old robot commands must never be replayed, so keep that queue tiny.
         client.max_queued_messages_set(5)
@@ -120,11 +130,11 @@ class MqttLink:
         self._client.disconnect()
         self._client.loop_stop()
 
-    def publish(self, topic: str, payload: bytes | str, qos: int = 0) -> bool:
+    def publish(self, topic: str, payload: bytes | str, qos: int = 0, retain: bool = False) -> bool:
         """Thread-safe. Returns False when the message could not be sent (e.g. offline)."""
         if not self.connected.is_set():
             return False
-        info = self._client.publish(topic, payload, qos=qos)
+        info = self._client.publish(topic, payload, qos=qos, retain=retain)
         return info.rc == mqtt.MQTT_ERR_SUCCESS
 
     def messages(self) -> AsyncIterator[Message]:
@@ -162,6 +172,7 @@ class InMemoryHub:
     """A tiny broker living in one process. hub.endpoint([...]) returns a Link."""
 
     endpoints: list[InMemoryLink] = field(default_factory=list)
+    retained: dict[str, Message] = field(default_factory=dict)
 
     def endpoint(self, subscriptions: list[str]) -> InMemoryLink:
         ep = InMemoryLink(self, subscriptions)
@@ -184,16 +195,21 @@ class InMemoryLink:
 
     async def start(self) -> None:
         self.connected.set()
+        for msg in self.hub.retained.values():
+            if any(topic_matches(sub, msg.topic) for sub in self.subs):
+                self.inbox.put(msg)
 
     async def stop(self) -> None:
         self.connected.clear()
 
-    def publish(self, topic: str, payload: bytes | str, qos: int = 0) -> bool:
+    def publish(self, topic: str, payload: bytes | str, qos: int = 0, retain: bool = False) -> bool:
         if not self.connected.is_set():
             return False
         data = payload.encode() if isinstance(payload, str) else payload
         msg = Message(topic, data)
         self.published.append(msg)
+        if retain:
+            self.hub.retained[topic] = msg
         self.hub.route(msg)
         return True
 

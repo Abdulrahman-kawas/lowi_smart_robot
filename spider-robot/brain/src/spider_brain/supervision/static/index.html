@@ -29,7 +29,7 @@
   .k { color:var(--accent); margin-right:6px; }
   .approval { border:1px solid var(--warn); border-radius:10px; padding:10px; margin-bottom:8px; }
   .approval .row { display:flex; gap:8px; margin-top:8px; }
-  #state { font-family:ui-monospace,monospace; font-size:12px; white-space:pre-wrap; }
+  #state, #gateway, #latency { font-family:ui-monospace,monospace; font-size:12px; white-space:pre-wrap; }
 </style>
 </head>
 <body>
@@ -56,6 +56,10 @@
     <img id="cam" alt="last camera frame">
     <h2 style="margin-top:12px">Robot state</h2>
     <div id="state">-</div>
+    <h2 style="margin-top:12px">Sources</h2>
+    <div id="gateway">-</div>
+    <h2 style="margin-top:12px">Voice latency (ms after end of speech)</h2>
+    <div id="latency">-</div>
   </section>
   <section>
     <h2>Activity</h2>
@@ -118,8 +122,41 @@ function showApproval(ev) {
   row.append(yes, no); card.append(t, row); box.appendChild(card);
 }
 
+function showConfirm(ev) {
+  const box = $("approvals");
+  if (box.querySelector(".pill")) box.textContent = "";
+  const card = document.createElement("div");
+  card.className = "approval"; card.id = "cf-" + ev.id;
+  const t = document.createElement("div");
+  t.textContent = "Look at this frame. Confirm only if the robot is clear: " + ev.action +
+                  " (expires in " + ev.ttl_s + " s)";
+  const img = document.createElement("img");
+  img.src = "data:image/jpeg;base64," + ev.data;
+  const row = document.createElement("div"); row.className = "row";
+  const yes = document.createElement("button"); yes.className = "approve"; yes.textContent = "Confirm";
+  const no = document.createElement("button"); no.className = "reject"; no.textContent = "Cancel";
+  yes.onclick = () => { send({cmd: "confirm", id: ev.id, approved: true}); card.remove(); };
+  no.onclick = () => { send({cmd: "confirm", id: ev.id, approved: false}); card.remove(); };
+  row.append(yes, no); card.append(t, img, row); box.appendChild(card);
+}
+
 function onEvent(ev) {
   switch (ev.kind) {
+    case "confirm_request": showConfirm(ev); log("confirm?", ev.action); break;
+    case "latency": {
+      const rows = Object.entries(ev.summary.stages).map(([k, v]) =>
+        k.padEnd(18) + " p50 " + String(v.p50).padStart(7) + "  p95 " + String(v.p95).padStart(7) +
+        "  n=" + v.n);
+      $("latency").textContent = rows.join("\n") + "\npaths " + JSON.stringify(ev.summary.paths);
+      break;
+    }
+    case "gateway_status": {
+      const g = ev.status;
+      $("gateway").textContent = "owner " + (g.owner || "-") + "\n" +
+        Object.entries(g.sources).map(([k, v]) =>
+          k.padEnd(8) + (v.alive ? "alive" : "lost ") + "  queue " + v.queue_delay_ms + " ms").join("\n");
+      break;
+    }
     case "robot_state": {
       const s = ev.state;
       pill($("mode"), "robot: " + s.mode + (s.estop ? " (E-STOP)" : ""),

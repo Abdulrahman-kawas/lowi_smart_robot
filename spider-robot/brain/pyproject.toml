@@ -17,6 +17,8 @@ dependencies = [
 [project.optional-dependencies]
 # Voice notes (same libraries as the repo's orchestrator.py); ffmpeg comes from apt.
 voice = ["google-genai>=1.0", "gTTS>=2.5"]
+# Converts a recording to a ROS 1 bag for the SLAM container. Only on the home server.
+slam = ["rosbags>=0.11", "numpy>=1.26"]
 
 [project.scripts]
 spider-brain = "spider_brain.main:main"
@@ -27,11 +29,16 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.7",
     "spider-body",  # end-to-end tests drive the simulated body in-process
+    "spider-gateway",  # gateway-mode tests run the real arbitration in-process
 ]
+# Only on the home server: uv sync --extra voice --extra slam --group stt --group aws
+stt = ["faster-whisper==1.2.1", "ctranslate2==4.8.5"]
+aws = ["boto3>=1.35,<2"]
 
 [tool.uv.sources]
 spider-common = { path = "../common", editable = true }
 spider-body = { path = "../body", editable = true }
+spider-gateway = { path = "../gateway", editable = true }
 
 [build-system]
 requires = ["hatchling"]

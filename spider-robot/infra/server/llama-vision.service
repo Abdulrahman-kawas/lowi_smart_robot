@@ -1,0 +1,19 @@
+[Unit]
+Description=Liquid LFM2.5-VL-1.6B vision (llama-server, loopback, port 8081)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=__USER__
+Environment=LLAMA_CACHE=/var/lib/liquid
+ExecStart=/usr/local/bin/llama-server -hf LiquidAI/LFM2.5-VL-1.6B-GGUF:Q4_0 \
+  --host 127.0.0.1 --port 8081 -c 4096 --jinja -t 6 --parallel 1
+Restart=on-failure
+RestartSec=5
+Nice=10
+MemoryHigh=2500M
+MemoryMax=3G
+OOMScoreAdjust=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,17 +1,29 @@
 [Unit]
 Description=Spider robot - Unitree L2 LiDAR bridge (UDP -> ZeroMQ)
-After=network-online.target
-Wants=network-online.target
+# The L2 is on its own Ethernet link. Never wait for the home network here.
+After=spider-tune.service
+Wants=spider-tune.service
 
 [Service]
 User=spider
 Environment=LIDAR_IP=192.168.1.62
 Environment=LOCAL_IP=192.168.1.2
 Environment=ZMQ_ENDPOINT=ipc:///tmp/spider_lidar.ipc
+Environment=ZMQ_RECORD_ENDPOINT=ipc:///tmp/spider_lidar_rec.ipc
 Environment=POINT_STRIDE=2
+Environment=IMU_DECIMATE=20
 ExecStart=/opt/spider/bin/lidar_bridge
 Restart=always
 RestartSec=2
+# Shares core 0 with the control loop, below it: the loop is SCHED_FIFO, this is not.
+CPUAffinity=0
+Nice=-10
+MemoryMax=64M
+OOMScoreAdjust=-900
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/tmp
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target

@@ -14,7 +14,6 @@ import threading
 import time
 from typing import Protocol
 
-import cv2
 import numpy as np
 
 from ..config import CameraCfg
@@ -27,6 +26,8 @@ class Camera(Protocol):
 
 
 def encode_jpeg(frame_bgr: np.ndarray, quality: int, max_bytes: int) -> bytes:
+    import cv2  # not at module level: the control process never needs OpenCV
+
     q = quality
     img = frame_bgr
     while True:
@@ -47,10 +48,12 @@ def encode_jpeg(frame_bgr: np.ndarray, quality: int, max_bytes: int) -> bytes:
 class OpenCvCamera:
     def __init__(self, cfg: CameraCfg) -> None:
         self.cfg = cfg
-        self._cap: cv2.VideoCapture | None = None
+        self._cap = None
         self._lock = threading.Lock()
 
-    def _open(self) -> cv2.VideoCapture:
+    def _open(self):
+        import cv2
+
         if self._cap is None or not self._cap.isOpened():
             cap = cv2.VideoCapture(self.cfg.device, cv2.CAP_V4L2)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
@@ -98,6 +101,8 @@ class FakeCamera:
         self.cfg = cfg
 
     def snapshot(self) -> bytes:
+        import cv2
+
         img = np.full((self.cfg.height, self.cfg.width, 3), 60, dtype=np.uint8)
         cv2.rectangle(img, (200, 150), (440, 400), (40, 120, 220), -1)  # an orange "box"
         cv2.putText(img, time.strftime("SIM %H:%M:%S"), (20, 40),

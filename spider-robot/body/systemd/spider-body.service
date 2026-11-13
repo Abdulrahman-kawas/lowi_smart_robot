@@ -1,24 +1,42 @@
 [Unit]
-Description=Spider robot - body controller (servos, gait, safety, cloud link)
-After=network-online.target time-sync.target spider-lidar.service
-Wants=network-online.target time-sync.target spider-lidar.service
+Description=Spider robot - body controller (servos, gait, safety)
+# Local units only: the robot must come up with no network and no correct clock (decision 1).
+After=mosquitto.service spider-lidar.service spider-tune.service
+Wants=mosquitto.service spider-lidar.service spider-tune.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=notify
 NotifyAccess=main
-# The control loop pings systemd every tick; if it stops for 1 s, systemd kills and restarts
-# the process. (Add the PCA9685 OE-pin wiring from the plan so a dead process also cuts pulses.)
+# The control loop pings systemd every tick. If it stops for 1 s, systemd kills and restarts the
+# process. The servo power relay (see the plan) cuts torque if the Pi itself dies.
 WatchdogSec=1
 User=spider
-SupplementaryGroups=dialout i2c video
+SupplementaryGroups=dialout i2c
 WorkingDirectory=/opt/spider/spider-robot/body
 ExecStart=/opt/spider/spider-robot/body/.venv/bin/spider-body --config /etc/spider/robot.yaml
-# SIGTERM makes the robot sit down and relax its servos before exiting.
+# SIGTERM makes the robot sit down and relax its servos, unless an E-stop is latched.
 KillSignal=SIGTERM
 TimeoutStopSec=10
 Restart=always
 RestartSec=3
-Nice=-5
+# Core 0 is reserved for this process and lidar_bridge. FIFO is set in-process, after the MQTT
+# thread exists, so that only the control thread is real-time.
+CPUAffinity=0
+AmbientCapabilities=CAP_SYS_NICE CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_SYS_NICE CAP_IPC_LOCK
+LimitRTPRIO=60
+LimitRTTIME=500000:900000
+OOMScoreAdjust=-900
+LimitMEMLOCK=infinity
+MemoryMax=400M
+Environment=OPENBLAS_NUM_THREADS=1
+Environment=OMP_NUM_THREADS=1
+StateDirectory=spider
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/tmp
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target

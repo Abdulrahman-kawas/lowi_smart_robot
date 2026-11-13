@@ -23,6 +23,11 @@ class Settings(BaseSettings):
 
     # Robot link ---------------------------------------------------------------
     robot_id: str = "spider-01"
+    # "remote" or "planner" = send through the command gateway on the Pi; None = straight to the
+    # body. The local broker's ACL requires the gateway.
+    robot_source: Literal["remote", "planner"] | None = None
+    # With robot_source=planner, what the owner does by hand goes out at this higher priority.
+    human_source: Literal["remote"] | None = None
     mqtt_host: str = "127.0.0.1"
     mqtt_port: int = 1884  # the simulator broker (infra/local/mosquitto-sim.conf)
     mqtt_tls: bool = False
@@ -101,6 +106,27 @@ class Settings(BaseSettings):
     vision_url: str = "http://127.0.0.1:8081/v1"
     vision_model: str = "LFM2.5-VL-1.6B"
     vision_timeout_s: float = 90.0
+
+    # Workers for the Pi's voice loop (request and reply over MQTT) --------------
+    ask_worker: bool = False
+    # "liquid" or "compat:<model>"; NIM's kimi-k3.1-pro had no API on 2026-11-04, kimi-k3 does.
+    ask_route: str = "liquid"
+    ask_fallback: str = ""  # e.g. compat:moonshotai/kimi-k3 with SB_COMPAT_BASE_URL set
+    ask_timeout_s: float = 30.0
+    stt_worker: bool = False
+    stt_model: str = "small"
+    stt_device: str = "cpu"  # "cuda" after a GPU upgrade; nothing else changes
+    stt_compute_type: str = "int8"
+    stt_threads: int = 6
+    stt_language: str = "ar"
+    traces_path: str = "data/voice_traces.jsonl"
+
+    # On-demand recording and mapping (off unless these are set) ---------------
+    pi_ssh_target: str = ""  # e.g. spider@spider-pi (a Tailscale name)
+    recordings_dir: str = "data/recordings"
+    aws_worker_instance_id: str = ""
+    aws_region: str = "ap-northeast-1"
+    aws_worker_ssh_target: str = ""  # e.g. ubuntu@spider-worker (a Tailscale name)
 
     # Behaviour ----------------------------------------------------------------
     autonomy: Autonomy = "guarded"

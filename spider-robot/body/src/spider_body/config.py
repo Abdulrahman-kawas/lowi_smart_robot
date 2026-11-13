@@ -7,6 +7,7 @@ from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from spider_common.link import MqttSettings
 
 LEG_NAMES = ("LF", "LM", "LR", "RF", "RM", "RR")
 JOINTS = ("coxa", "femur", "tibia")
@@ -23,6 +24,22 @@ class MqttCfg(_M):
     ca_path: str | None = None
     cert_path: str | None = None
     key_path: str | None = None
+    username: str | None = None  # loopback listener on the Pi: no certificate, no clock needed
+    password_file: str | None = None
+    reconnect_max_s: int = 30
+
+
+def broker_settings(
+    m: MqttCfg, client_id: str, username: str | None = None, password_file: str | None = None
+) -> MqttSettings:
+    """Settings for one process. Camera, recorder and sysmon pass their own broker login."""
+    secret = password_file or m.password_file
+    return MqttSettings(
+        host=m.host, port=m.port, client_id=client_id, tls=m.tls, ca_path=m.ca_path,
+        cert_path=m.cert_path, key_path=m.key_path, username=username or m.username,
+        password=Path(secret).read_text("utf-8").strip() if secret else None,
+        reconnect_max_s=m.reconnect_max_s,
+    )
 
 
 class PulseCfg(_M):
@@ -124,16 +141,33 @@ class SafetyCfg(_M):
     fall_tilt_deg: float = 55.0  # relax servos (robot has fallen)
 
 
+class MovesCfg(_M):
+    """Expressive moves (moves.py). Every move is checked against these before it starts."""
+
+    clear_radius_m: float = Field(0.35, ge=0.0)  # nothing this close to the footprint edge
+    support_margin_m: float = Field(0.02, ge=0.0)  # body centre inside the feet polygon by this
+    max_joint_speed_dps: float = Field(240.0, gt=0.0, le=600.0)
+    max_duration_s: float = Field(20.0, gt=0.0, le=20.0)
+    max_shift_m: float = Field(0.03, gt=0.0, le=0.03)  # body translation from where it started
+    dance_bpm: float = Field(100.0, ge=60.0, le=140.0)
+    reach_touch_height_m: float = Field(0.06, ge=0.02, le=0.15)  # "nearest": touch at this height
+    # offer_hand: the foot goes to a fixed point this far ahead of the footprint edge, this high.
+    offer_hand_ahead_m: float = Field(0.10, ge=0.0, le=0.20)
+    offer_hand_height_m: float = Field(0.12, ge=0.04, le=0.20)
+
+
 class LidarCfg(_M):
     enabled: bool = True
     endpoint: str = "ipc:///tmp/spider_lidar.ipc"
     mount_height_m: float = 0.15  # LiDAR origin above the ground when standing
     mount_yaw_deg: float = 0.0  # rotation of the LiDAR x axis vs robot forward
-    imu_upside_down: bool = False  # LiDAR mounted upside down: at rest roll would read ~180
+    imu_upside_down: bool = False  # the L2 hangs upside down: flips its points and its IMU
     z_min_m: float = 0.04  # ignore the floor
     z_max_m: float = 0.45  # ignore things above the robot
     max_range_m: float = 8.0
     sectors: int = 36
+    # One cloud can miss sectors, so each sector reports its nearest return over this many clouds.
+    history_clouds: int = Field(3, ge=1, le=10)
 
 
 class CameraCfg(_M):
@@ -142,7 +176,47 @@ class CameraCfg(_M):
     width: int = 640
     height: int = 480
     jpeg_quality: int = 80
-    max_bytes: int = 120_000  # AWS IoT Core payload limit is 128 KB
+    max_bytes: int = 120_000  # kept below the broker's message_size_limit
+    # True on the robot: the separate spider-camera process (cores 1-3) answers Snapshot and the
+    # control process never loads OpenCV. False keeps the in-process camera for the simulator.
+    external: bool = False
+    client_id: str = "spider-camera"
+    username: str | None = None
+    password_file: str | None = None
+
+
+class RtCfg(_M):
+    """Real-time setup of the control process. Unsupported platforms log it and keep running."""
+
+    enabled: bool = True
+    cpu: int = Field(0, ge=0, le=3)
+    priority: int = Field(50, ge=1, le=90)  # SCHED_FIFO; below kernel IRQ threads and watchdogs
+    lock_memory: bool = True
+    gil_switch_ms: float = Field(1.0, gt=0, le=10)  # how long another thread may hold the GIL
+
+
+class WatchdogGpioCfg(_M):
+    """A pin toggled once per good tick. External hardware cuts servo power if it stops."""
+
+    chip: str = "/dev/gpiochip0"
+    line: int = Field(17, ge=0)
+
+
+class RecorderCfg(_M):
+    endpoint: str = "ipc:///tmp/spider_lidar_rec.ipc"
+    out_dir: str = "/var/lib/spider/rec"
+    max_bytes: int = 8_000_000_000  # about 90 min at the full L2 point rate
+    min_free_bytes: int = 1_000_000_000  # stop before the SD card fills
+    client_id: str = "spider-recorder"
+    username: str | None = None
+    password_file: str | None = None
+
+
+class SysmonCfg(_M):
+    client_id: str = "spider-sysmon"
+    username: str | None = None
+    password_file: str | None = None
+    server_tailscale_name: str = ""  # reports direct or relay path to this peer; empty = skip
 
 
 class BodyConfig(_M):
@@ -156,7 +230,14 @@ class BodyConfig(_M):
     gait: GaitCfg = Field(default_factory=GaitCfg)
     safety: SafetyCfg = Field(default_factory=SafetyCfg)
     lidar: LidarCfg = Field(default_factory=LidarCfg)
+    moves: MovesCfg = Field(default_factory=MovesCfg)
     camera: CameraCfg = Field(default_factory=CameraCfg)
+    rt: RtCfg = Field(default_factory=RtCfg)
+    watchdog_gpio: WatchdogGpioCfg | None = None  # None until the relay board is fitted
+    recorder: RecorderCfg = Field(default_factory=RecorderCfg)
+    sysmon: SysmonCfg = Field(default_factory=SysmonCfg)
+    # File present = E-stop latched, across crashes and reboots. None disables it (simulator).
+    estop_latch_path: str | None = None
     state_hz: float = 4.0
     legs: list[LegCfg]
 
@@ -165,8 +246,9 @@ class BodyConfig(_M):
         s, g = self.safety, self.gait
         if not 0 < s.stop_distance_m < s.slow_distance_m:
             raise ValueError("safety: need 0 < stop_distance_m < slow_distance_m")
-        # distance needed to stop: one control tick + one telemetry period of travel + braking
-        brake = g.max_vx**2 / (2 * g.accel) + g.max_vx * (1.0 / g.control_hz + 0.1)
+        # Distance needed to stop: braking, plus travel during detection. The L2 needs up to one
+        # revolution (0.18 s) and one cloud (0.083 s) to report a new obstacle, then one tick.
+        brake = g.max_vx**2 / (2 * g.accel) + g.max_vx * (1.0 / g.control_hz + 0.18 + 0.083)
         if s.stop_distance_m < brake:
             raise ValueError(f"safety.stop_distance_m must be >= {brake:.3f} m for max_vx/accel")
         if s.turn_clearance_m <= 0:

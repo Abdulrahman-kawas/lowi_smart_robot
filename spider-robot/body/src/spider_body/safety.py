@@ -17,15 +17,77 @@ and the obstacle.
 
 from __future__ import annotations
 
+import logging
 import math
+import os
+import threading
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from spider_common.protocol import LidarSummary
 
 from .config import SafetyCfg
 
+log = logging.getLogger(__name__)
+
 TiltState = Literal["ok", "tilt", "fallen"]
+
+
+class EStopLatch:
+    """An E-stop that survives a crash, a restart and a reboot. File present = latched.
+
+    set() returns at once; the disk write and fsync happen on a short-lived thread so a slow SD
+    card can never stall the control loop. Only the newest value is written.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self._lock = threading.Lock()
+        self._want: bool | None = None
+        self._thread: threading.Thread | None = None
+        self.write_failed = False  # read by the control tick, which emits the error event
+
+    def read(self) -> bool:
+        return self.path.exists()
+
+    def set(self, latched: bool) -> None:
+        with self._lock:
+            self._want = latched
+        thread = threading.Thread(target=self._flush, name="estop-latch", daemon=True)
+        thread.start()
+        self._thread = thread
+
+    def wait(self, timeout_s: float = 2.0) -> None:
+        if self._thread is not None:
+            self._thread.join(timeout_s)
+
+    def _flush(self) -> None:
+        with self._lock:
+            want, self._want = self._want, None
+            if want is None:
+                return
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                if want:
+                    tmp = self.path.with_suffix(".tmp")
+                    with tmp.open("w", encoding="utf-8") as f:
+                        f.write(str(time.time()))
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp, self.path)
+                else:
+                    self.path.unlink(missing_ok=True)
+                fd = os.open(self.path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+                self.write_failed = False
+            except OSError:
+                self.write_failed = True
+                log.exception("could not persist the E-stop latch at %s", self.path)
 
 
 @dataclass(frozen=True)

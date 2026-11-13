@@ -1,0 +1,26 @@
+[Unit]
+Description=Spider robot - command gateway (the only sender of commands to the body)
+# Local units only: voice control must work with no network at all (decision 1).
+After=mosquitto.service
+Wants=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+User=spider
+WorkingDirectory=/opt/spider/spider-robot/gateway
+# SG_MQTT_HOST, SG_MQTT_PORT, SG_MQTT_USERNAME, SG_MQTT_PASSWORD_FILE
+EnvironmentFile=-/etc/spider/gateway.env
+ExecStart=/opt/spider/spider-robot/gateway/.venv/bin/spider-gateway
+Restart=always
+RestartSec=1
+# Core 0 belongs to the balance loop.
+CPUAffinity=1 2 3
+Nice=-5
+MemoryMax=150M
+OOMScoreAdjust=-700
+ProtectHome=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

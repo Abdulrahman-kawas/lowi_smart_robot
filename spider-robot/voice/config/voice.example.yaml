@@ -1,0 +1,46 @@
+# /etc/spider/voice.yaml. Every engine is chosen here; moving one to another machine is a config change.
+robot_id: spider-01
+
+mqtt:
+  host: 127.0.0.1
+  port: 1883               # loopback listener: needs no certificate and no correct clock
+  tls: false
+  username: spider-voice
+  password_file: /etc/spider/secrets/spider-voice.mqtt
+  reconnect_max_s: 2
+
+audio:
+  capture_device: default    # `arecord -L` lists the names
+  playback_device: default
+  vad_aggressiveness: 2
+  min_rms_dbfs: -45.0
+  end_of_speech_ms: 300
+
+stt:
+  primary: whisper_local
+  escalate: whisper_server   # the brain's STT worker, over MQTT. Set to none if it is not running
+  server_timeout_s: 4.0
+  server_retry_after_s: 30.0
+  whisper_local: {model: tiny, compute_type: int8, cpu_threads: 3, workers: 2, language: ar, timeout_s: 20.0}
+
+tts:
+  primary: piper
+  fallback: espeak
+  piper: {model_path: /opt/spider/models/ar_JO-kareem-low.onnx}
+
+router:
+  url: http://127.0.0.1:11434
+  model: "hf.co/LiquidAI/LFM2.5-350M-GGUF:Q4_K_M"
+  timeout_s: 10.0
+
+escalation:
+  enabled: true              # vision and hard questions go to the brain; answers are only spoken
+  timeout_s: 45.0
+
+motion: {speed_mps: 0.06, turn_rps: 0.4, duration_s: 1.5, gait: tripod, say_max_chars: 30}
+
+wake_words: ["لوي", "لاوي", "سبايدر", "عنكبوت", "spider"]
+wake_required: true
+attention_window_s: 8
+stop_on_speech_onset: false  # enable only after bench test V4 passes
+max_motion_age_s: 6.0        # bench V1 sets the final value

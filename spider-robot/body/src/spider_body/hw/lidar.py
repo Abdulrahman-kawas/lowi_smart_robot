@@ -17,6 +17,7 @@ import logging
 import math
 import struct
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -57,10 +58,13 @@ class LidarProcessor:
         self._c, self._s = math.cos(yaw), math.sin(yaw)
 
     def process(self, pts: np.ndarray, ts: float) -> LidarSummary:
+        """One cloud to one sector map. LidarFeed merges recent clouds, because one can miss."""
         c = self.cfg
         fx, fy = self.footprint
-        x0, y0 = pts[:, 0], pts[:, 1]
-        z = pts[:, 2] + c.mount_height_m + self.height_offset
+        x0, y0, z0 = pts[:, 0], pts[:, 1], pts[:, 2]
+        if c.imu_upside_down:  # hung upside down: 180 deg about x, the same flip as the IMU's
+            y0, z0 = -y0, -z0
+        z = z0 + c.mount_height_m + self.height_offset
         x = self._c * x0 - self._s * y0
         y = self._s * x0 + self._c * y0
         r = np.hypot(x, y)
@@ -75,7 +79,7 @@ class LidarProcessor:
         sectors = np.full(c.sectors, c.max_range_m, dtype=np.float64)
         if mask.any():
             ang = np.degrees(np.arctan2(y[mask], x[mask]))
-            idx = (np.floor(((ang + self.sector_deg / 2) % 360.0) / self.sector_deg)).astype(int)
+            idx = np.floor(((ang + self.sector_deg / 2) % 360.0) / self.sector_deg).astype(int)
             np.minimum.at(sectors, idx % c.sectors, r[mask])
         i = int(np.argmin(sectors))
         bearing = i * self.sector_deg
@@ -104,11 +108,26 @@ class LidarFeed:
         self._roll: float | None = None
         self._pitch: float | None = None
         self._imu_rx: float | None = None
+        self._history: deque[list[float]] = deque(maxlen=cfg.history_clouds)
 
     def latest(self) -> tuple[LidarSummary | None, float | None]:
         if self._summary is None or self._rx is None:
             return None, None
         return self._summary, time.monotonic() - self._rx
+
+    def _merge(self, summary: LidarSummary) -> LidarSummary:
+        """Nearest return per sector over the last few clouds; one cloud can miss sectors."""
+        self._history.append(summary.sectors_m)
+        if len(self._history) == 1:
+            return summary
+        merged = np.min(np.array(self._history, dtype=np.float64), axis=0)
+        i = int(np.argmin(merged))
+        bearing = i * summary.sector_deg
+        return summary.model_copy(update={
+            "sectors_m": [round(float(v), 3) for v in merged],
+            "nearest_m": round(float(merged[i]), 3),
+            "nearest_bearing_deg": bearing if bearing <= 180 else bearing - 360,
+        })
 
     def tilt(self) -> tuple[float | None, float | None]:
         if self._imu_rx is None or time.monotonic() - self._imu_rx > self.imu_timeout_s:
@@ -127,7 +146,7 @@ class LidarFeed:
             if pts.size != n * 4:
                 log.warning("cloud size mismatch: header %d, payload %d floats", n, pts.size)
                 return
-            self._summary = self.proc.process(pts.reshape(-1, 4), time.time())
+            self._summary = self._merge(self.proc.process(pts.reshape(-1, 4), time.time()))
             self._rx = time.monotonic()
         elif parts[0] == b"imu":
             d = np.frombuffer(parts[2], dtype="<f4")
@@ -149,7 +168,7 @@ class LidarFeed:
 
         ctx = zmq.asyncio.Context.instance()
         sock = ctx.socket(zmq.SUB)
-        sock.setsockopt(zmq.RCVHWM, 2)  # only the newest data matters
+        sock.setsockopt(zmq.RCVHWM, 8)  # small, but IMU and clouds share it: 2 could drop clouds
         sock.setsockopt(zmq.SUBSCRIBE, b"")
         sock.connect(self.cfg.endpoint)
         log.info("LiDAR feed listening on %s", self.cfg.endpoint)

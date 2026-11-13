@@ -1,0 +1,22 @@
+[Unit]
+Description=Spider robot - physical E-stop release button (needs no network)
+After=mosquitto.service spider-gateway.service
+Wants=mosquitto.service
+
+[Service]
+User=spider
+SupplementaryGroups=gpio
+WorkingDirectory=/opt/spider/spider-robot/gateway
+EnvironmentFile=/etc/spider/gateway.env
+ExecStart=/opt/spider/spider-robot/gateway/.venv/bin/spider-button
+Restart=always
+RestartSec=1
+CPUAffinity=1 2 3
+MemoryMax=64M
+OOMScoreAdjust=200
+ProtectHome=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

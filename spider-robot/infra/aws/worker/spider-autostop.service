@@ -1,0 +1,6 @@
+[Unit]
+Description=Stop this instance when idle or past its time limit
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/spider-autostop.sh

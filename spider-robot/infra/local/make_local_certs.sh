@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Phase 2 (no AWS): a private CA + certificates for a local Mosquitto broker.
-#   BROKER_HOST=brain-pc.local BROKER_IP=192.168.0.10 ./make_local_certs.sh
-# Output in ./local-certs: ca.crt, server.{crt,key}, spider-01.{crt,key}, spider-brain.{crt,key}
+# A private CA and certificates for the Tailscale listener of the broker on the Pi.
+#   BROKER_HOST=spider-pi BROKER_IP=100.x.y.z ./make_local_certs.sh
+# Output in ./local-certs: ca.crt, server.{crt,key}, spider-brain.{crt,key}
+# Processes on the Pi use the loopback listener with passwords (infra/pi/mqtt_passwords.sh).
 set -euo pipefail
 HOST="${BROKER_HOST:-brain-pc.local}"
 IP="${BROKER_IP:-192.168.0.10}"
@@ -28,6 +29,5 @@ issue() {  # <name> <CN> [subjectAltName]
 }
 
 issue server "$HOST" "DNS:$HOST,IP:$IP"
-issue spider-01 spider-01
 issue spider-brain spider-brain
 echo "Certificates in $OUT. Keep ca.key offline."

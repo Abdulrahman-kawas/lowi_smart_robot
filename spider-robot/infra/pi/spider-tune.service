@@ -1,0 +1,13 @@
+[Unit]
+Description=Spider robot - move interrupts off core 0, fix the CPU governor
+DefaultDependencies=no
+After=sysinit.target local-fs.target
+Before=basic.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/spider-tune.sh
+
+[Install]
+WantedBy=basic.target

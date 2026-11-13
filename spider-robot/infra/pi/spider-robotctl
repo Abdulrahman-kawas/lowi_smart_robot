@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# /usr/local/bin/spider-robotctl: the fallback console, from any SSH login on the Pi.
+# Runs as the spider user with the gateway's settings, because the broker passwords are readable
+# only by that user.
+exec sudo -u spider bash -c 'set -a; . /etc/spider/gateway.env; set +a
+  exec /opt/spider/spider-robot/gateway/.venv/bin/spider-robotctl "$@"' _ "$@"
