@@ -15,7 +15,7 @@ fi
 if [[ ! -x /usr/local/bin/llama-server ]]; then
   git clone --depth 1 --branch "$LLAMA_TAG" https://github.com/ggml-org/llama.cpp "$HOME/llama.cpp"
   cmake -S "$HOME/llama.cpp" -B "$HOME/llama.cpp/build" -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON
-  cmake --build "$HOME/llama.cpp/build" -j"$(nproc)" --target llama-server
+  cmake --build "$HOME/llama.cpp/build" -j"${BUILD_JOBS:-$(nproc)}" --target llama-server
   sudo install -m 755 "$HOME/llama.cpp/build/bin/llama-server" /usr/local/bin/llama-server
 fi
 
@@ -31,6 +31,12 @@ for unit in llama-vision llama-planner spider-brain; do
     | sudo tee "/etc/systemd/system/$unit.service" >/dev/null
 done
 sudo systemctl daemon-reload
-sudo systemctl enable --now llama-vision llama-planner
+# START_MODELS=0 installs the model services without loading them (about 5.5 GB at most):
+# for a desktop that is still in use. Start them later with systemctl enable --now.
+if [[ "${START_MODELS:-1}" == 1 ]]; then
+  sudo systemctl enable --now llama-vision llama-planner
+else
+  echo "Model services installed but not started: sudo systemctl enable --now llama-vision llama-planner"
+fi
 echo "Next: certificates into /etc/spider-brain/certs, secrets into secrets.env, then:"
 echo "  sudo systemctl enable --now spider-brain"
