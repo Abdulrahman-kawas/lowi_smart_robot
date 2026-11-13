@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="884" viewBox="0 0 1200 884" role="img" aria-labelledby="title desc">
+<title id="title">How everything connects</title>
+<desc id="desc">Diagram of the robot (Raspberry Pi 4), the home server, AWS, the AI cloud, the owner's phone and laptop, with animated messages moving between them.</desc>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+</style>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0d1117"/><stop offset="1" stop-color="#151c27"/>
+  </linearGradient>
+  <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+    <circle cx="1" cy="1" r="1" fill="#ffffff" opacity="0.05"/>
+  </pattern>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <radialGradient id="scan" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="255">
+    <stop offset="0" stop-color="#4ea1ff" stop-opacity="0.42"/>
+    <stop offset="1" stop-color="#4ea1ff" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="fov" gradientUnits="userSpaceOnUse" x1="0" y1="-140" x2="0" y2="-262">
+    <stop offset="0" stop-color="#5fd3e6" stop-opacity="0.22"/>
+    <stop offset="1" stop-color="#5fd3e6" stop-opacity="0"/>
+  </linearGradient>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#4a5870"/>
+  </marker>
+</defs>
+<rect width="1200" height="884" rx="24" fill="url(#bg)"/>
+<rect width="1200" height="884" rx="24" fill="url(#dots)"/>
+<rect x="0.5" y="0.5" width="1199" height="883" rx="23.5" fill="none" stroke="#263041"/>
+<text x="48" y="66" font-size="30" fill="#e8edf3" font-weight="700">How everything connects</text>
+<text x="48" y="98" font-size="16.5" fill="#9aa5b4">Each part has one job, and one rule holds them together: if the network dies, the robot is still safe.</text>
+<defs><path id="p_rs" d="M340 268 H450"/><path id="p_sr" d="M450 300 H340"/><path id="p_sc" d="M750 212 H860"/><path id="p_cs" d="M860 230 H750"/><path id="p_sp" d="M750 420 C805 420 805 560 860 560"/><path id="p_ps" d="M860 560 C805 560 805 420 750 420"/><path id="p_sa" d="M588 470 V520"/><path id="p_as" d="M612 520 V470"/><path id="p_lr" d="M190 540 V470"/><path id="p_ls" d="M340 600 H380 Q395 600 395 585 V455 Q395 440 410 440 H450"/></defs>
+<path d="M340 268 H450" fill="none" stroke="#33405a" stroke-width="2"/>
+<path d="M450 300 H340" fill="none" stroke="#33405a" stroke-width="2"/>
+<path d="M750 212 H860" stroke="#b48cff" stroke-opacity=".55" fill="none" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.2s" repeatCount="indefinite"/></path>
+<path d="M860 230 H750" stroke="#b48cff" stroke-opacity=".55" fill="none" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.2s" repeatCount="indefinite"/></path>
+<path d="M750 420 C805 420 805 560 860 560" fill="none" stroke="#33405a" stroke-width="2"/>
+<path d="M588 470 V520" stroke="#ff9900" stroke-opacity=".55" fill="none" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.2s" repeatCount="indefinite"/></path>
+<path d="M612 520 V470" stroke="#ff9900" stroke-opacity=".55" fill="none" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.2s" repeatCount="indefinite"/></path>
+<path d="M190 540 V470" stroke="#5fd3e6" stroke-opacity=".5" fill="none" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.2s" repeatCount="indefinite"/></path>
+<path d="M340 600 H380 Q395 600 395 585 V455 Q395 440 410 440 H450" stroke="#5fd3e6" stroke-opacity=".5" fill="none" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.2s" repeatCount="indefinite"/></path>
+<circle r="4.5" fill="#4ea1ff" filter="url(#glow)"><animateMotion dur="2.0s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_rs" href="#p_rs"/></animateMotion></circle>
+<circle r="4.5" fill="#4ea1ff" filter="url(#glow)"><animateMotion dur="2.0s" begin="-1s" repeatCount="indefinite"><mpath xlink:href="#p_rs" href="#p_rs"/></animateMotion></circle>
+<circle r="4.5" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="2.0s" begin="-0.5s" repeatCount="indefinite"><mpath xlink:href="#p_sr" href="#p_sr"/></animateMotion></circle>
+<circle r="4.5" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="2.0s" begin="-1.5s" repeatCount="indefinite"><mpath xlink:href="#p_sr" href="#p_sr"/></animateMotion></circle>
+<g><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.2;.8;1" dur="5s" repeatCount="indefinite"/><circle r="4.5" fill="#b48cff" filter="url(#glow)"><animateMotion dur="2.5s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_sc" href="#p_sc"/></animateMotion></circle><circle r="4.5" fill="#b48cff" filter="url(#glow)"><animateMotion dur="2.5s" begin="-1.25s" repeatCount="indefinite"><mpath xlink:href="#p_cs" href="#p_cs"/></animateMotion></circle></g>
+<g><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.2;.8;1" dur="4s" begin="-2s" repeatCount="indefinite"/><circle r="4" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="1.4s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_sa" href="#p_sa"/></animateMotion></circle><circle r="4" fill="#ff9900" filter="url(#glow)"><animateMotion dur="1.4s" begin="-0.7s" repeatCount="indefinite"><mpath xlink:href="#p_as" href="#p_as"/></animateMotion></circle></g>
+<circle r="4.5" fill="#ffb547" filter="url(#glow)"><animateMotion dur="2.6s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_ps" href="#p_ps"/></animateMotion></circle>
+<circle r="4.5" fill="#ffb547" filter="url(#glow)"><animateMotion dur="2.6s" begin="-1.3s" repeatCount="indefinite"><mpath xlink:href="#p_ps" href="#p_ps"/></animateMotion></circle>
+<circle r="4.5" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="2.6s" begin="-0.65s" repeatCount="indefinite"><mpath xlink:href="#p_sp" href="#p_sp"/></animateMotion></circle>
+<circle r="4.5" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="2.6s" begin="-1.95s" repeatCount="indefinite"><mpath xlink:href="#p_sp" href="#p_sp"/></animateMotion></circle>
+<circle r="3.5" fill="#5fd3e6" filter="url(#glow)"><animateMotion dur="2.4s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_lr" href="#p_lr"/></animateMotion></circle>
+<circle r="3.5" fill="#5fd3e6" filter="url(#glow)"><animateMotion dur="3.4s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_ls" href="#p_ls"/></animateMotion></circle>
+<text x="395" y="232" font-size="13" fill="#e8edf3" font-weight="700" text-anchor="middle">MQTT + mTLS</text>
+<text x="395" y="249" font-size="12.5" fill="#9aa5b4" text-anchor="middle">via Tailscale</text>
+<text x="805" y="180" font-size="13" fill="#e8edf3" font-weight="700" text-anchor="middle">HTTPS</text>
+<text x="805" y="197" font-size="12.5" fill="#9aa5b4" text-anchor="middle">when online</text>
+<rect x="763" y="469" width="84" height="42" rx="9" fill="#121820" stroke="#2a3445"/>
+<text x="805" y="486" font-size="12.5" fill="#2aabee" font-weight="700" text-anchor="middle">Telegram</text>
+<text x="805" y="503" font-size="12.5" fill="#25d366" font-weight="700" text-anchor="middle">WhatsApp</text>
+<text x="202" y="510" font-size="12.5" fill="#9aa5b4">SSH · deploy</text>
+<text x="386" y="528" font-size="12.5" fill="#9aa5b4" text-anchor="end">SSH</text>
+<text x="624" y="500" font-size="12.5" fill="#9aa5b4">Tailscale</text>
+<rect x="40" y="140" width="300" height="330" rx="16" fill="#161d27" stroke="#273142"/>
+<path d="M58 141.5 H322" stroke="#4ea1ff" stroke-width="3" stroke-linecap="round"/>
+<circle cx="76" cy="182" r="21" fill="#4ea1ff" fill-opacity="0.13" stroke="#4ea1ff" stroke-opacity="0.5"/>
+<line x1="82.9" y1="186.0" x2="88.1" y2="189.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="76.0" y1="190.0" x2="76.0" y2="196.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="69.1" y1="186.0" x2="63.9" y2="189.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="69.1" y1="178.0" x2="63.9" y2="175.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="76.0" y1="174.0" x2="76.0" y2="168.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="82.9" y1="178.0" x2="88.1" y2="175.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><polygon points="82.9,186.0 76.0,190.0 69.1,186.0 69.1,178.0 76.0,174.0 82.9,178.0" fill="none" stroke="#4ea1ff" stroke-width="2"/>
+<text x="108" y="178" font-size="19" fill="#e8edf3" font-weight="700">Robot</text>
+<text x="108" y="200" font-size="13.5" fill="#9aa5b4">Raspberry Pi 4 · 4 GB</text>
+<circle cx="318" cy="164" r="4" fill="#4ea1ff"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle>
+<line x1="56" y1="220" x2="324" y2="220" stroke="#273142"/>
+<circle cx="67" cy="245" r="3" fill="#4ea1ff"/>
+<text x="80" y="250" font-size="15" fill="#e8edf3">Walks: IK + gait at 50 Hz</text>
+<circle cx="67" cy="275" r="3" fill="#4ea1ff"/>
+<text x="80" y="280" font-size="15" fill="#e8edf3">Stops itself: LiDAR + IMU</text>
+<circle cx="67" cy="305" r="3" fill="#4ea1ff"/>
+<text x="80" y="310" font-size="15" fill="#e8edf3">Hears &amp; talks: Whisper, Piper</text>
+<circle cx="67" cy="335" r="3" fill="#4ea1ff"/>
+<text x="80" y="340" font-size="15" fill="#e8edf3">Gateway: one source of motion</text>
+<rect x="54" y="418" width="272" height="38" rx="10" fill="#4ea1ff" fill-opacity="0.1" stroke="#4ea1ff" stroke-opacity="0.25"/>
+<text x="68" y="443" font-size="14"><tspan fill="#4ea1ff" font-weight="700">Why  </tspan><tspan fill="#cfd7e2">Safety never waits for Wi-Fi</tspan></text>
+<rect x="450" y="140" width="300" height="330" rx="16" fill="#161d27" stroke="#273142"/>
+<path d="M468 141.5 H732" stroke="#3ecf8e" stroke-width="3" stroke-linecap="round"/>
+<circle cx="486" cy="182" r="21" fill="#3ecf8e" fill-opacity="0.13" stroke="#3ecf8e" stroke-opacity="0.5"/>
+<rect x="476" y="172" width="20" height="5" rx="1.5" fill="none" stroke="#3ecf8e" stroke-width="1.8"/><circle cx="492" cy="174.5" r="1" fill="#3ecf8e"/><rect x="476" y="179" width="20" height="5" rx="1.5" fill="none" stroke="#3ecf8e" stroke-width="1.8"/><circle cx="492" cy="181.5" r="1" fill="#3ecf8e"/><rect x="476" y="186" width="20" height="5" rx="1.5" fill="none" stroke="#3ecf8e" stroke-width="1.8"/><circle cx="492" cy="188.5" r="1" fill="#3ecf8e"/>
+<text x="518" y="178" font-size="19" fill="#e8edf3" font-weight="700">Home server</text>
+<text x="518" y="200" font-size="13.5" fill="#9aa5b4">i7-8700 · 15 GB · CPU only</text>
+<circle cx="728" cy="164" r="4" fill="#3ecf8e"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle>
+<line x1="466" y1="220" x2="734" y2="220" stroke="#273142"/>
+<circle cx="477" cy="245" r="3" fill="#3ecf8e"/>
+<text x="490" y="250" font-size="15" fill="#e8edf3">Brain: planner + dashboard</text>
+<circle cx="477" cy="275" r="3" fill="#3ecf8e"/>
+<text x="490" y="280" font-size="15" fill="#e8edf3">Lowi: chat, Telegram, WhatsApp</text>
+<circle cx="477" cy="305" r="3" fill="#3ecf8e"/>
+<text x="490" y="310" font-size="15" fill="#e8edf3">Vision: LFM2.5-VL-1.6B</text>
+<circle cx="477" cy="335" r="3" fill="#3ecf8e"/>
+<text x="490" y="340" font-size="15" fill="#e8edf3">Hard questions: LFM2.5-1.2B</text>
+<rect x="464" y="418" width="272" height="38" rx="10" fill="#3ecf8e" fill-opacity="0.1" stroke="#3ecf8e" stroke-opacity="0.25"/>
+<text x="478" y="443" font-size="14"><tspan fill="#3ecf8e" font-weight="700">Why  </tspan><tspan fill="#cfd7e2">Heavy work that can wait 1 s</tspan></text>
+<rect x="860" y="140" width="300" height="220" rx="16" fill="#161d27" stroke="#273142"/>
+<path d="M878 141.5 H1142" stroke="#b48cff" stroke-width="3" stroke-linecap="round"/>
+<circle cx="896" cy="182" r="21" fill="#b48cff" fill-opacity="0.13" stroke="#b48cff" stroke-opacity="0.5"/>
+<path d="M896 170 Q898 180 908 182 Q898 184 896 194 Q894 184 884 182 Q894 180 896 170 z" fill="none" stroke="#b48cff" stroke-width="2" stroke-linejoin="round"/><circle cx="905" cy="173" r="1.8" fill="#b48cff"/>
+<text x="928" y="178" font-size="19" fill="#e8edf3" font-weight="700">AI cloud</text>
+<text x="928" y="200" font-size="13.5" fill="#9aa5b4">Escalation only</text>
+<circle cx="1138" cy="164" r="4" fill="#b48cff"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle>
+<line x1="876" y1="220" x2="1144" y2="220" stroke="#273142"/>
+<circle cx="887" cy="245" r="3" fill="#b48cff"/>
+<text x="900" y="250" font-size="15" fill="#e8edf3">NVIDIA NIM · Claude · Gemini</text>
+<circle cx="887" cy="275" r="3" fill="#b48cff"/>
+<text x="900" y="280" font-size="15" fill="#e8edf3">Deep reasoning, hard images</text>
+<rect x="874" y="308" width="272" height="38" rx="10" fill="#b48cff" fill-opacity="0.1" stroke="#b48cff" stroke-opacity="0.25"/>
+<text x="888" y="333" font-size="14"><tspan fill="#b48cff" font-weight="700">Why  </tspan><tspan fill="#cfd7e2">Optional: only when online</tspan></text>
+<rect x="860" y="410" width="300" height="300" rx="16" fill="#161d27" stroke="#273142"/>
+<path d="M878 411.5 H1142" stroke="#ffb547" stroke-width="3" stroke-linecap="round"/>
+<circle cx="896" cy="452" r="21" fill="#ffb547" fill-opacity="0.13" stroke="#ffb547" stroke-opacity="0.5"/>
+<rect x="889" y="441" width="14" height="22" rx="3" fill="none" stroke="#ffb547" stroke-width="2"/><line x1="894" y1="459" x2="898" y2="459" stroke="#ffb547" stroke-width="2" stroke-linecap="round"/>
+<text x="928" y="448" font-size="19" fill="#e8edf3" font-weight="700">Your phone</text>
+<text x="928" y="470" font-size="13.5" fill="#9aa5b4">Remote control</text>
+<circle cx="1138" cy="434" r="4" fill="#ffb547"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle>
+<line x1="876" y1="490" x2="1144" y2="490" stroke="#273142"/>
+<circle cx="887" cy="515" r="3" fill="#ffb547"/>
+<text x="900" y="520" font-size="15" fill="#e8edf3">Telegram: tasks, photos, stop</text>
+<circle cx="887" cy="545" r="3" fill="#ffb547"/>
+<text x="900" y="550" font-size="15" fill="#e8edf3">WhatsApp: chat with Lowi</text>
+<circle cx="887" cy="575" r="3" fill="#ffb547"/>
+<text x="900" y="580" font-size="15" fill="#e8edf3">Dashboard over Tailscale</text>
+<circle cx="887" cy="605" r="3" fill="#ffb547"/>
+<text x="900" y="610" font-size="15" fill="#e8edf3">Mobile app: coming soon</text>
+<rect x="874" y="658" width="272" height="38" rx="10" fill="#ffb547" fill-opacity="0.1" stroke="#ffb547" stroke-opacity="0.25"/>
+<text x="888" y="683" font-size="14"><tspan fill="#ffb547" font-weight="700">Why  </tspan><tspan fill="#cfd7e2">Always through the brain</tspan></text>
+<rect x="40" y="540" width="300" height="170" rx="16" fill="#161d27" stroke="#273142"/>
+<path d="M58 541.5 H322" stroke="#5fd3e6" stroke-width="3" stroke-linecap="round"/>
+<circle cx="76" cy="582" r="21" fill="#5fd3e6" fill-opacity="0.13" stroke="#5fd3e6" stroke-opacity="0.5"/>
+<rect x="66" y="573" width="20" height="13" rx="2" fill="none" stroke="#5fd3e6" stroke-width="2"/><line x1="62" y1="590" x2="90" y2="590" stroke="#5fd3e6" stroke-width="2" stroke-linecap="round"/>
+<text x="108" y="578" font-size="19" fill="#e8edf3" font-weight="700">Your laptop</text>
+<text x="108" y="600" font-size="13.5" fill="#9aa5b4">Development</text>
+<circle cx="318" cy="564" r="4" fill="#5fd3e6"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle>
+<line x1="56" y1="620" x2="324" y2="620" stroke="#273142"/>
+<circle cx="67" cy="645" r="3" fill="#5fd3e6"/>
+<text x="80" y="650" font-size="15" fill="#e8edf3">Simulator and tests</text>
+<circle cx="67" cy="675" r="3" fill="#5fd3e6"/>
+<text x="80" y="680" font-size="15" fill="#e8edf3">Deploy + SSH via Tailscale</text>
+<rect x="450" y="520" width="300" height="250" rx="16" fill="#161d27" stroke="#273142"/>
+<path d="M468 521.5 H732" stroke="#ff9900" stroke-width="3" stroke-linecap="round"/>
+<circle cx="486" cy="562" r="21" fill="#ff9900" fill-opacity="0.13" stroke="#ff9900" stroke-opacity="0.5"/>
+<path d="M476 568 a5 5 0 0 1 1-10 a7 7 0 0 1 13-2 a5 5 0 0 1 6 6 a4 4 0 0 1-1 6 z" fill="none" stroke="#ff9900" stroke-width="2" stroke-linejoin="round"/>
+<text x="518" y="558" font-size="19" fill="#e8edf3" font-weight="700">AWS</text>
+<text x="518" y="580" font-size="13.5" fill="#9aa5b4">Lightsail · EC2 on demand</text>
+<circle cx="728" cy="544" r="4" fill="#ff9900"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle>
+<line x1="466" y1="600" x2="734" y2="600" stroke="#273142"/>
+<circle cx="477" cy="625" r="3" fill="#ff9900"/>
+<text x="490" y="630" font-size="15" fill="#e8edf3">Lightsail: Lowi, until the move</text>
+<circle cx="477" cy="655" r="3" fill="#ff9900"/>
+<text x="490" y="660" font-size="15" fill="#e8edf3">Then a standby copy</text>
+<circle cx="477" cy="685" r="3" fill="#ff9900"/>
+<text x="490" y="690" font-size="15" fill="#e8edf3">3D mapping (SLAM) on demand</text>
+<rect x="464" y="718" width="272" height="38" rx="10" fill="#ff9900" fill-opacity="0.1" stroke="#ff9900" stroke-opacity="0.25"/>
+<text x="478" y="743" font-size="14"><tspan fill="#ff9900" font-weight="700">Why  </tspan><tspan fill="#cfd7e2">Stops itself, never required</tspan></text>
+<circle cx="54" cy="743" r="4.5" fill="#4ea1ff"/><text x="68" y="748" font-size="13.5" fill="#9aa5b4">Robot → server: hard questions, photos</text>
+<circle cx="54" cy="769" r="4.5" fill="#3ecf8e"/><text x="68" y="774" font-size="13.5" fill="#9aa5b4">Server → robot: answers, plans</text>
+<line x1="48" y1="795" x2="61" y2="795" stroke="#9aa5b4" stroke-width="2" stroke-dasharray="4 3"/><text x="68" y="800" font-size="13.5" fill="#9aa5b4">Dashed: optional or maintenance</text>
+<rect x="40" y="818" width="1120" height="44" rx="12" fill="#18202b" stroke="#2a3445"/>
+<text x="64" y="846" font-size="15"><tspan fill="#ffb547" font-weight="700">Rule   </tspan><tspan fill="#d5dce6">If the network dies, safety, walking and simple voice commands keep working on the robot.</tspan></text>
+</svg>
