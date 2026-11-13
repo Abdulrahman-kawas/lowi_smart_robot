@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="770" viewBox="0 0 1200 770" role="img" aria-labelledby="title desc">
+<title id="title">Telegram and WhatsApp</title>
+<desc id="desc">Two animated phone chats, Telegram for control and WhatsApp for conversation, both connected to the home server and then the robot.</desc>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+</style>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0d1117"/><stop offset="1" stop-color="#151c27"/>
+  </linearGradient>
+  <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+    <circle cx="1" cy="1" r="1" fill="#ffffff" opacity="0.05"/>
+  </pattern>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <radialGradient id="scan" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="255">
+    <stop offset="0" stop-color="#4ea1ff" stop-opacity="0.42"/>
+    <stop offset="1" stop-color="#4ea1ff" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="fov" gradientUnits="userSpaceOnUse" x1="0" y1="-140" x2="0" y2="-262">
+    <stop offset="0" stop-color="#5fd3e6" stop-opacity="0.22"/>
+    <stop offset="1" stop-color="#5fd3e6" stop-opacity="0"/>
+  </linearGradient>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#4a5870"/>
+  </marker>
+</defs>
+<rect width="1200" height="770" rx="24" fill="url(#bg)"/>
+<rect width="1200" height="770" rx="24" fill="url(#dots)"/>
+<rect x="0.5" y="0.5" width="1199" height="769" rx="23.5" fill="none" stroke="#263041"/>
+<text x="48" y="66" font-size="30" fill="#e8edf3" font-weight="700">Telegram and WhatsApp</text>
+<text x="48" y="98" font-size="16.5" fill="#9aa5b4">Two apps, two jobs. Both reach the robot only through the brain.</text>
+<defs><path id="p_tg" d="M315 330 C375 330 375 255 430 255"/><path id="p_gt" d="M430 255 C375 255 375 330 315 330"/><path id="p_wa" d="M885 330 C825 330 825 255 770 255"/><path id="p_aw" d="M770 255 C825 255 825 330 885 330"/><path id="p_down" d="M600 340 V425"/></defs>
+<path d="M315 330 C375 330 375 255 430 255" fill="none" stroke="#33405a" stroke-width="2"/>
+<path d="M885 330 C825 330 825 255 770 255" fill="none" stroke="#33405a" stroke-width="2"/>
+<path d="M600 340 V425" fill="none" stroke="#33405a" stroke-width="2"/>
+<circle r="4.5" fill="#2aabee" filter="url(#glow)"><animateMotion dur="2.2s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_tg" href="#p_tg"/></animateMotion></circle>
+<circle r="4.5" fill="#2aabee" filter="url(#glow)"><animateMotion dur="2.2s" begin="-1.1s" repeatCount="indefinite"><mpath xlink:href="#p_tg" href="#p_tg"/></animateMotion></circle>
+<circle r="3.5" fill="#dfe6ee" filter="url(#glow)"><animateMotion dur="2.2s" begin="-0.55s" repeatCount="indefinite"><mpath xlink:href="#p_gt" href="#p_gt"/></animateMotion></circle>
+<circle r="4.5" fill="#25d366" filter="url(#glow)"><animateMotion dur="2.2s" begin="-0.4s" repeatCount="indefinite"><mpath xlink:href="#p_wa" href="#p_wa"/></animateMotion></circle>
+<circle r="4.5" fill="#25d366" filter="url(#glow)"><animateMotion dur="2.2s" begin="-1.5s" repeatCount="indefinite"><mpath xlink:href="#p_wa" href="#p_wa"/></animateMotion></circle>
+<circle r="3.5" fill="#dfe6ee" filter="url(#glow)"><animateMotion dur="2.2s" begin="-0.95s" repeatCount="indefinite"><mpath xlink:href="#p_aw" href="#p_aw"/></animateMotion></circle>
+<circle r="4.5" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="1.4s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#p_down" href="#p_down"/></animateMotion></circle>
+<circle r="4.5" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="1.4s" begin="-0.7s" repeatCount="indefinite"><mpath xlink:href="#p_down" href="#p_down"/></animateMotion></circle>
+<clipPath id="tgclip"><rect x="74" y="134" width="232" height="412" rx="28"/></clipPath>
+<rect x="65" y="125" width="250" height="430" rx="36" fill="#0a0d12" stroke="#2a3240" stroke-width="2"/>
+<g clip-path="url(#tgclip)">
+<rect x="74" y="134" width="232" height="412" fill="#0e1621"/>
+<rect x="74" y="134" width="232" height="54" fill="#17212b"/>
+</g>
+<circle cx="102" cy="162" r="15" fill="#2aabee"/>
+<text x="102" y="167" font-size="14" fill="#ffffff" font-weight="700" text-anchor="middle">L</text>
+<text x="126" y="159" font-size="14.5" fill="#ffffff" font-weight="700">Lowi</text>
+<text x="126" y="176" font-size="12" fill="#9fb0c2">bot</text>
+<clipPath id="waclip"><rect x="894" y="134" width="232" height="412" rx="28"/></clipPath>
+<rect x="885" y="125" width="250" height="430" rx="36" fill="#0a0d12" stroke="#2a3240" stroke-width="2"/>
+<g clip-path="url(#waclip)">
+<rect x="894" y="134" width="232" height="412" fill="#0b141a"/>
+<rect x="894" y="134" width="232" height="54" fill="#202c33"/>
+</g>
+<circle cx="922" cy="162" r="15" fill="#1f8f63"/>
+<text x="922" y="167" font-size="14" fill="#ffffff" font-weight="700" text-anchor="middle">L</text>
+<text x="946" y="159" font-size="14.5" fill="#ffffff" font-weight="700">Lowi</text>
+<text x="946" y="176" font-size="12" fill="#9fb0c2">online</text>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.050;0.080;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.050;0.080;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="136.8" y="200" width="159.2" height="52" rx="12" fill="#2b5278"/><text x="149.755" y="223" font-size="13.5" fill="#eef3f8">/photo</text><text x="149.755" y="241" font-size="13.5" fill="#eef3f8">what's on the table?</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.180;0.210;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.180;0.210;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="84.0" y="261" width="176.0" height="124" rx="12" fill="#182533"/><rect x="90" y="267" width="164" height="80" rx="8" fill="#2a3f55"/><line x1="98" y1="331" x2="246" y2="331" stroke="#6d87a3" stroke-width="3"/><rect x="120" y="307" width="18" height="24" rx="3" fill="#d9e4f0"/><path d="M138 313 q8 0 8 7 q0 7 -8 7" fill="none" stroke="#d9e4f0" stroke-width="3"/><rect x="176" y="291" width="54" height="34" rx="3" fill="#9fb7cf"/><rect x="170" y="325" width="66" height="5" rx="2" fill="#c8d6e4"/><text x="97" y="374" font-size="13.5" fill="#eef3f8">A cup and a laptop.</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.310;0.340;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.310;0.340;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="84.0" y="394" width="144.4" height="34" rx="12" fill="#182533"/><text x="97" y="417" font-size="13.5" fill="#eef3f8">Walk 1 m forward?</text><rect x="84.0" y="433" width="69.2" height="28" rx="8" fill="#22303f"><animate attributeName="fill" values="#22303f;#22303f;#2f6fb0;#2f6fb0;#22303f;#22303f" keyTimes="0;0.370;0.390;0.440;0.460;1" dur="10s" repeatCount="indefinite"/></rect><text x="118.599" y="452" font-size="13" fill="#7cb8ff" font-weight="700" text-anchor="middle">Approve</text><rect x="159.2" y="433" width="69.2" height="28" rx="8" fill="#22303f"></rect><text x="193.796" y="452" font-size="13" fill="#7cb8ff" font-weight="700" text-anchor="middle">Reject</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.440;0.470;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.440;0.470;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="232.9" y="469" width="63.1" height="34" rx="12" fill="#2b5278"/><text x="245.875" y="492" font-size="13.5" fill="#eef3f8">/stop</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.570;0.600;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.570;0.600;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="84.0" y="512" width="181.0" height="34" rx="12" fill="#182533"/><text x="97" y="535" font-size="13.5" fill="#eef3f8">Stopped. Standing still.</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.115;0.145;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.115;0.145;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="996.6" y="200" width="119.4" height="52" rx="12" fill="#005c4b"/><text x="1009.58" y="223" font-size="13.5" fill="#eef3f8">Hi Lowi, is the</text><text x="1009.58" y="241" font-size="13.5" fill="#eef3f8">robot OK?</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.245;0.275;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.245;0.275;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="904.0" y="261" width="145.2" height="52" rx="12" fill="#202c33"/><text x="917" y="284" font-size="13.5" fill="#eef3f8">All good: standing,</text><text x="917" y="302" font-size="13.5" fill="#eef3f8">nothing in front.</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.375;0.405;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.375;0.405;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="948" y="322" width="168" height="40" rx="12" fill="#005c4b"/><path d="M962 334 L976 342 L962 350 z" fill="#dff5ee"/><rect x="986" y="339.0" width="3" height="6" rx="1.5" fill="#bfe8dc"/><rect x="992" y="336.0" width="3" height="12" rx="1.5" fill="#bfe8dc"/><rect x="998" y="333.0" width="3" height="18" rx="1.5" fill="#bfe8dc"/><rect x="1004" y="337.0" width="3" height="10" rx="1.5" fill="#bfe8dc"/><rect x="1010" y="334.0" width="3" height="16" rx="1.5" fill="#bfe8dc"/><rect x="1016" y="331.0" width="3" height="22" rx="1.5" fill="#bfe8dc"/><rect x="1022" y="335.0" width="3" height="14" rx="1.5" fill="#bfe8dc"/><rect x="1028" y="338.0" width="3" height="8" rx="1.5" fill="#bfe8dc"/><rect x="1034" y="333.0" width="3" height="18" rx="1.5" fill="#bfe8dc"/><rect x="1040" y="336.0" width="3" height="12" rx="1.5" fill="#bfe8dc"/><rect x="1046" y="332.0" width="3" height="20" rx="1.5" fill="#bfe8dc"/><rect x="1052" y="337.5" width="3" height="9" rx="1.5" fill="#bfe8dc"/><rect x="1058" y="335.0" width="3" height="14" rx="1.5" fill="#bfe8dc"/><rect x="1064" y="338.5" width="3" height="7" rx="1.5" fill="#bfe8dc"/><rect x="1070" y="336.5" width="3" height="11" rx="1.5" fill="#bfe8dc"/><text x="1106" y="347" font-size="12" fill="#cfe9e1" text-anchor="end">0:04</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.505;0.535;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.505;0.535;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="904.0" y="371" width="129.5" height="52" rx="12" fill="#202c33"/><text x="917" y="394" font-size="13.5" fill="#eef3f8">Got it, saved to</text><text x="917" y="412" font-size="13.5" fill="#eef3f8">memory.</text></g>
+<g><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.635;0.665;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 10;0 10;0 0;0 0;0 0;0 0" keyTimes="0;0.635;0.665;0.92;0.97;1" dur="10s" repeatCount="indefinite"/><rect x="904.0" y="432" width="166.8" height="52" rx="12" fill="#202c33"/><rect x="904" y="432" width="4" height="52" rx="2" fill="#ffb547"/><text x="917" y="455" font-size="13.5" fill="#ffd9a0">Alert: robot stopped,</text><text x="917" y="473" font-size="13.5" fill="#ffd9a0">obstacle ahead.</text></g>
+<rect x="125" y="112" width="130" height="26" rx="13" fill="#2aabee"/><text x="190" y="130" font-size="13.5" fill="#ffffff" font-weight="700" text-anchor="middle">Telegram</text>
+<rect x="945" y="112" width="130" height="26" rx="13" fill="#25d366"/><text x="1010" y="130" font-size="13.5" fill="#06301c" font-weight="700" text-anchor="middle">WhatsApp</text>
+<rect x="430" y="165" width="340" height="175" rx="16" fill="#161d27" stroke="#273142"/><path d="M448 166.5 H752" stroke="#3ecf8e" stroke-width="3" stroke-linecap="round"/><circle cx="466" cy="207" r="21" fill="#3ecf8e" fill-opacity=".13" stroke="#3ecf8e" stroke-opacity=".5"/><rect x="456" y="197" width="20" height="5" rx="1.5" fill="none" stroke="#3ecf8e" stroke-width="1.8"/><circle cx="472" cy="199.5" r="1" fill="#3ecf8e"/><rect x="456" y="204" width="20" height="5" rx="1.5" fill="none" stroke="#3ecf8e" stroke-width="1.8"/><circle cx="472" cy="206.5" r="1" fill="#3ecf8e"/><rect x="456" y="211" width="20" height="5" rx="1.5" fill="none" stroke="#3ecf8e" stroke-width="1.8"/><circle cx="472" cy="213.5" r="1" fill="#3ecf8e"/><text x="498" y="203" font-size="19" fill="#e8edf3" font-weight="700">Home server</text><text x="498" y="225" font-size="13.5" fill="#9aa5b4">Lowi + brain</text><circle cx="748" cy="189" r="4" fill="#3ecf8e"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle><line x1="446" y1="246" x2="754" y2="246" stroke="#273142"/>
+<circle cx="457" cy="271" r="3" fill="#3ecf8e"/><text x="470" y="276" font-size="14.5" fill="#e8edf3">Keeps every word from every channel</text>
+<circle cx="457" cy="299" r="3" fill="#3ecf8e"/><text x="470" y="304" font-size="14.5" fill="#e8edf3">Photos only when you ask</text>
+<rect x="460" y="425" width="280" height="110" rx="16" fill="#161d27" stroke="#273142"/><path d="M478 426.5 H722" stroke="#4ea1ff" stroke-width="3" stroke-linecap="round"/><circle cx="496" cy="465" r="21" fill="#4ea1ff" fill-opacity=".13" stroke="#4ea1ff" stroke-opacity=".5"/><line x1="502.9" y1="469.0" x2="508.1" y2="472.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="496.0" y1="473.0" x2="496.0" y2="479.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="489.1" y1="469.0" x2="483.9" y2="472.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="489.1" y1="461.0" x2="483.9" y2="458.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="496.0" y1="457.0" x2="496.0" y2="451.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><line x1="502.9" y1="461.0" x2="508.1" y2="458.0" stroke="#4ea1ff" stroke-width="2" stroke-linecap="round"/><polygon points="502.9,469.0 496.0,473.0 489.1,469.0 489.1,461.0 496.0,457.0 502.9,461.0" fill="none" stroke="#4ea1ff" stroke-width="2"/><text x="528" y="461" font-size="19" fill="#e8edf3" font-weight="700">Robot</text><text x="528" y="483" font-size="13.5" fill="#9aa5b4">through the gateway</text><circle cx="487" cy="511" r="3" fill="#4ea1ff"/><text x="500" y="516" font-size="14.5" fill="#e8edf3">All safety rules still apply</text>
+<rect x="395" y="578" width="410" height="160" rx="16" fill="#18202b" stroke="#2a3445"/>
+<text x="419" y="610" font-size="16" fill="#ffb547" font-weight="700">Same rules for every channel</text>
+<circle cx="425" cy="637" r="3" fill="#ffb547"/><text x="438" y="642" font-size="14.5" fill="#d5dce6">Stop always wins</text>
+<circle cx="425" cy="667" r="3" fill="#ffb547"/><text x="438" y="672" font-size="14.5" fill="#d5dce6">Risky moves wait for your approval</text>
+<circle cx="425" cy="697" r="3" fill="#ffb547"/><text x="438" y="702" font-size="14.5" fill="#d5dce6">Text the camera sees never moves the robot</text>
+<rect x="40" y="578" width="300" height="168" rx="16" fill="#161d27" stroke="#273142"/>
+<text x="60" y="608" font-size="16" fill="#2aabee" font-weight="700">Telegram · control</text>
+<circle cx="65" cy="631" r="2.6" fill="#2aabee"/><text x="76" y="636" font-size="14" fill="#cfd7e2">Tasks in plain words or voice</text>
+<circle cx="65" cy="654" r="2.6" fill="#2aabee"/><text x="76" y="659" font-size="14" fill="#cfd7e2">/status  /photo  /stop  /estop</text>
+<circle cx="65" cy="677" r="2.6" fill="#2aabee"/><text x="76" y="682" font-size="14" fill="#cfd7e2">Approve or reject risky moves</text>
+<circle cx="65" cy="700" r="2.6" fill="#2aabee"/><text x="76" y="705" font-size="14" fill="#cfd7e2">Alerts: obstacle, fall, link lost</text>
+<circle cx="65" cy="723" r="2.6" fill="#2aabee"/><text x="76" y="728" font-size="14" fill="#cfd7e2">Answers owner accounts only</text>
+<rect x="860" y="578" width="300" height="168" rx="16" fill="#161d27" stroke="#273142"/>
+<text x="880" y="608" font-size="16" fill="#25d366" font-weight="700">WhatsApp · conversation</text>
+<circle cx="885" cy="631" r="2.6" fill="#25d366"/><text x="896" y="636" font-size="14" fill="#cfd7e2">Chat with Lowi, 1:1 or in groups</text>
+<circle cx="885" cy="654" r="2.6" fill="#25d366"/><text x="896" y="659" font-size="14" fill="#cfd7e2">Voice notes are transcribed</text>
+<circle cx="885" cy="677" r="2.6" fill="#25d366"/><text x="896" y="682" font-size="14" fill="#cfd7e2">Short alerts, rate-limited</text>
+<circle cx="885" cy="700" r="2.6" fill="#25d366"/><text x="896" y="705" font-size="14" fill="#cfd7e2">Every word goes to Lowi's memory</text>
+</svg>

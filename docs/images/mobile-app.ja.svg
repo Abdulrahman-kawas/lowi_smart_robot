@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+<title id="title">モバイルアプリ</title>
+<desc id="desc">開発予定のモバイルアプリの画面案：カメラ映像、ジョイスティック、停止ボタン、そしてロボットまでの指令の流れ。</desc>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', Meiryo, 'Noto Sans JP', 'Segoe UI', sans-serif; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+</style>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0d1117"/><stop offset="1" stop-color="#151c27"/>
+  </linearGradient>
+  <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+    <circle cx="1" cy="1" r="1" fill="#ffffff" opacity="0.05"/>
+  </pattern>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <radialGradient id="scan" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="255">
+    <stop offset="0" stop-color="#4ea1ff" stop-opacity="0.42"/>
+    <stop offset="1" stop-color="#4ea1ff" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="fov" gradientUnits="userSpaceOnUse" x1="0" y1="-140" x2="0" y2="-262">
+    <stop offset="0" stop-color="#5fd3e6" stop-opacity="0.22"/>
+    <stop offset="1" stop-color="#5fd3e6" stop-opacity="0"/>
+  </linearGradient>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#4a5870"/>
+  </marker>
+</defs>
+<rect width="1200" height="650" rx="24" fill="url(#bg)"/>
+<rect width="1200" height="650" rx="24" fill="url(#dots)"/>
+<rect x="0.5" y="0.5" width="1199" height="649" rx="23.5" fill="none" stroke="#263041"/>
+<text x="48" y="66" font-size="30" fill="#e8edf3" font-weight="700">モバイルアプリ</text>
+<rect x="274" y="44" width="76" height="26" rx="13" fill="#ffb547" fill-opacity=".14" stroke="#ffb547"/>
+<text x="312" y="62" font-size="12.5" fill="#ffb547" font-weight="700" text-anchor="middle" letter-spacing="1.5">開発予定</text>
+<text x="48" y="98" font-size="16.5" fill="#9aa5b4">ロボットのカメラを見ながら、どこからでも操作。</text>
+<defs><clipPath id="scr"><rect x="70" y="144" width="556" height="292" rx="26"/></clipPath><linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#151b25"/><stop offset="1" stop-color="#222b38"/></linearGradient><linearGradient id="floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3342"/><stop offset="1" stop-color="#394456"/></linearGradient></defs>
+<rect x="48" y="130" width="600" height="320" rx="44" fill="#0a0d12" stroke="#2a3240" stroke-width="2"/>
+<circle cx="59" cy="290" r="4" fill="#1d2430"/>
+<g clip-path="url(#scr)"><rect x="70" y="144" width="556" height="106" fill="url(#wall)"/><rect x="70" y="250" width="556" height="186" fill="url(#floor)"/><line x1="348" y1="250" x2="-560" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="-480" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="-400" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="-320" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="-240" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="-160" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="-80" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="0" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="80" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="160" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="240" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="320" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="400" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="480" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="560" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="640" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="720" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="800" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="880" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="960" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="1040" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="1120" y2="436" stroke="#46526a" stroke-width="1"/><line x1="348" y1="250" x2="1200" y2="436" stroke="#46526a" stroke-width="1"/><line x1="70" x2="626" y1="252" y2="252" stroke="#56627a" stroke-width="1.4"><animate attributeName="y1" values="252;440" dur="2.4s" begin="-0s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/><animate attributeName="y2" values="252;440" dur="2.4s" begin="-0s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/></line><line x1="70" x2="626" y1="252" y2="252" stroke="#56627a" stroke-width="1.4"><animate attributeName="y1" values="252;440" dur="2.4s" begin="-0.4s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/><animate attributeName="y2" values="252;440" dur="2.4s" begin="-0.4s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/></line><line x1="70" x2="626" y1="252" y2="252" stroke="#56627a" stroke-width="1.4"><animate attributeName="y1" values="252;440" dur="2.4s" begin="-0.8s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/><animate attributeName="y2" values="252;440" dur="2.4s" begin="-0.8s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/></line><line x1="70" x2="626" y1="252" y2="252" stroke="#56627a" stroke-width="1.4"><animate attributeName="y1" values="252;440" dur="2.4s" begin="-1.2s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/><animate attributeName="y2" values="252;440" dur="2.4s" begin="-1.2s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/></line><line x1="70" x2="626" y1="252" y2="252" stroke="#56627a" stroke-width="1.4"><animate attributeName="y1" values="252;440" dur="2.4s" begin="-1.6s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/><animate attributeName="y2" values="252;440" dur="2.4s" begin="-1.6s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/></line><line x1="70" x2="626" y1="252" y2="252" stroke="#56627a" stroke-width="1.4"><animate attributeName="y1" values="252;440" dur="2.4s" begin="-2s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/><animate attributeName="y2" values="252;440" dur="2.4s" begin="-2s" calcMode="spline" keyTimes="0;1" keySplines=".7 0 1 1" repeatCount="indefinite"/></line><polygon points="452,282 512,282 526,272 466,272" fill="#a5714d"/><polygon points="512,282 526,272 526,326 512,338" fill="#6e4a33"/><rect x="452" y="282" width="60" height="56" fill="#8a5a3c"/><rect x="444" y="264" width="90" height="82" rx="6" fill="none" stroke="#ffb547" stroke-width="2" stroke-dasharray="6 5"/><rect x="458" y="232" width="62" height="24" rx="12" fill="#000" fill-opacity=".55" stroke="#ffb547"/><text x="489" y="249" font-size="13" fill="#ffb547" font-weight="700" text-anchor="middle">0.8 m</text><rect x="70" y="144" width="556" height="40" fill="#000" fill-opacity=".38"/><circle cx="96" cy="164" r="5" fill="#ff5d5d"><animate attributeName="opacity" values="1;.2;1" dur="1.2s" repeatCount="indefinite"/></circle><text x="108" y="169" font-size="12.5" fill="#ffffff" font-weight="700">LIVE</text><text x="348" y="169" font-size="12.5" fill="#cdd6e2" text-anchor="middle">Tailscale · 38 ms</text><rect x="574" y="157" width="28" height="14" rx="3" fill="none" stroke="#cdd6e2" stroke-width="1.5"/><rect x="577" y="160" width="18" height="8" rx="1.5" fill="#3ecf8e"/><rect x="603" y="161" width="3" height="6" rx="1" fill="#cdd6e2"/><text x="566" y="169" font-size="12.5" fill="#cdd6e2" text-anchor="end">82%</text><path d="M340 300 h16 M348 292 v16" stroke="#ffffff" stroke-opacity=".35" stroke-width="1.5"/><circle cx="150" cy="370" r="48" fill="#000" fill-opacity=".38" stroke="#ffffff" stroke-opacity=".25" stroke-width="1.5"/><path d="M150 330 l-6 8 h12 z" fill="#ffffff" fill-opacity=".35" transform="rotate(0 150 370)"/><path d="M150 330 l-6 8 h12 z" fill="#ffffff" fill-opacity=".35" transform="rotate(90 150 370)"/><path d="M150 330 l-6 8 h12 z" fill="#ffffff" fill-opacity=".35" transform="rotate(180 150 370)"/><path d="M150 330 l-6 8 h12 z" fill="#ffffff" fill-opacity=".35" transform="rotate(270 150 370)"/><circle cx="150" cy="370" r="20" fill="#e8edf3" fill-opacity=".92"><animateTransform attributeName="transform" type="translate" values="0 0;0 -26;14 -20;0 0" keyTimes="0;.3;.7;1" dur="3s" repeatCount="indefinite"/></circle><circle cx="552" cy="370" r="38" fill="none" stroke="#ff5d5d" stroke-width="3"><animate attributeName="r" values="38;54" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" values=".7;0" dur="1.8s" repeatCount="indefinite"/></circle><circle cx="552" cy="370" r="38" fill="#ff5d5d"/><text x="552" y="376" font-size="16" fill="#ffffff" font-weight="800" text-anchor="middle">STOP</text><rect x="262" y="398" width="84" height="30" rx="15" fill="#000" fill-opacity=".42" stroke="#ffffff" stroke-opacity=".25"/><text x="304" y="418" font-size="13" fill="#e8edf3" font-weight="600" text-anchor="middle">立つ</text><rect x="354" y="398" width="84" height="30" rx="15" fill="#000" fill-opacity=".42" stroke="#ffffff" stroke-opacity=".25"/><text x="396" y="418" font-size="13" fill="#e8edf3" font-weight="600" text-anchor="middle">座る</text></g>
+<rect x="70" y="144" width="556" height="292" rx="26" fill="none" stroke="#000" stroke-opacity=".6"/>
+<text x="690" y="152" font-size="19" fill="#e8edf3" font-weight="700">動作の仕組み（予定）</text>
+<circle cx="704" cy="193" r="13" fill="#ffb547" fill-opacity=".14" stroke="#ffb547" stroke-opacity=".7"/>
+<text x="704" y="198" font-size="13" fill="#ffb547" font-weight="700" text-anchor="middle">1</text>
+<text x="728" y="198" font-size="15" fill="#d5dce6">ロボットのカメラ映像をライブ表示</text>
+<circle cx="704" cy="241" r="13" fill="#ffb547" fill-opacity=".14" stroke="#ffb547" stroke-opacity=".7"/>
+<text x="704" y="246" font-size="13" fill="#ffb547" font-weight="700" text-anchor="middle">2</text>
+<text x="728" y="246" font-size="15" fill="#d5dce6">ジョイスティックは1秒ずつの移動を送信、押す間は継続</text>
+<circle cx="704" cy="289" r="13" fill="#ffb547" fill-opacity=".14" stroke="#ffb547" stroke-opacity=".7"/>
+<text x="704" y="294" font-size="13" fill="#ffb547" font-weight="700" text-anchor="middle">3</text>
+<text x="728" y="294" font-size="15" fill="#d5dce6">Tailscale経由でブレインへ。ロボットへ直接は送らない</text>
+<circle cx="704" cy="337" r="13" fill="#ffb547" fill-opacity=".14" stroke="#ffb547" stroke-opacity=".7"/>
+<text x="704" y="342" font-size="13" fill="#ffb547" font-weight="700" text-anchor="middle">4</text>
+<text x="728" y="342" font-size="15" fill="#d5dce6">停止が最優先：停止 &gt; 音声 &gt; 遠隔 &gt; プランナー</text>
+<circle cx="704" cy="385" r="13" fill="#ffb547" fill-opacity=".14" stroke="#ffb547" stroke-opacity=".7"/>
+<text x="704" y="390" font-size="13" fill="#ffb547" font-weight="700" text-anchor="middle">5</text>
+<text x="728" y="390" font-size="15" fill="#d5dce6">遠隔操作は低速・短い移動に制限</text>
+<circle cx="704" cy="433" r="13" fill="#ffb547" fill-opacity=".14" stroke="#ffb547" stroke-opacity=".7"/>
+<text x="704" y="438" font-size="13" fill="#ffb547" font-weight="700" text-anchor="middle">6</text>
+<text x="728" y="438" font-size="15" fill="#d5dce6">非常停止の解除には新しい写真と確認が必要</text>
+<text x="48" y="494" font-size="12.5" fill="#5b6676" font-weight="700" letter-spacing="2">ジョイスティック操作の流れ</text>
+<rect x="48" y="508" width="220" height="64" rx="14" fill="#161d27" stroke="#273142"/><rect x="48" y="522" width="4" height="36" rx="2" fill="#ffb547"/><text x="70" y="537" font-size="16" fill="#e8edf3" font-weight="700">モバイルアプリ</text><text x="70" y="557" font-size="13" fill="#9aa5b4">スマホ</text>
+<line x1="276" y1="540.0" x2="335" y2="540.0" stroke="#4a5870" stroke-width="2" marker-end="url(#arrow)"/>
+<circle r="3.8" fill="#ffb547" filter="url(#glow)"><animateMotion dur="1.6s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#f0" href="#f0"/></animateMotion></circle>
+<text x="305.5" y="531" font-size="11.5" fill="#9aa5b4" font-weight="600" text-anchor="middle">Tailscale</text>
+<rect x="343" y="508" width="220" height="64" rx="14" fill="#161d27" stroke="#273142"/><rect x="343" y="522" width="4" height="36" rx="2" fill="#3ecf8e"/><text x="365" y="537" font-size="16" fill="#e8edf3" font-weight="700">ブレイン</text><text x="365" y="557" font-size="13" fill="#9aa5b4">ホームサーバー</text>
+<line x1="571" y1="540.0" x2="629" y2="540.0" stroke="#4a5870" stroke-width="2" marker-end="url(#arrow)"/>
+<circle r="3.8" fill="#3ecf8e" filter="url(#glow)"><animateMotion dur="1.6s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#f1" href="#f1"/></animateMotion></circle>
+<text x="600" y="531" font-size="11.5" fill="#9aa5b4" font-weight="600" text-anchor="middle">MQTT</text>
+<text x="600" y="561" font-size="11.5" fill="#9aa5b4" font-weight="600" text-anchor="middle">+ mTLS</text>
+<rect x="637" y="508" width="220" height="64" rx="14" fill="#161d27" stroke="#273142"/><rect x="637" y="522" width="4" height="36" rx="2" fill="#4ea1ff"/><text x="659" y="537" font-size="16" fill="#e8edf3" font-weight="700">ゲートウェイ</text><text x="659" y="557" font-size="13" fill="#9aa5b4">ロボット</text>
+<line x1="865" y1="540.0" x2="924" y2="540.0" stroke="#4a5870" stroke-width="2" marker-end="url(#arrow)"/>
+<circle r="3.8" fill="#4ea1ff" filter="url(#glow)"><animateMotion dur="1.6s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#f2" href="#f2"/></animateMotion></circle>
+<text x="894.5" y="531" font-size="11.5" fill="#9aa5b4" font-weight="600" text-anchor="middle">唯一の</text>
+<text x="894.5" y="561" font-size="11.5" fill="#9aa5b4" font-weight="600" text-anchor="middle">送信元</text>
+<rect x="932" y="508" width="220" height="64" rx="14" fill="#161d27" stroke="#273142"/><rect x="932" y="522" width="4" height="36" rx="2" fill="#ff9f43"/><text x="954" y="537" font-size="16" fill="#e8edf3" font-weight="700">ボディ</text><text x="954" y="557" font-size="13" fill="#9aa5b4">脚と安全機能</text>
+<defs><path id="f0" d="M276 540.0 H335"/><path id="f1" d="M571 540.0 H629"/><path id="f2" d="M865 540.0 H924"/></defs>
+<text x="48" y="618" font-size="14" fill="#9aa5b4">設計案（未実装）。必要な安全ルールは、すでにゲートウェイとボディで動いている。</text>
+</svg>

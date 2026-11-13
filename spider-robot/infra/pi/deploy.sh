@@ -19,11 +19,23 @@ mode() {  # the gateway's retained status, one message, 3 s at most; no answer m
     | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["mode"] if d["online"] else "offline")'
 }
 
-current_mode="$(mode || echo unknown)"
-case "$current_mode" in
-  relaxed|sitting) ;;
-  *) echo "refusing: the robot is '$current_mode'. Sit it down first."; exit 1 ;;
-esac
+# With spider-body stopped nothing can move, so there is no posture to check.
+if systemctl is-active --quiet spider-body; then
+  current_mode="$(mode || echo unknown)"
+  case "$current_mode" in
+    relaxed|sitting) ;;
+    *) echo "refusing: the robot is '$current_mode'. Sit it down first."; exit 1 ;;
+  esac
+fi
+
+# Restart only what the owner turned on. A deploy never starts spider-body, voice or the camera.
+RUN=()
+for svc in "${SERVICES[@]}"; do
+  if systemctl is-active --quiet "$svc" || systemctl is-enabled --quiet "$svc"; then
+    RUN+=("$svc")
+  fi
+done
+echo "services to restart: ${RUN[*]:-none}"
 
 sudo install -d -o "$USER" "$RELEASES"
 if [[ -d "$LINK" && ! -L "$LINK" ]]; then   # first deploy after setup_pi.sh
@@ -32,7 +44,8 @@ if [[ -d "$LINK" && ! -L "$LINK" ]]; then   # first deploy after setup_pi.sh
 fi
 previous="$(readlink -f "$LINK")"
 release="$RELEASES/$(date +%Y%m%d-%H%M%S)"
-rsync -a --exclude .venv --exclude __pycache__ --exclude docs "$SR/" "$release/"
+rsync -a --exclude .venv --exclude __pycache__ --exclude .ruff_cache --exclude docs \
+  --exclude infra/local/local-certs "$SR/" "$release/"
 export UV_LINK_MODE=copy UV_PYTHON_INSTALL_DIR=/opt/spider/python
 for pkg in body gateway; do
   (cd "$release/$pkg" && uv sync --frozen --no-dev --extra gpio --python "$PYTHON_VERSION")
@@ -42,9 +55,10 @@ sudo chown -R spider:spider "$release"
 
 activate() {
   sudo ln -sfn "$1" "$LINK"
-  sudo systemctl restart "${SERVICES[@]}"
+  [[ ${#RUN[@]} -gt 0 ]] || return 0
+  sudo systemctl restart "${RUN[@]}"
   sleep 8
-  for svc in "${SERVICES[@]}"; do
+  for svc in "${RUN[@]}"; do
     systemctl is-active --quiet "$svc" || return 1
   done
 }
