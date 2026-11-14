@@ -4,6 +4,8 @@
 **/.ruff_cache/
 brain/.env
 brain/photos/
+# memory, traces, recordings, paired-device hashes
+brain/data/
 infra/aws/certs/
 infra/local/local-certs/
 *.private.key

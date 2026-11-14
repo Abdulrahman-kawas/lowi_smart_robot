@@ -118,6 +118,12 @@ class BrainService:
                              http=whatsapp_http)
             if settings.whatsapp_bridge_url else None
         )
+        self.mobile = None
+        if settings.mobile:
+            from .mobile.devices import data_dir
+            from .mobile.hub import MobileHub
+
+            self.mobile = MobileHub(self, data_dir(settings.mobile_data_dir))
         self.telegram = None
         if settings.telegram_enabled:
             from .telegram import TelegramBot
@@ -161,11 +167,16 @@ class BrainService:
             asyncio.create_task(self.robot.heartbeat_loop(self.settings.heartbeat_hz),
                                 name="heartbeat"),
         ]
-        if self.settings.dashboard:
+        if self.settings.dashboard or self.mobile is not None:
             self._server = self._build_server()
-            self._bg.append(asyncio.create_task(self._server.serve(), name="dashboard"))
+            self._bg.append(asyncio.create_task(self._server.serve(), name="http"))
             await asyncio.sleep(0.4)
-            print(f"Dashboard: http://{self.settings.host}:{self.settings.port}/#t={self.run_token}")
+            if self.settings.dashboard:
+                print(f"Dashboard: http://{self.settings.host}:{self.http_port}/#t={self.run_token}")
+        if self.mobile is not None:
+            self._bg += self.mobile.start()
+            print(f"Mobile API: http://{self.settings.host}:{self.http_port}/v1 "
+                  "(publish it with `tailscale serve`)")
         if self.telegram is not None:
             self._bg += [asyncio.create_task(self.telegram.run(), name="telegram"),
                          asyncio.create_task(self.telegram.notify_loop(), name="telegram-notify")]
@@ -184,12 +195,29 @@ class BrainService:
         with contextlib.suppress(Exception):
             await self.link.stop()
 
+    @property
+    def http_port(self) -> int:
+        """The port the dashboard and mobile API listen on (the real one when SB_PORT=0)."""
+        servers = getattr(self._server, "servers", None)
+        if servers and servers[0].sockets:
+            return servers[0].sockets[0].getsockname()[1]
+        return self.settings.port
+
     def _build_server(self):
         import uvicorn
+        from fastapi import FastAPI
 
-        app = create_app(self.supervisor, self.robot, run_token=self.run_token,
-                         port=self.settings.port, extra_origins=self.settings.dashboard_origins,
-                         token_timeout=self.settings.run_token_seconds, confirm=self.confirm)
+        if self.settings.dashboard:
+            app = create_app(self.supervisor, self.robot, run_token=self.run_token,
+                             port=self.settings.port,
+                             extra_origins=self.settings.dashboard_origins,
+                             token_timeout=self.settings.run_token_seconds, confirm=self.confirm)
+        else:
+            app = FastAPI(title="Spider Brain")
+        if self.mobile is not None:
+            from .mobile.api import build_router
+
+            app.include_router(build_router(self.mobile))
         return uvicorn.Server(uvicorn.Config(app, host=self.settings.host,
                                              port=self.settings.port, log_level="warning"))
 

@@ -9,6 +9,8 @@
   spider-brain serve                           long-running brain: dashboard + Telegram bot +
                                                WhatsApp alerts + memory + skills + voice
       --planner claude|liquid --autonomy supervised|guarded|autonomous
+  spider-brain pair                            one-time code for the mobile app (2 min)
+  spider-brain devices list | revoke <name>    paired phones
 """
 
 from __future__ import annotations
@@ -173,6 +175,10 @@ def main(argv: list[str] | None = None) -> int:
     ping.add_argument("--n", type=int, default=100)
     look = sub.add_parser("look")
     look.add_argument("question")
+    sub.add_parser("pair", help="one-time pairing code for the mobile app")
+    devices = sub.add_parser("devices", help="list or revoke paired phones")
+    devices.add_argument("action", choices=["list", "revoke"])
+    devices.add_argument("name", nargs="?")
     p.add_argument("--log-level", default="WARNING")
     args = p.parse_args(argv)
     logging.basicConfig(
@@ -198,6 +204,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"config error: {err['msg']}", file=sys.stderr)
         return 2
 
+    if args.command in ("pair", "devices"):
+        from .mobile import cli
+
+        if args.command == "pair":
+            return cli.pair(settings)
+        return cli.devices(settings, args.action, args.name)
     try:
         if args.command == "status":
             return asyncio.run(_status(settings))
