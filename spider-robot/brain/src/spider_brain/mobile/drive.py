@@ -78,8 +78,8 @@ class _Hold:
     pending: bool = True
 
 
-# notify(device or None for everyone, kind, detail, refusal)
-Notify = Callable[[str | None, str, str, bool], None]
+# notify(device or None for everyone, kind, detail, refusal, hold_id the event is about)
+Notify = Callable[[str | None, str, str, bool, str | None], None]
 
 
 class DriveControl:
@@ -107,7 +107,7 @@ class DriveControl:
     # ------------------------------------------------------------------ from the app
     def drive(self, device: str, x: object, y: object, turn: object, hold_id: object) -> None:
         if not isinstance(hold_id, str) or not 0 < len(hold_id) <= MAX_HOLD_ID:
-            self.notify(device, "drive_refused", "a drive needs a hold_id", True)
+            self.notify(device, "drive_refused", "a drive needs a hold_id", True, None)
             return
         if hold_id in self._ended[device]:
             return  # this press already ended and was reported once: lift and press again
@@ -205,8 +205,8 @@ class DriveControl:
         self._ended[hold.device].append(hold.hold_id)
         if stop and self.in_flight(hold.device):
             self.robot.cancel_motion()
-        self.notify(hold.device, "drive_ended", why, refusal)
+        self.notify(hold.device, "drive_ended", why, refusal, hold.hold_id)
 
     def _refuse(self, device: str, hold_id: str, why: str) -> None:
         self._ended[device].append(hold_id)
-        self.notify(device, "drive_refused", why, True)
+        self.notify(device, "drive_refused", why, True, hold_id)

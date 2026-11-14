@@ -8,7 +8,7 @@ the remote caps (0.05 m/s, 0.3 rad/s, moves of at most 1 s) and the body's own l
 | Part | Where | State |
 |---|---|---|
 | Brain API (`/v1`) | `brain/src/spider_brain/mobile/` | built, tested against the simulator |
-| iOS and iPadOS app | `mobile/ios/` | to build |
+| iOS and iPadOS app | `mobile/ios/` | Connect and Drive on iPhone; iPad layout to build |
 
 ## Run everything on a Mac, without hardware
 
@@ -56,7 +56,33 @@ brew install mosquitto xcodegen
    uv run spider-brain devices revoke "Simulator iPhone"
    ```
 
-In the iOS Simulator, use `127.0.0.1` as the brain address and the code from step 5.
+6. The app. SwiftUI, iOS and iPadOS 17 or newer, Swift 6, no third-party packages. The
+   project is described in `ios/project.yml`; the generated `Lowi.xcodeproj` is not in git.
+
+   ```bash
+   cd mobile/ios
+   xcodegen generate
+   open Lowi.xcodeproj        # run the Lowi scheme on an iPhone simulator
+   ```
+
+   In the app, use `127.0.0.1` as the brain address and the code from step 5. To run on a real
+   phone, set your team and a bundle id of your own in `project.yml`, then generate again.
+
+Tests, from `mobile/ios` (pick any installed iPhone simulator):
+
+```bash
+DEST='platform=iOS Simulator,name=iPhone 15 Pro'   # iOS 17.5; iPhone 17 Pro for iOS 26
+xcodebuild -scheme Lowi -destination "$DEST" -only-testing:LowiTests test
+xcodebuild -scheme Lowi -destination "$DEST" -collect-test-diagnostics never \
+  -only-testing:LowiUITests/StopOnConnectTests test
+# End to end against the stack above, with a robot that is limp (restart spider-body) and a
+# fresh code from step 5:
+TEST_RUNNER_LOWI_PAIR_CODE=123456 xcodebuild -scheme Lowi -destination "$DEST" \
+  -collect-test-diagnostics never -only-testing:LowiUITests/SimulatorDriveTests test
+```
+
+`-collect-test-diagnostics never`: with Xcode 27.1, a failed UI test otherwise leaves
+`xcodebuild` collecting diagnostics without ever exiting.
 
 ## On the home server
 
@@ -100,7 +126,8 @@ On `/v1/live`:
   once a second), `lidar` (36 sectors), `event` (`kind`, `detail`, `level`, `refusal`), `pong`.
   Frames are binary: `[u32 big-endian header length][header JSON {type, n, age_ms}][JPEG]`.
 - **App to server:** `drive {x, y, turn, hold_id}`, `stop`, `estop`,
-  `posture {stand|sit|relax}`, `video {on}`, and `heartbeat {t}` every second. The server treats
+  `posture {stand|sit|relax}`, `video {on}`, and `heartbeat {t}` every second.
+  Drive events (`drive_ended`, `drive_refused`) carry the `hold_id` of the press they end. The server treats
   3 s of silence as a lost socket.
 - **Drive inputs:** each from -1 to 1. `x` is forward, `y` is left, and `turn` is positive to the
   left. The brain scales them to the caps.

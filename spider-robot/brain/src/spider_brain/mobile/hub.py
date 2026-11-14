@@ -179,10 +179,13 @@ class MobileHub:
                      text.startswith(("Rejected", "No answer")))
 
     # ------------------------------------------------------------------ outgoing
-    def _notify(self, device: str | None, kind: str, detail: str, refusal: bool) -> None:
+    def _notify(self, device: str | None, kind: str, detail: str, refusal: bool,
+                hold_id: str | None = None) -> None:
         level = "alert" if kind in ALERTS else "warn" if refusal else "info"
         msg = {"type": "event", "kind": kind, "detail": detail, "level": level,
                "refusal": refusal}
+        if hold_id is not None:
+            msg["hold_id"] = hold_id
         for s in list(self.sessions.values()):
             if device is None or s.device == device:
                 s.put(msg)

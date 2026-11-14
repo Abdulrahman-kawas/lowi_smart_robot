@@ -227,6 +227,7 @@ def test_one_device_drives_at_a_time_and_a_centred_stick_stands_still():
     drive.drive("phone", 1, 0, 0, "a")
     drive.drive("ipad", 0, 1, 0, "b")
     assert notes[-1][:2] == ("ipad", "drive_refused") and "phone is driving" in notes[-1][2]
+    assert notes[-1][4] == "b"  # the app ends only the press the event is about
     clock.t += 0.2
     drive.drive("phone", 0, 0, 0, "a")  # finger down, stick centred
     assert robot.calls[-1] == ("stop", True) and drive.holder == "phone"
@@ -536,7 +537,8 @@ async def test_no_renewal_stops_the_robot_within_a_second(stack):
     assert await _until(lambda: len(stack.cancels) > before, 1.0)  # socket still open
     assert 0.55 < stack.cancels[before] - sent < 0.75
     assert await _until(lambda: stack.body.move is None, 1.0 - (time.monotonic() - sent))
-    assert await _until(lambda: "dead-man" in " ".join(e["detail"] for e in app.events), 1.0)
+    assert await _until(lambda: any("dead-man" in e["detail"] and e.get("hold_id") == "h"
+                                    for e in app.events), 1.0)
     await app.close()
 
 
