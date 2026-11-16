@@ -2,7 +2,15 @@ import SwiftUI
 
 @main
 struct LowiApp: App {
-    @State private var model = AppModel()
+    @State private var model = AppModel(defaults: LowiApp.defaults)
+
+    /// UI tests keep their fake address and name out of the real settings.
+    private static var defaults: UserDefaults {
+        #if DEBUG
+        if UITestFakes.isOn { return UserDefaults(suiteName: "app.lowi.uitests") ?? .standard }
+        #endif
+        return .standard
+    }
 
     var body: some Scene {
         WindowGroup {

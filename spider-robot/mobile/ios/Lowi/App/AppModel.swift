@@ -59,19 +59,29 @@ final class AppModel {
         }
     }
     private(set) var busy = false
+    private(set) var stopPresses = 0
 
     // MARK: inputs
     private(set) var stick: CGVector?
     private(set) var turnDx: CGFloat?
+    var hasKeyboard = false
+    var controllerName: String?
+    var textEditing = false  // a text field has the keyboard: keys type, they do not drive
     var isActive = true {
         didSet {
+            if !isActive { hardware?.reset() }
             tick()
             updateVideo()
         }
     }
     var driveScreenVisible = false { didSet { updateVideo() } }
+    var sheetOpen = false { didSet { tick() } }  // Settings or Photo over the drive screen
 
     @ObservationIgnored private var deadMan = DeadMan()
+    @ObservationIgnored private var keyAxes = DriveMapping.KeyAxes.none
+    @ObservationIgnored private var padStick: CGVector?
+    @ObservationIgnored private var padTurn: CGFloat?
+    @ObservationIgnored private var hardware: HardwareInput?
     @ObservationIgnored private let socket = LiveSocket()
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var eventCounter = 0
@@ -107,6 +117,13 @@ final class AppModel {
                 try? await Task.sleep(for: .milliseconds(100))
             }
         }
+        hardware = HardwareInput(model: self)
+        #if DEBUG
+        if UITestFakes.isOn {
+            startUITestFake()
+            return
+        }
+        #endif
         connect()
     }
 
@@ -125,6 +142,7 @@ final class AppModel {
     func driveBlock(at now: TimeInterval) -> DriveBlock? {
         guard isPaired else { return .notPaired }
         guard isActive else { return .background }
+        if prompt != nil || sheetOpen { return .covered }
         guard isLive else { return .linkLost }
         guard let brain, brain.online, let robot = brain.robot else { return .robotOffline }
         if robot.estop { return .estop }
@@ -151,11 +169,28 @@ final class AppModel {
         tick()
     }
 
+    func setKeys(_ axes: DriveMapping.KeyAxes) {
+        keyAxes = axes
+        tick()
+    }
+
+    func setPad(stick: CGVector?, turn: CGFloat?) {
+        padStick = stick
+        padTurn = turn
+        tick()
+    }
+
+    /// Touch first, then keys, then a controller: whichever is held drives, one at a time.
     func tick() {
         let now = clock()
-        let held = stick != nil || turnDx != nil
-        let input = DriveMapping.input(stick: stick, turn: turnDx)
-        perform(deadMan.update(held: held, input: input, block: driveBlock(at: now), now: now))
+        let touch = stick != nil || turnDx != nil
+        let pad = padStick != nil || padTurn != nil
+        let input = touch ? DriveMapping.input(stick: stick, turn: turnDx)
+            : keyAxes.isHeld ? DriveMapping.input(forward: keyAxes.forward, left: keyAxes.left,
+                                                  turnLeft: keyAxes.turnLeft)
+            : DriveMapping.input(stick: padStick, turn: padTurn)
+        perform(deadMan.update(held: touch || keyAxes.isHeld || pad, input: input,
+                               block: driveBlock(at: now), now: now))
     }
 
     private func perform(_ commands: [DriveCommand]) {
@@ -173,6 +208,7 @@ final class AppModel {
 
     /// STOP goes out on the socket and over HTTP at once: whichever path still works delivers it.
     func pressStop() {
+        stopPresses += 1
         if hapticsOn { Haptics.stop() }
         deadMan.cancel()
         guard isPaired, let api else {
@@ -198,6 +234,11 @@ final class AppModel {
         if !socket.send(.posture(posture)) {
             notice = String(localized: "Not connected to the brain.")
         }
+    }
+
+    func takePhoto(question: String?) async throws -> PhotoResult {
+        guard let api, isPaired else { throw APIError.unauthorized(String(localized: "Not paired")) }
+        return try await api.photo(question: question)
     }
 
     // MARK: confirmed actions
@@ -359,8 +400,31 @@ final class AppModel {
 
     private func refuse(_ message: String) {
         if hapticsOn { Haptics.refusal() }
-        notice = message
+        notice = message.isEmpty ? String(localized: "Refused, with no reason given.") : message
     }
+
+    #if DEBUG
+    /// UI tests: a paired phone and a robot with a latched E-stop, without a brain. HTTP calls
+    /// are answered by UITestFakes; there is no socket, so the link reads "offline".
+    private func startUITestFake() {
+        UITestFakes.install()
+        if ProcessInfo.processInfo.arguments.contains("-uiTestUnpaired") { return }  // Connect
+        token = "ui-test"
+        addressText = UITestFakes.address
+        deviceName = "UI test"
+        robotId = "spider-01"
+        brain = UITestFakes.state
+        lidar = UITestFakes.lidar
+        for event in UITestFakes.events { record(event) }
+        toast = nil
+        Task { [weak self] in
+            while !Task.isCancelled {  // keep the frame fresh, as the live view would
+                self?.handle(.frame(FrameHeader(n: 1, ageMs: 120), UITestFakes.jpeg))
+                try? await Task.sleep(for: .seconds(0.6))
+            }
+        }
+    }
+    #endif
 }
 
 extension DriveBlock {
@@ -369,6 +433,7 @@ extension DriveBlock {
         case .notPaired: String(localized: "Not paired")
         case .linkLost: String(localized: "No link to the brain")
         case .background: String(localized: "App in the background")
+        case .covered: String(localized: "Close the window on top to drive")
         case .robotOffline: String(localized: "Robot offline")
         case .noFrame: String(localized: "Waiting for the camera")
         case .frameStale(let seconds):
@@ -383,6 +448,9 @@ extension DriveBlock {
 extension BrainEvent {
     /// "E-stop: latched", "Refused: busy: voice is in control", or the detail alone.
     var text: String {
+        if kind == "needs_confirm" {
+            return String(localized: "The robot is limp: standing it up needs a fresh photo and a long press")
+        }
         let title: String? = switch kind {
         case "estop": String(localized: "E-stop")
         case "obstacle_stop": String(localized: "Obstacle stop")

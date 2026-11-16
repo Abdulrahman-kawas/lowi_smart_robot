@@ -27,7 +27,10 @@ final class SimulatorDriveTests: XCTestCase {
             .flatMap { $0.isEmpty ? nil : $0 }, "no pairing code: skipped")
         let app = XCUIApplication()
         app.launchArguments = ["-resetPairing"]
+        let pad = UIDevice.current.userInterfaceIdiom == .pad
+        if pad { XCUIDevice.shared.orientation = .landscapeLeft }  // camera left, sidebar right
         app.launch()
+        if pad { rotate(app, to: .landscapeLeft) }
 
         let address = app.textFields["address"]
         XCTAssertTrue(address.waitForExistence(timeout: 5))
@@ -98,4 +101,167 @@ final class SimulatorDriveTests: XCTestCase {
                                              object: element)
         return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed
     }
+}
+
+/// STOP is on every screen, is hittable, and fires, in the iPhone and the iPad layout. Runs
+/// against the app's built-in fake brain (-uiTestFake), so it needs no server.
+final class StopEverywhereTests: XCTestCase {
+    private var app: XCUIApplication!
+    private var presses = 0
+
+    @MainActor
+    func testStopOnEveryScreen() {
+        app = XCUIApplication()
+        app.launchArguments = ["-uiTestFake"]
+        app.launch()
+
+        XCTAssertTrue(app.descendants(matching: .any)["link"].waitForExistence(timeout: 10))
+        pressStop("stop", on: "Drive")
+
+        app.buttons["settings"].tap()
+        pressStop("stop.settings", on: "Settings")
+        app.buttons["Done"].tap()
+        waitGone("stop.settings")
+
+        if app.buttons["photo"].waitForExistence(timeout: 2) {  // iPhone: its own screen
+            app.buttons["photo"].tap()
+            pressStop("stop.photo", on: "Photo")
+            app.buttons["takePhoto"].tap()
+            XCTAssertTrue(app.descendants(matching: .any)["photoAnswer"].waitForExistence(timeout: 5))
+            pressStop("stop.photo", on: "Photo, after the answer")
+            app.buttons["closePhoto"].tap()
+            waitGone("stop.photo")
+        } else {  // iPad: a panel next to the camera
+            XCTAssertTrue(app.buttons["takePhoto"].waitForExistence(timeout: 5))
+            app.buttons["takePhoto"].tap()
+            if !app.descendants(matching: .any)["photoAnswer"].waitForExistence(timeout: 5) {
+                let shot = XCTAttachment(screenshot: app.screenshot())
+                shot.name = "no-photo-answer"
+                shot.lifetime = .keepAlways
+                add(shot)
+                XCTFail("no answer in the iPad photo panel")
+            }
+            XCTAssertTrue(app.descendants(matching: .any)["radar"].exists)
+            pressStop("stop", on: "Drive with the photo answer")
+        }
+
+        app.buttons["release"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["holdToConfirm"].waitForExistence(timeout: 5))
+        pressStop("stop.confirm", on: "E-stop release")
+        app.buttons["cancelConfirm"].tap()
+        waitGone("stop.confirm")
+        pressStop("stop", on: "Drive, after cancelling")
+    }
+
+    /// Waits until that screen's STOP can be touched, taps it, and checks it fired.
+    @MainActor
+    private func pressStop(_ id: String, on screen: String,
+                           file: StaticString = #filePath, line: UInt = #line) {
+        let stop = app.descendants(matching: .any)[id]
+        let ready = NSPredicate(format: "exists == true AND hittable == true")
+        guard XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: ready, object: stop)],
+                               timeout: 8) == .completed else {
+            XCTFail("STOP on \(screen) never became tappable", file: file, line: line)
+            return
+        }
+        stop.tap()
+        presses += 1
+        let fired = NSPredicate(format: "value == %@", "\(presses)")
+        let ok = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: fired, object: stop)],
+                                  timeout: 3) == .completed
+        XCTAssertTrue(ok, "STOP on \(screen) did not fire", file: file, line: line)
+        if !ok, let value = stop.value as? String, let count = Int(value) {
+            presses = count  // report this screen only, not every screen after it
+        }
+    }
+
+    /// Waits for a sheet or cover to be gone. Its elements leave the tree a moment before its
+    /// closing animation stops swallowing touches, so give that moment too.
+    @MainActor
+    private func waitGone(_ id: String) {
+        let gone = NSPredicate(format: "exists == false")
+        let element = app.descendants(matching: .any)[id]
+        _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: element)],
+                             timeout: 5)
+        Thread.sleep(forTimeInterval: 0.8)
+    }
+}
+
+/// Screenshots of every screen for review and for the README. Skipped unless asked for:
+///   TEST_RUNNER_LOWI_SCREENSHOTS=1 [TEST_RUNNER_LOWI_LANG=ja] xcodebuild test \
+///     -only-testing:LowiUITests/ScreenshotTests
+/// then: xcrun xcresulttool export attachments --path <result bundle> --output-path <folder>
+final class ScreenshotTests: XCTestCase {
+    @MainActor
+    func testCaptureScreens() throws {
+        let env = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(env["LOWI_SCREENSHOTS"] == "1", "screenshots not asked for")
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestFake"]
+        if let lang = env["LOWI_LANG"], !lang.isEmpty {
+            app.launchArguments += ["-AppleLanguages", "(\(lang))", "-AppleLocale", lang]
+        }
+        let pad = UIDevice.current.userInterfaceIdiom == .pad
+        XCUIDevice.shared.orientation = .landscapeLeft
+        app.launch()
+        rotate(app, to: .landscapeLeft)
+        XCTAssertTrue(app.descendants(matching: .any)["link"].waitForExistence(timeout: 10))
+        Thread.sleep(forTimeInterval: 2)
+        snap("drive")
+
+        app.buttons["settings"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["settingsForm"].waitForExistence(timeout: 5))
+        snap("settings")
+        app.buttons["Done"].tap()
+
+        if !pad {
+            app.buttons["photo"].tap()
+        }
+        let question = app.textViews["photoQuestion"].exists ? app.textViews["photoQuestion"]
+            : app.textFields["photoQuestion"]
+        if question.waitForExistence(timeout: 5) {
+            question.tap()
+            question.typeText("What is in front of you?")
+            app.buttons["takePhoto"].tap()
+            XCTAssertTrue(app.descendants(matching: .any)["photoAnswer"].waitForExistence(timeout: 5))
+            Thread.sleep(forTimeInterval: 1)
+            snap(pad ? "drive-photo" : "photo")
+        }
+        if !pad { app.buttons["closePhoto"].tap() }
+
+        app.buttons["release"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["holdToConfirm"].waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1)
+        snap("release")
+        app.buttons["cancelConfirm"].tap()
+
+        if pad {
+            rotate(app, to: .portrait)
+            Thread.sleep(forTimeInterval: 1)
+            snap("drive-portrait")
+        }
+        app.terminate()
+        let connect = XCUIApplication()
+        connect.launchArguments = ["-uiTestFake", "-resetPairing", "-uiTestUnpaired"]
+            + Array(app.launchArguments.dropFirst())
+        connect.launch()
+        Thread.sleep(forTimeInterval: 2)
+        snap("connect")
+    }
+
+    @MainActor
+    private func snap(_ name: String) {
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+}
+
+/// Turns the simulator. Set before launch it sticks; set again after launch in case the app
+/// started in the old orientation. Then give the layout a moment.
+@MainActor
+func rotate(_ app: XCUIApplication, to orientation: UIDeviceOrientation) {
+    XCUIDevice.shared.orientation = orientation
+    Thread.sleep(forTimeInterval: 1.5)
 }

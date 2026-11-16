@@ -1,56 +1,82 @@
 import SwiftUI
 
-/// iPhone, landscape: the camera fills the screen, the joystick sits under the left thumb, the
-/// turn control and STOP under the right one.
+/// The main screen. iPhone (landscape): the camera fills the screen, the joystick sits under the
+/// left thumb, the turn control and STOP under the right one. iPad: the same camera stage on the
+/// left and a sidebar with the LiDAR radar, robot state, photo and event log.
 struct DriveScreen: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var widthClass
+    @Environment(\.verticalSizeClass) private var heightClass
     @State private var showSettings = false
+    @State private var showPhoto = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.2)) { _ in
             let now = model.clock()
             let block = model.driveBlock(at: now)
-            ZStack {
-                CameraView(age: model.frameAge(at: now))
-                VStack {
-                    LinearGradient(colors: [.black.opacity(0.65), .clear],
-                                   startPoint: .top, endPoint: .bottom)
-                        .frame(height: 90)
-                    Spacer()
-                }
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-                VStack(spacing: 8) {
-                    TopBar(now: now, showSettings: $showSettings)
-                    if let limiter = model.brain?.robot?.limiter, !limiter.isEmpty {
-                        Chip(tint: Theme.amber) {
-                            Image(systemName: "tortoise.fill")
-                            Text(limiter)
-                        }
-                        .accessibilityLabel(Text("Motion limited: \(limiter)"))
-                    }
-                    if let toast = model.toast {
-                        ToastView(item: toast)
-                    }
-                    Spacer()
-                    controls(block: block)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+            if widthClass == .regular && heightClass == .regular {
+                PadDriveLayout(now: now, block: block, showSettings: $showSettings)
+            } else {
+                CameraStage(now: now, block: block, showSettings: $showSettings,
+                            showPhoto: $showPhoto, compact: true)
             }
         }
         .onAppear { model.driveScreenVisible = true }
         .onDisappear { model.driveScreenVisible = false }
+        .onChange(of: showSettings || showPhoto) { _, open in model.sheetOpen = open }
         .sheet(isPresented: $showSettings) {
             SettingsView().environment(model)
         }
+        .sheet(isPresented: $showPhoto) {
+            PhotoSheet().environment(model)
+        }
+    }
+}
+
+/// Camera, top bar and thumb controls. The whole screen on iPhone, the left side on iPad.
+struct CameraStage: View {
+    @Environment(AppModel.self) private var model
+    var now: TimeInterval
+    var block: DriveBlock?
+    @Binding var showSettings: Bool
+    var showPhoto: Binding<Bool>? = nil
+    var compact: Bool
+
+    var body: some View {
+        ZStack {
+            CameraView(age: model.frameAge(at: now))
+            VStack {
+                LinearGradient(colors: [.black.opacity(0.65), .clear],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 90)
+                Spacer()
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            VStack(spacing: 8) {
+                TopBar(now: now, showSettings: $showSettings, showPhoto: showPhoto)
+                if let limiter = model.brain?.robot?.limiter, !limiter.isEmpty {
+                    Chip(tint: Theme.amber) {
+                        Image(systemName: "tortoise.fill")
+                        Text(limiter)
+                    }
+                    .accessibilityLabel(Text("Motion limited: \(limiter)"))
+                }
+                if let toast = model.toast {
+                    ToastView(item: toast)
+                }
+                Spacer()
+                controls
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
     }
 
-    @ViewBuilder
-    private func controls(block: DriveBlock?) -> some View {
+    private var controls: some View {
         HStack(alignment: .bottom, spacing: 16) {
             Joystick(enabled: block == nil) { model.setStick($0) }
-                .frame(width: 170, height: 170)
+                .frame(width: compact ? 170 : 200, height: compact ? 170 : 200)
             Spacer(minLength: 8)
             VStack(spacing: 10) {
                 if let block, block != .notPaired {
@@ -64,7 +90,7 @@ struct DriveScreen: View {
             Spacer(minLength: 8)
             HStack(alignment: .bottom, spacing: 16) {
                 TurnControl(enabled: block == nil) { model.setTurn($0) }
-                    .frame(width: 168, height: 56)
+                    .frame(width: compact ? 168 : 200, height: compact ? 56 : 66)
                 StopButton()
             }
         }
@@ -102,6 +128,7 @@ struct TopBar: View {
     @Environment(AppModel.self) private var model
     var now: TimeInterval
     @Binding var showSettings: Bool
+    var showPhoto: Binding<Bool>? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -147,24 +174,40 @@ struct TopBar: View {
                 .accessibilityIdentifier("release")
             }
             EStopButton()
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.body)
-                    .foregroundStyle(Theme.muted)
-                    .padding(8)
-                    .background(Circle().fill(Theme.panel.opacity(0.85)))
+            if let showPhoto {
+                RoundIconButton(systemImage: "camera.viewfinder", label: "Photo", id: "photo") {
+                    showPhoto.wrappedValue = true
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Settings"))
-            .accessibilityIdentifier("settings")
+            RoundIconButton(systemImage: "gearshape.fill", label: "Settings", id: "settings") {
+                showSettings = true
+            }
         }
     }
 
     private var latencyMs: Int? {
         guard let app = model.appRttMs, model.isLive else { return nil }
         return Int((app + (model.brain?.latency.robotCmdRttMs ?? 0)).rounded())
+    }
+}
+
+struct RoundIconButton: View {
+    var systemImage: String
+    var label: LocalizedStringKey
+    var id: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.body)
+                .foregroundStyle(Theme.muted)
+                .padding(8)
+                .background(Circle().fill(Theme.panel.opacity(0.85)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+        .accessibilityIdentifier(id)
     }
 }
 

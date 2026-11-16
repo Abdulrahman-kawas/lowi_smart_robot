@@ -39,7 +39,7 @@ struct ConfirmView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
                 .onGeometryChange(for: Bool.self) { $0.size.width >= 640 } action: { wide = $0 }
-                StopButton()
+                StopButton(id: "stop.confirm")
                     .padding(20)
             }
         }

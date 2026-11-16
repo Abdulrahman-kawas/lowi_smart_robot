@@ -9,38 +9,36 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var model = model
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                Form {
-                    Section("This device") {
-                        LabeledContent("Name", value: model.deviceName)
-                        LabeledContent("Brain", value: model.address?.base.host() ?? "-")
-                        if let robot = model.robotId {
-                            LabeledContent("Robot", value: robot)
-                        }
-                    }
-                    Section {
-                        Toggle("Haptics", isOn: $model.hapticsOn)
-                            .accessibilityIdentifier("hapticsToggle")
-                        Button("Language") {
-                            if let url = URL(string: UIApplication.openSettingsURLString) {
-                                openURL(url)
-                            }
-                        }
-                    } footer: {
-                        Text("The app follows the language you choose for it in iOS Settings.")
-                    }
-                    Section {
-                        Button("Unpair this device", role: .destructive) { confirmUnpair = true }
-                            .accessibilityIdentifier("unpair")
-                    } footer: {
-                        Text("Forgets the token on this device. To cut it off on the server as well, run `spider-brain devices revoke \"\(model.deviceName)\"`.")
+            Form {
+                Section("This device") {
+                    LabeledContent("Name", value: model.deviceName)
+                    LabeledContent("Brain", value: model.address?.base.host() ?? "-")
+                    if let robot = model.robotId {
+                        LabeledContent("Robot", value: robot)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .background(Theme.background)
-                StopButton()
-                    .padding(20)
+                Section {
+                    Toggle("Haptics", isOn: $model.hapticsOn)
+                        .accessibilityIdentifier("hapticsToggle")
+                    Button("Language") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
+                    }
+                } footer: {
+                    Text("The app follows the language you choose for it in iOS Settings.")
+                }
+                Section {
+                    Button("Unpair this device", role: .destructive) { confirmUnpair = true }
+                        .accessibilityIdentifier("unpair")
+                } footer: {
+                    Text("Forgets the token on this device. To cut it off on the server as well, run `spider-brain devices revoke \"\(model.deviceName)\"`.")
+                }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.background)
+            .accessibilityIdentifier("settingsForm")
+            .safeAreaInset(edge: .trailing, spacing: 8) { StopColumn(id: "stop.settings") }  // the form lays out beside STOP
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

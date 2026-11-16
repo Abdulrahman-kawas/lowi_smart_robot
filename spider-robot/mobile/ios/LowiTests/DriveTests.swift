@@ -118,3 +118,37 @@ struct DeadManTests {
         #expect(drives(deadMan.update(held: true, input: .zero, block: nil, now: 0.3)).count == 1)
     }
 }
+
+struct HardwareMappingTests {
+    @Test func keysAreTheSimulatorPageKeys() {
+        #expect(DriveMapping.axes(keys: ["w"]) == .init(forward: 1, left: 0, turnLeft: 0))
+        #expect(DriveMapping.axes(keys: ["s", "d"]) == .init(forward: -1, left: -1, turnLeft: 0))
+        #expect(DriveMapping.axes(keys: ["q"]) == .init(forward: 0, left: 0, turnLeft: 1))
+        #expect(DriveMapping.axes(keys: ["e", "a"]) == .init(forward: 0, left: 1, turnLeft: -1))
+        #expect(DriveMapping.axes(keys: ["w", "s", "q", "e"]) == .none)  // opposites cancel
+        #expect(!DriveMapping.axes(keys: []).isHeld)
+    }
+
+    @Test func aRestingControllerIsNotHeldAndUpIsForward() {
+        let rest = DriveMapping.pad(leftX: 0.08, leftY: -0.1, rightX: 0.12)
+        #expect(rest.stick == nil && rest.turn == nil)  // drift inside the dead zone
+        let up = DriveMapping.pad(leftX: 0, leftY: 1, rightX: 0)
+        #expect(DriveMapping.input(stick: up.stick, turn: up.turn) == DriveInput(x: 1))
+        let right = DriveMapping.pad(leftX: 0, leftY: 0, rightX: 1)
+        #expect(DriveMapping.input(stick: right.stick, turn: right.turn).turn == -1)
+        let corner = DriveMapping.pad(leftX: 1, leftY: 1, rightX: 0)  // square gates reach 1.41
+        let input = DriveMapping.input(stick: corner.stick, turn: nil)
+        #expect(hypot(input.x, input.y) <= 1 + 1e-9)
+    }
+}
+
+struct CoveredControlsTests {
+    @Test func aWindowOverTheControlsStopsAHeldDrive() {
+        var deadMan = DeadMan()
+        let forward = DriveInput(x: 1)
+        _ = deadMan.update(held: true, input: forward, block: nil, now: 0)
+        // The stand-up confirmation pops up while the thumb is still on the stick.
+        #expect(deadMan.update(held: true, input: forward, block: .covered, now: 0.1) == [.stop])
+        #expect(deadMan.update(held: true, input: forward, block: nil, now: 0.5).isEmpty)
+    }
+}

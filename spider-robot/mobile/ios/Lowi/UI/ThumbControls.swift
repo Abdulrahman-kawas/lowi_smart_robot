@@ -8,6 +8,9 @@ struct Joystick: View {
     var onChange: (CGVector?) -> Void
     @State private var knob: CGSize = .zero
     @State private var held = false
+    // Resets when the touch ends or is cancelled. onEnded alone misses a cancelled touch (a sheet
+    // appearing, Notification Center), and the app would keep driving with no finger down.
+    @GestureState private var touching = false
 
     var body: some View {
         GeometryReader { geo in
@@ -34,6 +37,7 @@ struct Joystick: View {
             .contentShape(Circle())
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($touching) { _, state, _ in state = true }
                     .onChanged { value in
                         var dx = value.location.x - radius
                         var dy = value.location.y - radius
@@ -56,6 +60,7 @@ struct Joystick: View {
         .accessibilityLabel(Text("Drive joystick"))
         .accessibilityHint(Text("Touch and hold, then slide to walk forward, back or sideways."))
         .accessibilityIdentifier("joystick")
+        .onChange(of: touching) { _, now in if !now { release() } }
         .onDisappear { release() }
     }
 
@@ -73,6 +78,7 @@ struct TurnControl: View {
     var onChange: (CGFloat?) -> Void
     @State private var offset: CGFloat = 0
     @State private var held = false
+    @GestureState private var touching = false  // see Joystick
 
     var body: some View {
         GeometryReader { geo in
@@ -99,6 +105,7 @@ struct TurnControl: View {
             .contentShape(Capsule())
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($touching) { _, state, _ in state = true }
                     .onChanged { value in
                         let x = min(max(value.location.x - width / 2, -travel), travel)
                         held = true
@@ -115,6 +122,7 @@ struct TurnControl: View {
         .accessibilityLabel(Text("Turn control"))
         .accessibilityHint(Text("Touch and hold, then slide left or right to turn."))
         .accessibilityIdentifier("turn")
+        .onChange(of: touching) { _, now in if !now { release() } }
         .onDisappear { release() }
     }
 

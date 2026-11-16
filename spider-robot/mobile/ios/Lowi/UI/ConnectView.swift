@@ -50,6 +50,7 @@ struct ConnectView: View {
             StopButton()
                 .padding(20)
         }
+        .onChange(of: focus) { _, field in model.textEditing = field != nil }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()

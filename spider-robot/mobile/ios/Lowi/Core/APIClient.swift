@@ -84,7 +84,8 @@ enum APIError: Error, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unauthorized(let detail), .unreachable(let detail): detail
-        case .refused(_, let detail): detail
+        case .refused(let status, let detail):
+            detail.isEmpty ? String(localized: "The brain refused it (HTTP \(status)).") : detail
         case .badResponse: String(localized: "The brain sent an answer the app does not understand.")
         }
     }

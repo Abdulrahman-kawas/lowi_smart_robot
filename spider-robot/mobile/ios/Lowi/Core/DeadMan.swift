@@ -5,6 +5,7 @@ enum DriveBlock: Equatable, Sendable {
     case notPaired
     case linkLost
     case background
+    case covered  // a confirmation or a sheet is over the drive controls
     case robotOffline
     case noFrame
     case frameStale(seconds: Double)

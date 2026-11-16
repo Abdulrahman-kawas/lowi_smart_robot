@@ -8,7 +8,7 @@ the remote caps (0.05 m/s, 0.3 rad/s, moves of at most 1 s) and the body's own l
 | Part | Where | State |
 |---|---|---|
 | Brain API (`/v1`) | `brain/src/spider_brain/mobile/` | built, tested against the simulator |
-| iOS and iPadOS app | `mobile/ios/` | Connect and Drive on iPhone; iPad layout to build |
+| iOS and iPadOS app | `mobile/ios/` | built: iPhone and iPad layouts, keyboard and controller, photo, E-stop release; English only until the localization pass |
 
 ## Run everything on a Mac, without hardware
 
@@ -68,13 +68,40 @@ brew install mosquitto xcodegen
    In the app, use `127.0.0.1` as the brain address and the code from step 5. To run on a real
    phone, set your team and a bundle id of your own in `project.yml`, then generate again.
 
-Tests, from `mobile/ios` (pick any installed iPhone simulator):
+### Screens and controls
+
+- **Connect:** brain address, connection test (it says when Tailscale is off on the device),
+  pairing code.
+- **Drive, iPhone (landscape):** the camera frame in full; the joystick under the left thumb;
+  the turn control and STOP under the right; Stand and Sit. The top bar shows the link state,
+  latency, frame age, mode, E-stop and the limiter reason.
+- **Drive, iPad:** the same camera stage, with a sidebar holding the LiDAR radar (36 sectors,
+  nearest obstacle marked), robot state, photo with a question, and the event log. In portrait
+  the sidebar moves under the camera.
+- **Keyboard:** W/S forward and back, A/D sideways, Q/E turn, Space STOP, Esc E-stop: the keys of
+  the simulator page. Keys are ignored while a text field has the keyboard.
+- **Game controller:** the left stick drives, the right stick turns, B is STOP, Y is E-stop.
+- **Photo:** an iPhone screen of its own, a sidebar panel on iPad. The vision answer is shown
+  only; it never moves the robot.
+- **E-stop release, and standing a limp robot:** a fresh photo, what will happen, and a long
+  press. A confirmation works once.
+- **STOP:** on every screen, never disabled, fires on touch-down, and goes out on the socket and
+  over HTTP at once.
+
+Holding a finger, a key or a stick is the dead-man hold; touch wins over keys, and keys win
+over a controller.
+
+Tests, from `mobile/ios` (pick any installed iPhone or iPad simulator):
 
 ```bash
 DEST='platform=iOS Simulator,name=iPhone 15 Pro'   # iOS 17.5; iPhone 17 Pro for iOS 26
 xcodebuild -scheme Lowi -destination "$DEST" -only-testing:LowiTests test
 xcodebuild -scheme Lowi -destination "$DEST" -collect-test-diagnostics never \
-  -only-testing:LowiUITests/StopOnConnectTests test
+  -only-testing:LowiUITests/StopOnConnectTests -only-testing:LowiUITests/StopEverywhereTests test
+# Every screen as screenshots (the app's built-in fake brain, debug builds only):
+TEST_RUNNER_LOWI_SCREENSHOTS=1 xcodebuild -scheme Lowi -destination "$DEST" \
+  -resultBundlePath build/shots.xcresult -only-testing:LowiUITests/ScreenshotTests test
+xcrun xcresulttool export attachments --path build/shots.xcresult --output-path build/shots
 # End to end against the stack above, with a robot that is limp (restart spider-body) and a
 # fresh code from step 5:
 TEST_RUNNER_LOWI_PAIR_CODE=123456 xcodebuild -scheme Lowi -destination "$DEST" \

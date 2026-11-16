@@ -53,4 +53,29 @@ enum DriveMapping {
         if length > 1 { x /= length; y /= length }
         return DriveInput(x: x, y: y, turn: Double(turnLeft.signum()))
     }
+
+    struct KeyAxes: Equatable, Sendable {
+        var forward = 0, left = 0, turnLeft = 0
+        static let none = KeyAxes()
+        var isHeld: Bool { self != .none }
+    }
+
+    /// W/S forward and back, A/D sideways, Q/E turn: the keys of the simulator page. Opposite
+    /// keys held together cancel out.
+    static func axes(keys: Set<Character>) -> KeyAxes {
+        func on(_ key: Character) -> Int { keys.contains(key) ? 1 : 0 }
+        return KeyAxes(forward: on("w") - on("s"), left: on("a") - on("d"),
+                       turnLeft: on("q") - on("e"))
+    }
+
+    static let padDeadzone: Float = 0.15
+
+    /// Controller sticks (up is positive) to the screen vectors the touch controls report. A stick
+    /// inside its dead zone is not held, so a resting controller never keeps a drive alive.
+    static func pad(leftX: Float, leftY: Float, rightX: Float) -> (stick: CGVector?, turn: CGFloat?) {
+        let stick = (leftX * leftX + leftY * leftY).squareRoot() > padDeadzone
+            ? CGVector(dx: CGFloat(leftX), dy: CGFloat(-leftY)) : nil
+        let turn = abs(rightX) > padDeadzone ? CGFloat(rightX) : nil
+        return (stick, turn)
+    }
 }
