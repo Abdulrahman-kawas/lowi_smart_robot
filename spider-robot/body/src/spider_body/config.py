@@ -172,7 +172,9 @@ class LidarCfg(_M):
 
 class CameraCfg(_M):
     backend: Literal["opencv", "picamera2", "fake", "none"] = "opencv"
-    device: int = 0
+    # A /dev/videoN number, or a stable /dev/v4l/by-id/... path. Prefer the path: with a ribbon
+    # camera fitted, the CSI driver takes video0 at boot and USB cameras get whatever is left.
+    device: int | str = 0
     width: int = 640
     height: int = 480
     jpeg_quality: int = 80

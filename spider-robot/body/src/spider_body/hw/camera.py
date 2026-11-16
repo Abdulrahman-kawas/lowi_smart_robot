@@ -59,7 +59,9 @@ class OpenCvCamera:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
             if not cap.isOpened():
-                raise RuntimeError(f"cannot open camera /dev/video{self.cfg.device}")
+                dev = self.cfg.device
+                name = dev if isinstance(dev, str) else f"/dev/video{dev}"
+                raise RuntimeError(f"cannot open camera {name}")
             self._cap = cap
         return self._cap
 
