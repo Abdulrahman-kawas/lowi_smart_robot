@@ -19,7 +19,7 @@
 [Telegram and WhatsApp](#telegram-and-whatsapp) ·
 [Simulator](#simulator) ·
 [Quick start](#quick-start) ·
-[Mobile app](#mobile-app-planned) ·
+[Mobile app](#mobile-app) ·
 [Roadmap](#status-and-roadmap)
 
 </div>
@@ -35,7 +35,7 @@ Say *"look"* and it takes a photo and tells you what it sees. Ask it something h
 - **Safe on its own.** It stops near obstacles, when it tilts, and when it loses its brain. It never waits for the network to be safe.
 - **Fast where it matters.** "Stop" and simple moves are handled on the robot, without any model in the way.
 - **Smart where it can wait.** Vision and hard questions go to a home server. The cloud helps only when the internet is up.
-- **Yours from anywhere.** Telegram, WhatsApp and a live dashboard over Tailscale, and a mobile app on the way.
+- **Yours from anywhere.** Telegram, WhatsApp, a live dashboard over Tailscale, and an iPhone and iPad app.
 
 <!-- PHOTO SLOT: replace with docs/images/photos/robot-hero.jpg (front, three-quarter view) -->
 <p align="center"><img src="docs/images/photos/robot-hero.svg" alt="Photo of the robot (coming soon)" width="100%"></p>
@@ -52,7 +52,7 @@ Say *"look"* and it takes a photo and tells you what it sees. Ask it something h
 | **Home server**<br>i7-8700, 15 GB, no GPU | Brain (planner, skills, memory, dashboard) · Lowi on Telegram and WhatsApp · vision with LFM2.5-VL-1.6B · harder questions with LFM2.5-1.2B · Whisper small | Heavy work that can wait a second |
 | **AWS**<br>Lightsail and EC2 | Lightsail runs Lowi until it moves to the home server, then stays as a standby copy · an EC2 worker for 3D mapping (SLAM) that starts only for a job and stops itself | Extra power for short jobs, billed by the hour. The robot never needs it |
 | **AI cloud**<br>optional | Kimi on NVIDIA NIM, Claude, Gemini | Deep reasoning, only when the internet is up |
-| **Your phone** | Telegram, WhatsApp, the dashboard, the future app | Remote control always goes through the brain |
+| **Your phone** | Telegram, WhatsApp, the dashboard, the Lowi app | Remote control always goes through the brain |
 | **Your laptop** | Simulator, tests, deploys over SSH | Build and test without touching the hardware |
 
 Only the home server holds AWS credentials, and they can only start, stop and check the mapping
@@ -329,14 +329,36 @@ The body never waits for the network to be safe. Every rule below runs on the ro
 
 ---
 
-## Mobile app (planned)
+## Mobile app
 
-<p align="center"><img src="docs/images/mobile-app.en.svg" alt="Mock-up of the planned mobile app: live camera, joystick and stop button" width="100%"></p>
+<p align="center"><img src="docs/images/app/iphone-drive.en.jpg" alt="The Lowi app on iPhone: the robot's camera, a joystick, a turn control and STOP" width="100%"></p>
 
-The app is not built yet. It will drive the robot from its own camera, and it will reuse paths
-that already exist: commands go to the brain over Tailscale, the gateway ranks them, and the
-body applies its own limits. Remote moves are slower and shorter than local ones, and releasing an
-E-stop from afar needs a fresh photo and a confirmation.
+The Lowi app for iPhone and iPad drives the robot from its own camera, from anywhere. It talks
+only to the brain on the home server, over Tailscale. The phone never speaks MQTT and never
+connects to the Pi, so the gateway's remote limits and the body's own limits apply to everything
+it does.
+
+- **Hold to drive.** The robot moves only while a thumb, a key or a controller stick is held: 1 s
+  moves, renewed every 0.4 s. Let go, lose the link, or let the camera frame get older than 2 s,
+  and it stops. The brain enforces the same dead-man on its side.
+- **STOP on every screen.** It fires the moment a finger touches it and goes out two ways at once.
+  E-stop is one tap. Releasing it shows a fresh photo and needs a long press, and works once.
+- **Honest status.** Link, latency, frame age, mode, E-stop and the reason the robot is slowing
+  down are always on screen. When driving is off, the controls grey out and say why.
+- **iPad.** The camera next to a LiDAR radar, the robot's state, a photo with a question, and the
+  event log. A keyboard (W A S D, Q E, Space, Esc) and game controllers work too.
+- English and Japanese, Dynamic Type and VoiceOver.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/app/iphone-release.en.jpg" alt="Releasing an E-stop: a fresh photo from the robot and a long press" width="100%"></td>
+<td width="50%"><img src="docs/images/app/ipad-drive.en.jpg" alt="The iPad layout: camera, LiDAR radar and robot state" width="100%"></td>
+</tr>
+</table>
+
+Remote limits today: 0.05 m/s, 0.3 rad/s, moves of at most 1 s. The screenshots come from the
+simulator, whose camera shows a grey frame with an orange box. Setup, pairing and the API:
+[spider-robot/mobile/README.md](spider-robot/mobile/README.md).
 
 ---
 
@@ -359,7 +381,7 @@ spider-robot/
 
 | Stage | What | Status |
 |---|---|---|
-| Software | Body, gateway, voice, brain and simulator, with 666 tests | ✅ Done |
+| Software | Body, gateway, voice, brain and simulator, with 685 tests | ✅ Done |
 | Pi bring-up | OS, services, certificates, servo port, LiDAR, broker fault tests | ✅ Done |
 | Home server | Brain, vision and planner models installed and answering the robot | ✅ Done |
 | Real-time check | One hour at 50 Hz under full load (P06) | ⏳ Next |
@@ -368,7 +390,7 @@ spider-robot/
 | First motion | Servo calibration and walking on a stand (P08) | 🔜 |
 | Hardware E-stop and floor walking | Relay, watchdog, fuse, obstacle tests (P09) | 🔜 |
 | Voice tuning | 200 recorded phrases and accuracy targets (P10) | 🔜 |
-| Mobile app | Drive from the camera | 🗓️ Planned |
+| Mobile app | iPhone and iPad: drive from the camera, with 24 unit tests and UI tests | ✅ Built, tested on the simulator |
 | Edge sensors | VL53L1X stair-edge and side sensors | 🗓️ Planned |
 | 3D mapping | LiDAR recordings to SLAM on an on-demand AWS worker | 🗓️ Planned |
 | Raspberry Pi 5 (16 GB) | A strong offline Lowi on the robot itself, around March 2027 | 🗓️ Planned |

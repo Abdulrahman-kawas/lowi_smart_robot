@@ -5,16 +5,14 @@ import SwiftUI
 struct ConfirmView: View {
     @Environment(AppModel.self) private var model
     var prompt: ConfirmPrompt
-    @State private var wide = true
+    @State private var width: CGFloat = 800
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             let left = max(0, prompt.expiresAt - model.clock())
             let age = prompt.photoAge(at: model.clock())
-            ZStack(alignment: .bottomTrailing) {
-                Theme.background.ignoresSafeArea()
-                Group {
-                    if wide {
+            Group {
+                    if width >= 520 {
                         // The photo takes the space that is left; the question and the button
                         // are always on screen next to it.
                         HStack(alignment: .top, spacing: 24) {
@@ -22,9 +20,9 @@ struct ConfirmView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             ScrollView {
                                 details(left: left)
-                                    .padding(.bottom, 120)  // scrolls clear of STOP
+                                    .padding(.bottom, 20)
                             }
-                            .frame(width: 340)
+                            .frame(width: min(340, width / 2))
                         }
                     } else {
                         ScrollView {
@@ -32,21 +30,20 @@ struct ConfirmView: View {
                                 photo(age: age).frame(maxHeight: 280)
                                 details(left: left)
                             }
-                            .padding(.bottom, 120)
+                            .padding(.bottom, 20)
                         }
                     }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
-                .onGeometryChange(for: Bool.self) { $0.size.width >= 640 } action: { wide = $0 }
-                StopButton(id: "stop.confirm")
-                    .padding(20)
-            }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+                .stopSide(id: "stop.confirm")
+                .background(Theme.background.ignoresSafeArea())
         }
     }
 
     private func photo(age: TimeInterval) -> some View {
-        let caption = Chip(tint: Theme.text) {
+        let caption = Chip(tint: Theme.text, wraps: true) {
             Image(systemName: "camera.fill")
             if age < 1 {
                 Text("Photo taken just now")
@@ -60,7 +57,11 @@ struct ConfirmView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(alignment: .bottomLeading) { caption.padding(8) }
+                    .overlay(alignment: .bottomLeading) {
+                        caption
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                            .padding(8)
+                    }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(Text("Photo the robot took just now"))
             } else {

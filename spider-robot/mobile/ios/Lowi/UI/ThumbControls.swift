@@ -58,7 +58,7 @@ struct Joystick: View {
         .environment(\.layoutDirection, .leftToRight)  // left on the stick is the robot's left
         .accessibilityElement()
         .accessibilityLabel(Text("Drive joystick"))
-        .accessibilityHint(Text("Touch and hold, then slide to walk forward, back or sideways."))
+        .accessibilityHint(Text("Touch and hold, then slide to walk forward, back or sideways. With VoiceOver, drive with a keyboard or a game controller."))
         .accessibilityIdentifier("joystick")
         .onChange(of: touching) { _, now in if !now { release() } }
         .onDisappear { release() }
@@ -120,7 +120,7 @@ struct TurnControl: View {
         .environment(\.layoutDirection, .leftToRight)
         .accessibilityElement()
         .accessibilityLabel(Text("Turn control"))
-        .accessibilityHint(Text("Touch and hold, then slide left or right to turn."))
+        .accessibilityHint(Text("Touch and hold, then slide left or right to turn. With VoiceOver, use Q and E on a keyboard or the right stick of a game controller."))
         .accessibilityIdentifier("turn")
         .onChange(of: touching) { _, now in if !now { release() } }
         .onDisappear { release() }

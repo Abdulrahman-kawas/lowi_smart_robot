@@ -29,6 +29,7 @@ struct PhotoPanel: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(Theme.background)
             .disabled(taking || !model.isPaired)
             .accessibilityIdentifier("takePhoto")
             if let image {
@@ -87,9 +88,10 @@ struct PhotoSheet: View {
                 PhotoPanel().padding(20)
             }
             .background(Theme.background)
-            .safeAreaInset(edge: .trailing, spacing: 8) { StopColumn(id: "stop.photo") }
+            .stopSide(id: "stop.photo")
             .navigationTitle("Photo")
             .navigationBarTitleDisplayMode(.inline)
+            .sheetBar()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

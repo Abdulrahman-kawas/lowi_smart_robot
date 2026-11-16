@@ -36,6 +36,7 @@ struct DriveScreen: View {
 /// Camera, top bar and thumb controls. The whole screen on iPhone, the left side on iPad.
 struct CameraStage: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.layoutDirection) private var direction
     var now: TimeInterval
     var block: DriveBlock?
     @Binding var showSettings: Bool
@@ -56,7 +57,7 @@ struct CameraStage: View {
             VStack(spacing: 8) {
                 TopBar(now: now, showSettings: $showSettings, showPhoto: showPhoto)
                 if let limiter = model.brain?.robot?.limiter, !limiter.isEmpty {
-                    Chip(tint: Theme.amber) {
+                    Chip(tint: Theme.amber, wraps: true) {
                         Image(systemName: "tortoise.fill")
                         Text(limiter)
                     }
@@ -68,6 +69,9 @@ struct CameraStage: View {
                 Spacer()
                 controls
             }
+            // The camera needs the room: the heads-up text grows with Dynamic Type up to the first
+            // accessibility size. Everything here is also in Settings, the iPad sidebar or VoiceOver.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
@@ -77,7 +81,7 @@ struct CameraStage: View {
         HStack(alignment: .bottom, spacing: 16) {
             Joystick(enabled: block == nil) { model.setStick($0) }
                 .frame(width: compact ? 170 : 200, height: compact ? 170 : 200)
-            Spacer(minLength: 8)
+                .layoutPriority(1)
             VStack(spacing: 10) {
                 if let block, block != .notPaired {
                     BlockBanner(block: block)
@@ -87,13 +91,19 @@ struct CameraStage: View {
                 }
                 PostureBar()
             }
-            Spacer(minLength: 8)
+            .environment(\.layoutDirection, direction)  // text follows the language
+            .frame(minWidth: 0, maxWidth: .infinity)  // gives way first: STOP never leaves the screen
             HStack(alignment: .bottom, spacing: 16) {
                 TurnControl(enabled: block == nil) { model.setTurn($0) }
                     .frame(width: compact ? 168 : 200, height: compact ? 56 : 66)
                 StopButton()
             }
+            .fixedSize()
+            .layoutPriority(1)
         }
+        // The thumbs stay where they are in every language: the joystick under the left thumb,
+        // STOP under the right. Only the text in between follows the layout direction.
+        .environment(\.layoutDirection, .leftToRight)
     }
 }
 
@@ -132,6 +142,18 @@ struct TopBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {  // chips scroll when text is large
+                HStack(spacing: 8) { chips }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            buttons
+                .fixedSize()
+                .layoutPriority(1)
+        }
+    }
+
+    @ViewBuilder
+    private var chips: some View {
             LinkChip()
             if let latency = latencyMs {
                 Chip {
@@ -155,7 +177,11 @@ struct TopBar: View {
                 }
                 .accessibilityElement(children: .combine)
             }
-            Spacer(minLength: 4)
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        HStack(spacing: 8) {
             if model.brain?.robot?.estop == true {
                 Button {
                     Task { await model.requestRelease() }
@@ -164,7 +190,7 @@ struct TopBar: View {
                         .font(.caption.weight(.bold))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .background(Capsule().fill(Theme.amber.opacity(0.18)))
+                        .background(Capsule().fill(Theme.panel))
                         .overlay(Capsule().stroke(Theme.amber, lineWidth: 1.5))
                         .foregroundStyle(Theme.amber)
                 }
@@ -221,7 +247,9 @@ struct LinkChip: View {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(label)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Link to the robot"))
+        .accessibilityValue(Text(label))
         .accessibilityIdentifier("link")
     }
 
@@ -258,7 +286,11 @@ struct FrameAgeChip: View {
                 Text("no frame")
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Camera frame"))
+        .accessibilityValue(age.map {
+            Text("\($0.formatted(.number.precision(.fractionLength(1)))) s old")
+        } ?? Text("no frame"))
         .accessibilityIdentifier("frameAge")
     }
 }
@@ -272,7 +304,7 @@ struct BlockBanner: View {
             .foregroundStyle(Theme.amber)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Theme.panel.opacity(0.9)))
+            .background(Capsule().fill(Theme.panel))
             .overlay(Capsule().stroke(Theme.amber.opacity(0.6), lineWidth: 1))
             .accessibilityLabel(Text("Driving is off: \(block.message)"))
             .accessibilityIdentifier("driveBlock")
@@ -313,7 +345,7 @@ struct ToastView: View {
             .foregroundStyle(color)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Theme.panel.opacity(0.95)))
+            .background(Capsule().fill(Theme.panel))
             .overlay(Capsule().stroke(color.opacity(0.6), lineWidth: 1))
             .transition(.opacity)
             .accessibilityIdentifier("toast")
@@ -339,7 +371,7 @@ struct PostureBar: View {
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 9)
-                .background(Capsule().fill(Theme.panel.opacity(0.9)))
+                .background(Capsule().fill(Theme.panel))
                 .overlay(Capsule().stroke(Theme.blue.opacity(0.7), lineWidth: 1.5))
         }
         .buttonStyle(.plain)

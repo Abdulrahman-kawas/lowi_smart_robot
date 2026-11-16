@@ -8,7 +8,7 @@ the remote caps (0.05 m/s, 0.3 rad/s, moves of at most 1 s) and the body's own l
 | Part | Where | State |
 |---|---|---|
 | Brain API (`/v1`) | `brain/src/spider_brain/mobile/` | built, tested against the simulator |
-| iOS and iPadOS app | `mobile/ios/` | built: iPhone and iPad layouts, keyboard and controller, photo, E-stop release; English only until the localization pass |
+| iOS and iPadOS app | `mobile/ios/` | built: iPhone and iPad, keyboard and controller, photo, E-stop release, English and Japanese |
 
 ## Run everything on a Mac, without hardware
 
@@ -91,13 +91,40 @@ brew install mosquitto xcodegen
 Holding a finger, a key or a stick is the dead-man hold; touch wins over keys, and keys win
 over a controller.
 
+### Languages and accessibility
+
+- **Languages:** English and Japanese, in `Lowi/Resources/Localizable.xcstrings`. Text the robot
+  itself sends, such as the limiter reason or a refusal from the gateway, stays in English. To
+  add a language or new strings, export, translate the XLIFF, and import:
+
+  ```bash
+  xcodebuild -exportLocalizations -project Lowi.xcodeproj -localizationPath build/loc \
+    -exportLanguage ja -sdk iphonesimulator
+  xcodebuild -importLocalizations -project Lowi.xcodeproj -localizationPath build/loc/ja.xcloc
+  ```
+
+- **Right to left:** text and bars follow the language. The joystick, the turn control and STOP
+  keep their places, so a thumb finds STOP bottom-right on every screen.
+- **Dynamic Type:** everything scales. On the drive screen the text over the camera stops growing
+  at the first accessibility size, and the top-bar chips scroll sideways. STOP and the thumb
+  controls never leave the screen.
+- **VoiceOver:**
+  - Every control has a label.
+  - Refusals and alerts are announced.
+  - The joystick needs a held touch, so VoiceOver users drive with a keyboard or a controller.
+- **Haptics:** a firm tap on STOP and E-stop, and a warning on every refusal. They can be turned
+  off in Settings.
+- **Accessibility audit:** `AccessibilityAuditTests` runs Apple's audit on every screen and fails
+  on any issue except the deliberate limits listed in the test, each with its reason.
+
 Tests, from `mobile/ios` (pick any installed iPhone or iPad simulator):
 
 ```bash
 DEST='platform=iOS Simulator,name=iPhone 15 Pro'   # iOS 17.5; iPhone 17 Pro for iOS 26
 xcodebuild -scheme Lowi -destination "$DEST" -only-testing:LowiTests test
 xcodebuild -scheme Lowi -destination "$DEST" -collect-test-diagnostics never \
-  -only-testing:LowiUITests/StopOnConnectTests -only-testing:LowiUITests/StopEverywhereTests test
+  -only-testing:LowiUITests/StopOnConnectTests -only-testing:LowiUITests/StopEverywhereTests \
+  -only-testing:LowiUITests/AccessibilityAuditTests test
 # Every screen as screenshots (the app's built-in fake brain, debug builds only):
 TEST_RUNNER_LOWI_SCREENSHOTS=1 xcodebuild -scheme Lowi -destination "$DEST" \
   -resultBundlePath build/shots.xcresult -only-testing:LowiUITests/ScreenshotTests test

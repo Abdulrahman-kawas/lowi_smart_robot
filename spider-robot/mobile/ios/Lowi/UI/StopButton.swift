@@ -18,9 +18,8 @@ struct StopButton: View {
             .lineLimit(1)
             .foregroundStyle(.white)
             .frame(width: side, height: side)
-            .background(Circle().fill(down ? Theme.red.opacity(0.75) : Theme.red))
-            .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 3))
-            .shadow(color: Theme.red.opacity(0.5), radius: 10)
+            .background(Circle().fill(down ? Theme.stopFill.opacity(0.8) : Theme.stopFill))
+            .overlay(Circle().stroke(.white, lineWidth: 3))
             .contentShape(Circle())
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)  // reports the touch-down itself
@@ -38,6 +37,27 @@ struct StopButton: View {
             // UI tests read how many times STOP fired; release builds have no value here.
             .accessibilityValue(UITestFakes.isOn ? Text(verbatim: "\(model.stopPresses)") : Text(""))
             #endif
+    }
+}
+
+/// STOP in a column at the right edge of a screen or sheet, in every language: the content lays
+/// out beside it, never under it, at any text size, and the thumb finds it where it is on the drive
+/// screen. The content itself still follows the layout direction.
+struct StopSide: ViewModifier {
+    var id: String
+    @Environment(\.layoutDirection) private var direction
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.layoutDirection, direction)
+            .safeAreaInset(edge: .trailing, spacing: 8) { StopColumn(id: id) }
+            .environment(\.layoutDirection, .leftToRight)
+    }
+}
+
+extension View {
+    func stopSide(id: String) -> some View {
+        modifier(StopSide(id: id))
     }
 }
 

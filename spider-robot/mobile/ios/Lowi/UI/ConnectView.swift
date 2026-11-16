@@ -16,8 +16,7 @@ struct ConnectView: View {
 
     var body: some View {
         @Bindable var model = model
-        ZStack(alignment: .bottomTrailing) {
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Connect to Lowi")
@@ -43,13 +42,10 @@ struct ConnectView: View {
                     }
                 }
                 .padding(24)
-                .padding(.trailing, 110)  // room for STOP
             }
-            .onGeometryChange(for: Bool.self) { $0.size.width >= 680 } action: { wide = $0 }
+            .onGeometryChange(for: Bool.self) { $0.size.width >= 560 } action: { wide = $0 }
             .scrollDismissesKeyboard(.interactively)
-            StopButton()
-                .padding(20)
-        }
+            .stopSide(id: "stop")
         .onChange(of: focus) { _, field in model.textEditing = field != nil }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -63,7 +59,7 @@ struct ConnectView: View {
     private func addressCard(model: AppModel) -> some View {
         @Bindable var model = model
         return Card(title: "1. Brain address") {
-            TextField("home-server.tailnet.ts.net", text: $model.addressText)
+            TextField("server.tailnet.ts.net", text: $model.addressText)
                 .textContentType(.URL)
                 .keyboardType(.URL)
                 .autocorrectionDisabled()
@@ -122,6 +118,7 @@ struct ConnectView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(Theme.background)
             .disabled(pairing || code.count != 6 || model.addressText.isEmpty
                       || model.deviceName.trimmingCharacters(in: .whitespaces).isEmpty)
             .accessibilityIdentifier("pair")

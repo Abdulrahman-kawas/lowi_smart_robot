@@ -10,6 +10,7 @@ enum Theme {
     static let green = Color(hex: 0x3ECF8E)
     static let amber = Color(hex: 0xFFB547)
     static let red = Color(hex: 0xFF5D5D)
+    static let stopFill = Color(hex: 0xC62828)  // white STOP text on it reaches 5.6:1
     static let text = Color(hex: 0xE8EDF3)
     static let muted = Color(hex: 0x9AA5B4)
 }
@@ -23,20 +24,30 @@ extension Color {
     }
 }
 
+extension View {
+    /// A solid dark navigation bar on sheets: the title keeps its contrast whatever is behind it.
+    func sheetBar() -> some View {
+        toolbarBackground(Theme.panel, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+}
+
 /// A small rounded label in the top bar.
 struct Chip<Content: View>: View {
     var tint: Color = Theme.muted
+    var wraps = false  // long text (the limiter reason) wraps to two lines instead of running off
     @ViewBuilder var content: Content
 
     var body: some View {
         HStack(spacing: 6) { content }
-            .lineLimit(1)
-            .fixedSize()
+            .lineLimit(wraps ? 2 : 1)
+            .fixedSize(horizontal: !wraps, vertical: true)
             .font(.caption.weight(.semibold).monospacedDigit())
             .foregroundStyle(tint)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Capsule().fill(Theme.panel.opacity(0.85)))
+            .background(Capsule().fill(Theme.panel))  // solid: text over a bright frame stays legible
             .overlay(Capsule().stroke(Theme.panelLine, lineWidth: 1))
     }
 }

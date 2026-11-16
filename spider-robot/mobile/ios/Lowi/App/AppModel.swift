@@ -392,6 +392,7 @@ final class AppModel {
 
     private func showToast(_ item: EventItem) {
         toast = item
+        announce(item.event.text)
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(4))
             if self?.toast?.id == item.id { self?.toast = nil }
@@ -401,6 +402,13 @@ final class AppModel {
     private func refuse(_ message: String) {
         if hapticsOn { Haptics.refusal() }
         notice = message.isEmpty ? String(localized: "Refused, with no reason given.") : message
+        announce(notice ?? message)
+    }
+
+    /// VoiceOver users hear refusals and alerts, which sighted users see as banners.
+    private func announce(_ text: String) {
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        AccessibilityNotification.Announcement(text).post()
     }
 
     #if DEBUG
