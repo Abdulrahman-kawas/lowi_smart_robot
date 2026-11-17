@@ -131,6 +131,12 @@ struct APIClient: Sendable {
         return try await call("POST", "/v1/photo", body: body, timeout: 120)
     }
 
+    /// Speech to the robot's brain; it answers in text. A stop word makes it send STOP; nothing
+    /// said here can move the robot.
+    func talk(wav: Data) async throws -> TalkReply {
+        try await call("POST", "/v1/talk", body: Talk.body(wav: wav), timeout: 120)
+    }
+
     private struct Detail: Decodable { var detail: String? }
 
     private func call<T: Decodable>(_ method: String, _ path: String, body: [String: Any]? = nil,

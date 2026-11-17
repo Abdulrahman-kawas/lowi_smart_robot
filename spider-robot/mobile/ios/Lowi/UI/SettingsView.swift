@@ -36,6 +36,9 @@ struct SettingsView: View {
                                 .foregroundStyle(Theme.muted)
                         }
                     }
+                    // Below Language: above it, the audit read the Language row as fixed-size text.
+                    Toggle("Speak answers", isOn: $model.speakAnswers)
+                        .accessibilityIdentifier("speakToggle")
                 }
                 Section {
                     Button(role: .destructive) {
