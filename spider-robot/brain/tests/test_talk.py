@@ -1,32 +1,51 @@
 """Hold to talk (/v1/talk): WAV checks, stop words before any model, and the route chain."""
 
+import array
 import asyncio
 import io
+import math
 import wave
 
 import pytest
 from pydantic import ValidationError
 
 from spider_brain.config import Settings
-from spider_brain.mobile.talk import TalkError, TalkService, parse_wav, stop_kind
+from spider_brain.mobile.talk import (
+    STT_PROMPT_AR,
+    TalkError,
+    TalkService,
+    collapse_repeats,
+    loudest_rms,
+    parse_wav,
+    stop_kind,
+)
 
 
-def wav(seconds: float = 1.0, rate: int = 16_000, channels: int = 1, width: int = 2) -> bytes:
+def wav(seconds: float = 1.0, rate: int = 16_000, channels: int = 1, width: int = 2,
+        amplitude: int = 3000) -> bytes:
+    """A 220 Hz tone at speech level (amplitude 0: digital silence)."""
+    n = int(seconds * rate)
+    if width == 2:
+        one = array.array("h", (int(amplitude * math.sin(2 * math.pi * 220 * i / rate))
+                                for i in range(n)))
+        frames = b"".join(bytes(one) for _ in range(channels))
+    else:
+        frames = b"\x80" * n * channels
     buf = io.BytesIO()
     with wave.open(buf, "wb") as out:
         out.setnchannels(channels)
         out.setsampwidth(width)
         out.setframerate(rate)
-        out.writeframes(b"\x00" * int(seconds * rate) * channels * width)
+        out.writeframes(frames)
     return buf.getvalue()
 
 
 class FakeEngine:
     def __init__(self, text: str) -> None:
-        self.text, self.calls = text, 0
+        self.text, self.calls = text, []
 
     async def transcribe(self, pcm: bytes, language: str, prompt: str) -> tuple[str, float]:
-        self.calls += 1
+        self.calls.append((len(pcm), prompt))
         return self.text, 0.9
 
 
@@ -119,6 +138,30 @@ async def test_silence_answers_without_a_model():
     svc, calls = service("  ", [route])
     out = await svc.run("iPhone", wav())
     assert out["action"] == "no_speech" and route.questions == [] and calls == []
+
+
+async def test_a_silent_clip_never_reaches_whisper():
+    # With the stop-word prompt, Whisper turned 2 s of silence into "وقف، وقف، ..." on the server.
+    svc, calls = service("وقف وقف وقف", [FakeRoute("liquid", "x")])
+    out = await svc.run("iPhone", wav(2.0, amplitude=0))
+    assert out["action"] == "no_speech" and out["provider"] == "silence"
+    assert svc.engine.calls == [] and calls == []
+    assert loudest_rms(b"\x00\x00" * 1600) == 0.0 and loudest_rms(b"") == 0.0
+
+
+async def test_short_clips_are_padded_and_get_the_stop_word_prompt():
+    svc, _ = service("قف", [])
+    await svc.run("iPhone", wav(0.6))
+    assert svc.engine.calls == [(int(0.6 * 16_000) * 2 + 32_000, STT_PROMPT_AR)]
+    svc, _ = service("مرحبا", [FakeRoute("liquid", "أهلا")])
+    await svc.run("iPhone", wav(3.0))
+    assert svc.engine.calls == [(3 * 32_000, STT_PROMPT_AR)]  # long enough: no padding
+
+
+def test_word_loops_are_cut():
+    assert collapse_repeats("وقف وقف وقف وقف وقف وقف") == "وقف وقف وقف"
+    assert collapse_repeats("نحن نحن نحن نحن نحن") == "نحن نحن نحن"
+    assert collapse_repeats("مرحبا لوي شو عم تعمل") == "مرحبا لوي شو عم تعمل"
 
 
 async def test_one_talk_at_a_time():

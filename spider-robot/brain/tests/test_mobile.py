@@ -630,7 +630,8 @@ async def test_talk_needs_a_token_and_a_spoken_stop_reaches_the_robot(brain):
         clip.setnchannels(1)
         clip.setsampwidth(2)
         clip.setframerate(16_000)
-        clip.writeframes(b"\x00" * 32_000)
+        square = (3000 if (i // 36) % 2 else -3000 for i in range(16_000))  # loud: not silence
+        clip.writeframes(b"".join(v.to_bytes(2, "little", signed=True) for v in square))
     body = {"audio_b64": base64.b64encode(buf.getvalue()).decode(), "mime": "audio/wav"}
     assert (await brain.http.post("/v1/talk", json=body)).status_code == 401
 
