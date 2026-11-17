@@ -157,6 +157,28 @@ class Settings(BaseSettings):
     mobile_deadman_s: float = Field(0.6, gt=0.0, le=0.6)  # no drive renewal for this long: stop
     mobile_max_frame_age_s: float = Field(2.0, gt=0.0, le=2.0)  # no driving on an older frame
     mobile_pair_code_s: float = Field(120.0, gt=0.0, le=600.0)
+    # Hold to talk from the app (/v1/talk): Whisper (the STT worker's model), then the first
+    # of these routes that answers, in order. Comma-separated: "liquid", "compat:<model>",
+    # "anthropic:<model>", "gemini:<model>", "lowi" (reserved: skipped until Lowi is
+    # connected to the robot).
+    talk_routes: str = "liquid"
+    talk_max_s: float = Field(30.0, gt=0.0, le=60.0)  # longest clip the app may send
+    talk_timeout_s: float = Field(45.0, gt=0.0, le=120.0)  # for every route together
+
+    @property
+    def talk_route_list(self) -> list[str]:
+        return [part.strip() for part in self.talk_routes.split(",") if part.strip()]
+
+    @field_validator("talk_routes")
+    @classmethod
+    def _known_talk_routes(cls, value: str) -> str:
+        for route in (part.strip() for part in value.split(",") if part.strip()):
+            kind, _, model = route.partition(":")
+            if kind not in ("liquid", "compat", "anthropic", "gemini", "lowi") or (
+                    kind in ("compat", "anthropic", "gemini") and not model):
+                raise ValueError(f"unknown talk route {route!r}: use liquid, compat:<model>, "
+                                 "anthropic:<model>, gemini:<model> or lowi")
+        return value
 
     @property
     def telegram_enabled(self) -> bool:

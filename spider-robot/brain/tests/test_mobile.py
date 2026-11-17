@@ -619,3 +619,30 @@ async def test_state_lidar_events_and_photo(stack):
     assert base64.b64decode(r.json()["frame_jpeg"])[:2] == b"\xff\xd8"
     assert stack.gateway.counters.get("snapshot_limited", 0) == 0
     await app.close()
+
+
+async def test_talk_needs_a_token_and_a_spoken_stop_reaches_the_robot(brain):
+    import io
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as clip:
+        clip.setnchannels(1)
+        clip.setsampwidth(2)
+        clip.setframerate(16_000)
+        clip.writeframes(b"\x00" * 32_000)
+    body = {"audio_b64": base64.b64encode(buf.getvalue()).decode(), "mime": "audio/wav"}
+    assert (await brain.http.post("/v1/talk", json=body)).status_code == 401
+
+    class Engine:  # stands in for Whisper: the owner said "stop"
+        async def transcribe(self, pcm, language, prompt):
+            return "قف", 0.9
+
+    brain.svc.mobile.talk.engine = Engine()
+    r = await brain.http.post("/v1/talk", json=body, headers=bearer(brain.token))
+    assert r.status_code == 200, r.text
+    assert r.json()["action"] == "stop" and r.json()["reply"] == "وقفت."
+    assert brain.cancels  # the STOP went to the robot client
+    bad = await brain.http.post("/v1/talk", json={"audio_b64": "@" * 12},
+                                headers=bearer(brain.token))
+    assert bad.status_code == 400

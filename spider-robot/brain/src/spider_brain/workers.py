@@ -46,10 +46,10 @@ class ChatClient:
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self.http = http or httpx.AsyncClient(base_url=base_url, timeout=timeout_s, headers=headers)
 
-    async def ask(self, question: str) -> str:
+    async def ask(self, question: str, system: str = ASK_SYSTEM) -> str:
         resp = await self.http.post("/chat/completions", json={
             "model": self.model, "max_tokens": 200, "temperature": 0.2,
-            "messages": [{"role": "system", "content": ASK_SYSTEM},
+            "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": question}],
         })
         resp.raise_for_status()
