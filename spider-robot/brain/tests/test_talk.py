@@ -232,3 +232,15 @@ async def test_no_key_or_speech_off_means_the_phone_speaks():
         svc, _ = service("مرحبا", [FakeRoute("liquid", "أهلا")], voice=voice, **settings)
         out = await svc.run("iPhone", wav())
         assert out["audio_b64"] is None and out["audio_mime"] is None
+
+
+def test_gemini_client_uses_v1beta_for_tts(monkeypatch):
+    # google-genai 3.0.0's default API version answers 400 "Unknown name speechConfig".
+    from google import genai
+
+    from spider_brain.voice import VoiceService
+
+    seen = {}
+    monkeypatch.setattr(genai, "Client", lambda **kw: seen.update(kw) or object())
+    VoiceService(Settings(_env_file=None, gemini_api_key="k"))._gemini()
+    assert seen["api_key"] == "k" and seen["http_options"].api_version == "v1beta"

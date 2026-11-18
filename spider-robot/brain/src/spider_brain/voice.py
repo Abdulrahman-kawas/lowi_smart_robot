@@ -49,8 +49,12 @@ class VoiceService:
     def _gemini(self):
         if self._client is None:
             from google import genai
+            from google.genai import types
 
-            self._client = genai.Client(api_key=self.settings.gemini_api_key or None)
+            # v1beta: with google-genai 3.0.0 the default API version rejects speech_config
+            # ("Unknown name speechConfig", HTTP 400), so every Gemini TTS call failed.
+            self._client = genai.Client(api_key=self.settings.gemini_api_key or None,
+                                        http_options=types.HttpOptions(api_version="v1beta"))
         return self._client
 
     # ------------------------------------------------------------------ hear
