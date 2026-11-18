@@ -8,7 +8,12 @@ struct TalkReply: Decodable, Sendable, Equatable {
     var action: String  // answer, stop, estop, no_speech
     var provider: String
     var elapsedMs: Double
+    /// The answer in Lowi's own voice (a WAV from the brain's Gemini TTS); nil when the brain has
+    /// no voice to send, and the phone then reads the reply with its own best voice.
+    var audioB64: String? = nil
+    var audioMime: String? = nil
 
+    var audio: Data? { audioB64.flatMap { Data(base64Encoded: $0) } }
     var stoppedRobot: Bool { action == "stop" || action == "estop" }
     var heardNothing: Bool { action == "no_speech" }
 }

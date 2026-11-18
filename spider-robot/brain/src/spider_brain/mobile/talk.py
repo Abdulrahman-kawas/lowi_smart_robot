@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import array
 import asyncio
+import base64
 import io
 import logging
 import math
@@ -232,7 +233,7 @@ class TalkService:
         self.settings = settings
         self.stop, self.estop, self.context = stop, estop, context
         self.engine = engine  # the STT worker's WhisperEngine if any: one model in RAM
-        self.voice = voice  # VoiceService (Gemini) as a fallback transcriber
+        self.voice = voice  # VoiceService (Gemini): fallback transcriber and Lowi's voice
         self.routes = list(routes) if routes is not None else make_talk_routes(settings)
         self.lang = "ar" if settings.stt_language.startswith("ar") else "en"
         self._lock = asyncio.Lock()
@@ -246,10 +247,23 @@ class TalkService:
             heard, stt = await self._transcribe(pcm, wav)
             out = await self._respond(device, heard)
             out["provider"] = f"{stt}+{out['provider']}" if out["provider"] else stt
+            audio = await self._speech(out["reply"]) if out["action"] == "answer" else None
+            out["audio_b64"] = base64.b64encode(audio).decode("ascii") if audio else None
+            out["audio_mime"] = "audio/wav" if audio else None
             out["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
             log.info("talk from %s: action=%s provider=%s %.0f ms", device, out["action"],
                      out["provider"], out["elapsed_ms"])
             return out
+
+    async def _speech(self, reply: str) -> bytes | None:
+        """The answer in Lowi's own voice, or None: the phone then reads it with its own voice.
+        Stop and no-speech replies skip this, so their feedback stays instant."""
+        if not (self.settings.talk_speech and reply and self.voice is not None
+                and getattr(self.voice, "available", False)):
+            return None
+        arabic = re.search(r"[؀-ۿ]", reply) is not None
+        name = self.settings.talk_voice_ar if arabic else self.settings.talk_voice_en
+        return await self.voice.speak_wav(reply, name)
 
     async def _respond(self, device: str, heard: str) -> dict[str, Any]:
         text = _TEXT[self.lang]

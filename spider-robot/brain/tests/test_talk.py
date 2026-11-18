@@ -2,6 +2,7 @@
 
 import array
 import asyncio
+import base64
 import io
 import math
 import wave
@@ -62,13 +63,24 @@ class FakeRoute:
         return self._answer
 
 
-def service(heard: str, routes, **settings) -> tuple[TalkService, list[str]]:
+class FakeVoice:
+    """Stands in for Gemini TTS: records what it was asked to say and in which voice."""
+
+    def __init__(self, available: bool = True) -> None:
+        self.available, self.said = available, []
+
+    async def speak_wav(self, text: str, voice_name: str) -> bytes | None:
+        self.said.append((text, voice_name))
+        return b"RIFF-fake-wav"
+
+
+def service(heard: str, routes, voice=None, **settings) -> tuple[TalkService, list[str]]:
     calls: list[str] = []
     s = Settings(_env_file=None, robot_source="planner", human_source="remote", **settings)
     svc = TalkService(s, stop=lambda who: calls.append(f"stop:{who}"),
                       estop=lambda who: calls.append(f"estop:{who}"),
                       context=lambda: "Robot state: mode relaxed.", engine=FakeEngine(heard),
-                      routes=routes)
+                      voice=voice, routes=routes)
     return svc, calls
 
 
@@ -190,3 +202,33 @@ def test_talk_routes_are_validated():
     for bad in ("openai", "compat:", "anthropic"):
         with pytest.raises(ValidationError):
             Settings(_env_file=None, talk_routes=bad)
+
+
+async def test_answers_come_back_in_lowis_voices():
+    voice = FakeVoice()
+    svc, _ = service("مرحبا لوي", [FakeRoute("liquid", "أهلا، كيفك؟")], voice=voice)
+    out = await svc.run("iPhone", wav())
+    assert voice.said == [("أهلا، كيفك؟", "Fenrir")]
+    assert base64.b64decode(out["audio_b64"]) == b"RIFF-fake-wav"
+    assert out["audio_mime"] == "audio/wav"
+    voice = FakeVoice()
+    svc, _ = service("hello", [FakeRoute("liquid", "Hi there.")], voice=voice)
+    await svc.run("iPhone", wav())
+    assert voice.said == [("Hi there.", "Puck")]
+
+
+async def test_stop_and_silence_never_wait_for_a_voice():
+    voice = FakeVoice()
+    svc, calls = service("قف", [FakeRoute("liquid", "x")], voice=voice)
+    out = await svc.run("iPhone", wav())
+    assert calls == ["stop:iPhone"] and voice.said == [] and out["audio_b64"] is None
+    svc, _ = service("", [FakeRoute("liquid", "x")], voice=voice)
+    assert (await svc.run("iPhone", wav()))["audio_b64"] is None and voice.said == []
+
+
+async def test_no_key_or_speech_off_means_the_phone_speaks():
+    for voice, settings in ((FakeVoice(available=False), {}), (None, {}),
+                            (FakeVoice(), {"talk_speech": False})):
+        svc, _ = service("مرحبا", [FakeRoute("liquid", "أهلا")], voice=voice, **settings)
+        out = await svc.run("iPhone", wav())
+        assert out["audio_b64"] is None and out["audio_mime"] is None

@@ -11,6 +11,15 @@ struct TalkTests {
         #expect(!reply.stoppedRobot && !reply.heardNothing)
     }
 
+    @Test func lowisVoiceArrivesAsAWAVAndIsOptional() throws {
+        let wav = Talk.wav(pcm: Data(count: 480))
+        let json = #"{"heard":"مرحبا","reply":"أهلا","action":"answer","provider":"whisper-small+liquid","elapsed_ms":4200,"audio_b64":"\#(wav.base64EncodedString())","audio_mime":"audio/wav"}"#
+        let reply = try ServerMessage.decoder.decode(TalkReply.self, from: Data(json.utf8))
+        #expect(reply.audio == wav && reply.audioMime == "audio/wav")
+        let plain = #"{"heard":"قف","reply":"وقفت.","action":"stop","provider":"whisper-small","elapsed_ms":900,"audio_b64":null,"audio_mime":null}"#
+        #expect(try ServerMessage.decoder.decode(TalkReply.self, from: Data(plain.utf8)).audio == nil)
+    }
+
     @Test func stopWordsReportTheStopAndSilenceReportsNothingHeard() throws {
         for action in ["stop", "estop"] {
             let json = #"{"heard":"قف","reply":"وقفت.","action":"\#(action)","provider":"stopwords","elapsed_ms":120}"#

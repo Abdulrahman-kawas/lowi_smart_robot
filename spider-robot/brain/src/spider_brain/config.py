@@ -164,6 +164,11 @@ class Settings(BaseSettings):
     talk_routes: str = "liquid"
     talk_max_s: float = Field(30.0, gt=0.0, le=60.0)  # longest clip the app may send
     talk_timeout_s: float = Field(45.0, gt=0.0, le=120.0)  # for every route together
+    # Spoken answers come back as a WAV in Lowi's own Gemini voices (Arabic Fenrir, the owner's
+    # pick; English Puck); without a Gemini key or network the phone uses its own voice.
+    talk_speech: bool = True
+    talk_voice_ar: str = "Fenrir"
+    talk_voice_en: str = "Puck"
 
     @property
     def talk_route_list(self) -> list[str]:

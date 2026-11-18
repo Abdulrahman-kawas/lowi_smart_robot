@@ -117,15 +117,24 @@ final class TalkRecorder {
     }
 }
 
-/// Reads talk replies aloud with the system voices.
+/// Reads talk replies aloud: Lowi's own voice when the brain sends one, else the best system voice.
 @MainActor
 final class Speaker {
     private let synthesizer = AVSpeechSynthesizer()
+    private var player: AVAudioPlayer?
+
+    /// Plays the brain's WAV. False when it cannot be played; the caller then uses `say`.
+    func play(_ audio: Data) -> Bool {
+        stop()
+        guard let player = try? AVAudioPlayer(data: audio), player.play() else { return false }
+        self.player = player
+        return true
+    }
 
     func say(_ text: String) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        synthesizer.stopSpeaking(at: .immediate)
+        stop()
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = Self.voice(for: Talk.voiceLanguage(for: text))
         synthesizer.speak(utterance)
@@ -133,11 +142,19 @@ final class Speaker {
 
     func stop() {
         synthesizer.stopSpeaking(at: .immediate)
+        player?.stop()
+        player = nil
     }
 
-    private static func voice(for language: String) -> AVSpeechSynthesisVoice? {
-        if let exact = AVSpeechSynthesisVoice(language: language) { return exact }
+    /// The best installed voice for the language: premium, then enhanced (downloaded in Settings >
+    /// Accessibility > Spoken Content > Voices), then the default compact one.
+    static func voice(for language: String) -> AVSpeechSynthesisVoice? {
         let prefix = String(language.prefix(2))
-        return AVSpeechSynthesisVoice.speechVoices().first { $0.language.hasPrefix(prefix) }
+        let candidates = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(prefix) }
+        let best = candidates.max { a, b in
+            (a.quality.rawValue, a.language == language ? 1 : 0)
+                < (b.quality.rawValue, b.language == language ? 1 : 0)
+        }
+        return best ?? AVSpeechSynthesisVoice(language: language)
     }
 }

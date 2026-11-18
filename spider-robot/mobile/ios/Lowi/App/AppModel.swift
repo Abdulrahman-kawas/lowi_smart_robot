@@ -251,7 +251,13 @@ final class AppModel {
         guard let api, isPaired else { throw APIError.unauthorized(String(localized: "Not paired")) }
         let reply = try await api.talk(wav: wav)
         if reply.stoppedRobot, hapticsOn { Haptics.stop() }
-        if speakAnswers { speaker.say(reply.reply) }
+        if speakAnswers {
+            if let audio = reply.audio, speaker.play(audio) {
+                // Lowi's own voice from the brain
+            } else {
+                speaker.say(reply.reply)
+            }
+        }
         return reply
     }
 
