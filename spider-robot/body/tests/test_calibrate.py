@@ -109,3 +109,17 @@ def test_show_compares_every_servo_without_moving_anything(cfg, monkeypatch, cap
     config = str(calibrate.Path(__file__).resolve().parents[1] / "config" / "robot.sim.yaml")
     assert calibrate.main(["--config", config, "show"]) == 0
     assert "LF.coxa" in capsys.readouterr().out
+
+
+def test_after_direction_plus_turns_a_mirrored_joint_the_same_way(cfg, tmp_path):
+    import yaml
+
+    out = tmp_path / "calibration.yaml"
+    cfg.servo("RF.femur").direction = -1  # mounted mirrored: found by `direction`
+    bank, ser = ssc(cfg)
+    calibrate.cmd_trim(cfg, bank, out, ["LF", "RF"],
+                       ask=answers("n", "+", "+", "n", "n", "n", "+", "+", "n", "n"))
+    saved = yaml.safe_load(out.read_text())
+    assert saved["LF.femur"]["trim_deg"] == 2.0  # + twice = up, raw +2
+    assert saved["RF.femur"]["trim_deg"] == -2.0  # + twice = up too, so raw -2 on a mirrored servo
+    assert "#30P1515\r" in ser.written and "#14P1485\r" in ser.written

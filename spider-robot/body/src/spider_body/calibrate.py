@@ -6,8 +6,10 @@
   spider-calibrate center --leg LF [--leg LM ...] [--seconds 3]
                                the same, one leg at a time and one joint at a time (Enter
                                between joints), each gliding to the middle over --seconds
-  spider-calibrate trim        fine-tune each joint around that neutral pose
-  spider-calibrate direction   find which servos are mounted mirrored
+  spider-calibrate direction   find which servos are mounted mirrored (run it before trim)
+  spider-calibrate trim        fine-tune each joint around that neutral pose; after direction,
+                               + moves every joint the same way (coxa counter-clockwise seen
+                               from above, femur up, tibia down/in) on every leg
      trim and direction take --leg too (one leg at a time, saved after each leg)
   spider-calibrate show        every servo: channel, range, direction, trim and its real
                                centre pulse, to compare how far each one is off
@@ -91,17 +93,22 @@ def cmd_center(cfg: BodyConfig, bank, legs: list[str] | None = None, seconds: fl
 def cmd_trim(cfg: BodyConfig, bank, out: Path, legs: list[str] | None = None,
              ask: Callable[[str], str] = input) -> None:
     """Each joint until it sits exactly at its reference; saved after every leg, so stopping
-    halfway keeps the legs already done (the other legs keep their saved trims)."""
+    halfway keeps the legs already done (the other legs keep their saved trims).
+
+    The trim is kept in raw servo degrees, but a key step goes through the servo's direction:
+    once `direction` has run, + turns every joint the same way on every leg, mirrored or not."""
     print("Commands: + / - (1 deg), ++ / -- (5 deg), . / , (0.25 deg), n = next, q = save+quit")
     for leg_jids in _by_leg(_joint_ids(cfg, legs)):
         for jid in leg_jids:
             servo = cfg.servo(jid)
+            print(f"{jid}: + = {_POSITIVE[jid.split('.')[1]]}")
             while True:
                 bank.write_raw(jid, 90.0 + servo.trim_deg)
                 ans = ask(f"{jid} (channel {servo.channel}) trim={servo.trim_deg:+.2f} > ").strip()
                 step = {"+": 1, "-": -1, "++": 5, "--": -5, ".": 0.25, ",": -0.25}.get(ans)
                 if step is not None:
-                    servo.trim_deg = max(-30.0, min(30.0, servo.trim_deg + step))
+                    trim = servo.trim_deg + step * servo.direction
+                    servo.trim_deg = max(-30.0, min(30.0, trim))
                 elif ans == "n":
                     break
                 elif ans == "q":
