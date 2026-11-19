@@ -650,7 +650,7 @@ class Robot:
                 for joint, rad in zip(JOINTS, (j.coxa, j.femur, j.tibia), strict=True):
                     servo = getattr(leg, joint)
                     deg = joint_to_servo_deg(rad, neutral[joint], servo.direction, servo.trim_deg)
-                    out[f"{leg.name}.{joint}"], _ = clamp_servo(servo, deg)
+                    out[f"{leg.name}.{joint}"], _ = clamp_servo(self.cfg, servo, deg)
         except IKError as exc:
             if not self._ik_error_reported:
                 self._ik_error_reported = True

@@ -78,14 +78,15 @@ class PCA9685:
 
 class ServoBank(Protocol):
     def write(self, servo_deg: dict[str, float]) -> None:
-        """joint id ("LF.coxa") -> servo command in degrees (0..180, already calibrated)."""
+        """joint id ("LF.coxa") -> servo command in logical degrees (already calibrated)."""
 
     def relax(self) -> None:
         """Stop sending pulses: servos go limp (no holding torque)."""
 
 
-def clamp_servo(cfg: ServoCfg, deg: float) -> tuple[float, bool]:
-    clamped = max(cfg.min_deg, min(cfg.max_deg, deg))
+def clamp_servo(cfg: BodyConfig, servo: ServoCfg, deg: float) -> tuple[float, bool]:
+    lo, hi = cfg.limits_of(servo)
+    clamped = max(lo, min(hi, deg))
     return clamped, clamped != deg
 
 
@@ -116,7 +117,7 @@ class PcaServoBank:
         changes: dict[int, dict[int, int]] = {}
         for joint_id, deg in servo_deg.items():
             s = self.servos[joint_id]
-            deg, _ = clamp_servo(s, deg)
+            deg, _ = clamp_servo(self.cfg, s, deg)
             board = self.boards[s.board]
             t = board.to_ticks(self._pulse(s, deg))
             if board.ticks[s.channel] != t:
@@ -203,7 +204,7 @@ class SscServoBank:
     def write(self, servo_deg: dict[str, float]) -> None:
         for joint_id, deg in servo_deg.items():
             s = self.servos[joint_id]
-            deg, _ = clamp_servo(s, deg)
+            deg, _ = clamp_servo(self.cfg, s, deg)
             us = self._us(s, deg)
             if self._sent.get(s.channel) != us:
                 self._pending[s.channel] = us

@@ -34,9 +34,9 @@ from .hw.lidar import NoLidar
 from .hw.servos import make_servo_bank
 from .robot import Robot
 
-# How far a trim may go, by joint. The coxa swings about +-20 deg when walking or turning, so it
-# keeps room even 60 deg off centre; femur and tibia need most of their travel (sit, lift, stand),
-# and the femur already needs +86 deg to sit.
+# How far a trim may go, by joint. Joint limits move with the trim (BodyConfig.limits_of), so a
+# trim only uses up the servo's own travel: the femur's +-90 plus 30 is 120 of the RDS3218's 135.
+# The coxa swings about +-20 deg when walking or turning, so it keeps room even 60 deg off centre.
 TRIM_LIMIT_DEG = {"coxa": 60.0, "femur": 30.0, "tibia": 30.0}
 
 _POSITIVE = {

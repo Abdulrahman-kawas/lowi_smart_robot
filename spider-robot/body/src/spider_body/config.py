@@ -45,8 +45,9 @@ def broker_settings(
 class PulseCfg(_M):
     """Servo pulse mapping, shared by every servo driver.
 
-    "Servo degrees" in this code are LOGICAL: 90 = pulse centre (the calibrated neutral pose),
-    0..180 = +-90 deg of physical travel around it, whatever the servo's full range is.
+    "Servo degrees" in this code are LOGICAL: 90 = pulse centre, and one logical degree is one
+    physical degree whatever the servo's full range is, so 90 +- range_deg / 2 are the ends of
+    its travel (-45..225 on a 270-degree servo, 0..180 on a 180-degree one).
     """
 
     min_us: float = 500.0
@@ -79,12 +80,21 @@ class ServoCfg(_M):
     channel: int = Field(ge=0, le=31)  # SSC-32U: 0-31; PCA9685: 0-15
     direction: Literal[1, -1] = 1
     trim_deg: float = 0.0
-    min_deg: float = 10.0  # mechanical limits in servo degrees
+    # Joint limits in servo degrees around the calibrated neutral: the joint may go from
+    # min_deg + trim_deg to max_deg + trim_deg (a horn seated off by the trim moves the joint's
+    # stops with it), and never past the servo's own travel. See BodyConfig.limits_of.
+    min_deg: float = 10.0
     max_deg: float = 170.0
     # This servo's own pulse range, for one servo that differs from the rest (a 180-degree
     # servo among 270-degree ones). None = the shared `pulse`. Logical degrees keep their
     # meaning either way.
     pulse: PulseCfg | None = None
+
+
+class FemurServoCfg(ServoCfg):
+    # Sitting needs the femur about 86 deg up (default geometry), more than +-80 allows.
+    min_deg: float = 0.0
+    max_deg: float = 180.0
 
 
 class LegCfg(_M):
@@ -93,7 +103,7 @@ class LegCfg(_M):
     mount_y: float  # m, + left
     mount_angle_deg: float  # direction the coxa points at neutral, CCW from forward
     coxa: ServoCfg
-    femur: ServoCfg
+    femur: FemurServoCfg
     tibia: ServoCfg
 
 
@@ -250,6 +260,13 @@ class BodyConfig(_M):
     def pulse_of(self, servo: ServoCfg) -> PulseCfg:
         """The pulse range this servo really uses: its own, or the shared one."""
         return servo.pulse or self.pulse
+
+    def limits_of(self, servo: ServoCfg) -> tuple[float, float]:
+        """The servo degrees this joint may be sent: min_deg..max_deg shifted by its trim, as
+        the trim says how far its horn sits off, cut to the servo's own travel."""
+        half = self.pulse_of(servo).range_deg / 2.0
+        return (max(servo.min_deg + servo.trim_deg, 90.0 - half),
+                min(servo.max_deg + servo.trim_deg, 90.0 + half))
 
     @model_validator(mode="after")
     def _check_safety(self) -> BodyConfig:
