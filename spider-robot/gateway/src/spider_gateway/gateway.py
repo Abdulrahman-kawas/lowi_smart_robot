@@ -18,6 +18,7 @@ gateway, which:
     a remote wake from limp
   * accepts one more release path that needs no network: a physical hold-to-release button
   * returns each source its events with its own seq numbers
+  * lets voice, remote and bench turn the camera (Look) with a rate cap; the planner may not
   * lets voice and bench start expressive moves (Perform, Reach), remote only with allow_moves,
     and the planner never; offer_hand is for a person at the robot, so voice and bench only. A
     move owns the motion like a Move until the body reports it done
@@ -54,6 +55,7 @@ from spider_common.protocol import (
     EventKind,
     GatewayStatus,
     Heartbeat,
+    Look,
     Move,
     Perform,
     Posture,
@@ -207,6 +209,7 @@ class Gateway:
         self._holdoff: dict[str, tuple[float, str]] = {}  # source -> (until, who stopped)
         self._clocks = {source: SourceClock() for source in self.priority}
         self._last_snapshot: dict[str, float] = {}
+        self._last_look: dict[str, float] = {}
         self._last_clamp_notice: dict[str, float] = {}
         self._last_beat = -math.inf
         self._last_status = -math.inf
@@ -286,6 +289,8 @@ class Gateway:
         elif isinstance(cmd, Snapshot):
             if self._snapshot_allowed(source, cmd.seq, now):
                 self._forward(cmd, source)
+        elif isinstance(cmd, Look):
+            self._on_look(cmd, source, now)
         else:
             self._forward(cmd, source)
 
@@ -336,6 +341,26 @@ class Gateway:
             self._busy(source, cmd.seq)
             return
         self._forward(limited, source)
+
+    def _on_look(self, cmd: Look, source: str, now: float) -> None:
+        """Camera pan. It moves no leg, so it takes no motion ownership, but a Stop still
+        holds it off and the planner may never send one."""
+        if source == "planner" or not self.policies[source].allow_look:
+            self._reply(source, cmd.seq, "rejected", f"{source} may not turn the camera")
+            return
+        if cmd.seq <= self._fence.get((source, cmd.session), -1):
+            return  # sent before this source's own Stop
+        held = self._holdoff.get(source)
+        if held is not None and now < held[0]:
+            self._count("held_off")
+            self._reply(source, cmd.seq, "rejected", f"held off after a stop from {held[1]}")
+            return
+        if now - self._last_look.get(source, -math.inf) < self.policies[source].min_look_period_s:
+            self._count("look_limited")
+            self._reply(source, cmd.seq, "rejected", "look rate limit")
+            return
+        self._last_look[source] = now
+        self._forward(cmd, source)
 
     def _on_perform(self, cmd: Perform | Reach, source: str, now: float) -> None:
         name = cmd.name if isinstance(cmd, Perform) else "reach"

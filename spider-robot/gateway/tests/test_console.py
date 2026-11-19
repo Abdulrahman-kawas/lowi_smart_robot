@@ -2,9 +2,9 @@ import asyncio
 import json
 
 from spider_common.link import InMemoryHub
-from spider_common.protocol import RobotState, Snapshot, Stop, Topics
+from spider_common.protocol import RobotEvent, RobotState, Snapshot, Stop, Topics
 
-from spider_gateway.console import Console
+from spider_gateway.console import Console, make_parser
 from spider_gateway.gateway import Gateway
 
 ROBOT = "spider-01"
@@ -99,3 +99,39 @@ async def test_bench_posture_keeps_the_source_alive_while_it_ramps():
     await console.bench_posture("stand", wait_s=0.03)
     kinds = [json.loads(m.payload)["type"] for m in link.published]
     assert "posture" in kinds and kinds.count("heartbeat") >= 2
+
+
+def test_bench_look_accepts_a_negative_target():
+    args = make_parser().parse_args(["bench", "look", "-30", "--speed", "0.4"])
+    assert args.bench_action == "look" and args.target == -30.0 and args.speed == 0.4
+
+
+async def test_bench_look_sends_a_look_and_reports_the_ack():
+    hub = InMemoryHub()
+    link = hub.endpoint(Console.subscriptions(ROBOT, "bench"))
+    await link.start()
+    console = Console(link, ROBOT, source="bench")
+    task = asyncio.create_task(console.bench_look(-30.0, 0.4))
+    await asyncio.sleep(0.02)
+    out = [json.loads(m.payload) for m in link.published]
+    assert out[0]["type"] == "heartbeat"
+    look = next(c for c in out if c["type"] == "look")
+    assert look["pan_deg"] == -30.0 and look["speed"] == 0.4
+    link.publish(T.source_event("bench"), RobotEvent(
+        robot_id=ROBOT, kind="ack", seq=look["seq"], detail="look -30 deg").model_dump_json())
+    assert "look -30 deg" in await task
+
+
+async def test_release_warns_when_the_camera_is_turned(tmp_path, capsys):
+    console, gateway, gw_link, camera, hub = await rig()
+    tasks = [asyncio.create_task(gateway._pump()),
+             asyncio.create_task(_camera_answers(gateway, gw_link, camera, hub))]
+    try:
+        gw_link.publish(T.state, RobotState(
+            robot_id=ROBOT, mode="standing", camera_pan_deg=40.0).model_dump_json())
+        assert await console.release(lambda path: False, tmp_path) == "E-stop kept"
+        assert "WARNING: the camera is turned +40 deg" in capsys.readouterr().out
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)

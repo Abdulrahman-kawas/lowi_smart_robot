@@ -23,6 +23,8 @@ class SourcePolicy(BaseModel):
     needs_frame_proof: bool = False  # release must name a fresh camera frame and be confirmed
     min_snapshot_period_s: float = Field(0.5, ge=0.0)
     allow_moves: bool = False  # Perform and Reach (expressive moves); never for the planner
+    allow_look: bool = True  # Look (camera pan). Never for the planner: see check_order
+    min_look_period_s: float = Field(0.2, ge=0.0)  # at most 5 Looks a second per source
 
 
 # The bench source exists only while SG_BENCH=1, for a person at the robot during M3 and M4.
@@ -36,7 +38,7 @@ DEFAULT_POLICIES: dict[str, SourcePolicy] = {
                            max_excess_delay_s=0.75, may_release_estop=True,
                            needs_frame_proof=True),
     "planner": SourcePolicy(max_speed_mps=0.06, max_wz_rps=0.45, max_duration_s=1.0,
-                            max_excess_delay_s=0.75),
+                            max_excess_delay_s=0.75, allow_look=False),
 }
 
 
@@ -53,6 +55,8 @@ def check_order(policies: dict[str, SourcePolicy]) -> None:
         raise ValueError("only the remote source may release an E-stop")
     if policies["planner"].allow_moves:
         raise ValueError("the planner may never start expressive moves")
+    if policies["planner"].allow_look:
+        raise ValueError("the planner may not turn the camera")
 
 
 def load_policies(path: str | Path | None = None) -> dict[str, SourcePolicy]:

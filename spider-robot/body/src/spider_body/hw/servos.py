@@ -142,8 +142,8 @@ class PcaServoBank:
             board.all_off()
 
 
-# 18 channels x len("#31P2500") + len("T40\r"): the longest group move this code sends.
-MAX_GROUP_BYTES = 18 * 8 + 4
+# 18 legs + the camera pan, x len("#31P2500"), + len("T40\r"): the longest group move sent.
+MAX_GROUP_BYTES = 19 * 8 + 4
 
 
 class FakeServoBank:
@@ -191,9 +191,8 @@ class SscServoBank:
         # A tick that wakes 0.1 ms early against the last one must still send, or the group move
         # slips a whole tick and servos rest between glides. Tolerate up to about a quarter.
         self.min_gap = self.interval * 0.76
-        self.servos: dict[str, ServoCfg] = {
-            f"{leg.name}.{j}": getattr(leg, j) for leg in cfg.legs for j in JOINTS
-        }
+        # The legs and, if fitted, the camera pan ("camera_pan"): relax() cuts every one of them.
+        self.servos: dict[str, ServoCfg] = {jid: cfg.servo(jid) for jid in cfg.servo_ids()}
         self._sent: dict[int, int] = {}  # channel -> last pulse sent (us)
         self._pending: dict[int, int] = {}
         self._last_send = -1e9

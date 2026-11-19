@@ -11,6 +11,7 @@ from spider_common.link import MqttSettings
 
 LEG_NAMES = ("LF", "LM", "LR", "RF", "RM", "RR")
 JOINTS = ("coxa", "femur", "tibia")
+CAMERA_PAN = "camera_pan"  # servo id of the front camera's pan servo, beside "LF.coxa" and co.
 
 
 class _M(BaseModel):
@@ -95,6 +96,22 @@ class FemurServoCfg(ServoCfg):
     # Sitting needs the femur about 86 deg up (default geometry), more than +-80 allows.
     min_deg: float = 0.0
     max_deg: float = 180.0
+
+
+class CameraPanCfg(ServoCfg):
+    """The front camera's pan servo on the SSC-32U (owner: 10 kg, 180 degrees, channel 27).
+
+    Servo degrees as for the legs: 90 + trim_deg looks straight ahead, and
+    servo = 90 + trim_deg + direction * pan_deg, so after `spider-calibrate direction --camera`
+    a positive pan turns the camera left. min_deg..max_deg keep it clear of the legs and its cable
+    (they move with the trim, see BodyConfig.limits_of): widen them only after looking.
+    """
+
+    channel: int = Field(27, ge=0, le=31)
+    min_deg: float = 30.0
+    max_deg: float = 150.0
+    pulse: PulseCfg | None = Field(default_factory=lambda: PulseCfg(range_deg=180.0))
+    max_rate_dps: float = Field(90.0, gt=0.0, le=360.0)  # glide rate at Look.speed 1.0
 
 
 class LegCfg(_M):
@@ -256,6 +273,7 @@ class BodyConfig(_M):
     estop_latch_path: str | None = None
     state_hz: float = 4.0
     legs: list[LegCfg]
+    camera_pan: CameraPanCfg | None = None  # None: no pan servo (configs before 2026-11-20)
 
     def pulse_of(self, servo: ServoCfg) -> PulseCfg:
         """The pulse range this servo really uses: its own, or the shared one."""
@@ -305,14 +323,44 @@ class BodyConfig(_M):
                 if key in used:
                     raise ValueError(f"{leg.name}.{joint}: board/channel {key} used twice")
                 used.add(key)
+        if self.camera_pan is not None:
+            if self.servo_driver != "ssc32u":
+                raise ValueError("camera_pan needs the SSC-32U (servo_driver: ssc32u)")
+            if (0, self.camera_pan.channel) in used:
+                raise ValueError(f"camera_pan: channel {self.camera_pan.channel} is a leg's")
         return self
 
     def leg(self, name: str) -> LegCfg:
         return next(leg for leg in self.legs if leg.name == name)
 
     def servo(self, joint_id: str) -> ServoCfg:
+        if joint_id == CAMERA_PAN:
+            if self.camera_pan is None:
+                raise KeyError("camera_pan is not configured in robot.yaml")
+            return self.camera_pan
         leg_name, joint = joint_id.split(".")
         return getattr(self.leg(leg_name), joint)
+
+    def servo_ids(self) -> list[str]:
+        """Every servo this body drives: the 18 leg joints, then the camera pan if fitted."""
+        ids = [f"{leg.name}.{j}" for leg in self.legs for j in JOINTS]
+        return ids + ([CAMERA_PAN] if self.camera_pan is not None else [])
+
+    def pan_range(self) -> tuple[float, float]:
+        """The pan angles (deg, + left) the camera may be sent: its servo limits, mapped."""
+        s = self.camera_pan
+        if s is None:
+            raise KeyError("camera_pan is not configured in robot.yaml")
+        lo, hi = self.limits_of(s)
+        a, b = (lo - 90.0 - s.trim_deg) * s.direction, (hi - 90.0 - s.trim_deg) * s.direction
+        return (min(a, b), max(a, b))
+
+    def pan_servo_deg(self, pan_deg: float) -> float:
+        """Servo degrees for a pan angle (deg, + left)."""
+        s = self.camera_pan
+        if s is None:
+            raise KeyError("camera_pan is not configured in robot.yaml")
+        return 90.0 + s.trim_deg + s.direction * pan_deg
 
 
 def load_config(path: str | Path, calibration: str | Path | None = None) -> BodyConfig:
@@ -327,6 +375,8 @@ def load_config(path: str | Path, calibration: str | Path | None = None) -> Body
 def apply_calibration(cfg: BodyConfig, cal: dict) -> None:
     """calibration.yaml maps "LF.coxa" -> {direction: 1|-1, trim_deg: float}."""
     for joint_id, values in cal.items():
+        if joint_id == CAMERA_PAN and cfg.camera_pan is None:
+            continue  # calibrated once, then removed from robot.yaml: nothing to apply
         servo = cfg.servo(joint_id)
         if "direction" in values:
             servo.direction = int(values["direction"])  # type: ignore[assignment]
@@ -336,11 +386,7 @@ def apply_calibration(cfg: BodyConfig, cal: dict) -> None:
 
 def save_calibration(cfg: BodyConfig, path: str | Path) -> None:
     out = {}
-    for leg in cfg.legs:
-        for joint in JOINTS:
-            s: ServoCfg = getattr(leg, joint)
-            out[f"{leg.name}.{joint}"] = {
-                "direction": s.direction,
-                "trim_deg": round(s.trim_deg, 2),
-            }
+    for joint_id in cfg.servo_ids():
+        s = cfg.servo(joint_id)
+        out[joint_id] = {"direction": s.direction, "trim_deg": round(s.trim_deg, 2)}
     Path(path).write_text(yaml.safe_dump(out, sort_keys=True), "utf-8")

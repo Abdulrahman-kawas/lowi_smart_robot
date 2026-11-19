@@ -50,7 +50,7 @@ def test_without_a_leg_every_joint_centres_at_once(cfg):
     bank, ser = ssc(cfg)
     calibrate.cmd_center(cfg, bank, None, 2.0, ask=lambda q: "", wait=lambda s: None)
     assert len([w for w in ser.written if w.endswith("T2000\r")]) == 18
-    assert ser.written[-1].count("P0") == 18  # then everything relaxes
+    assert ser.written[-1].count("P0") == 19  # then everything relaxes, the camera (27) too
 
 
 def test_the_command_line(monkeypatch, tmp_path):

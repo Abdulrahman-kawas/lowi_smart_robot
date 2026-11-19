@@ -73,7 +73,7 @@ def test_starts_relaxed_and_stands(cfg):
     assert robot.mode == "relaxed"
     stand(robot, lidar, world, clock)
     assert robot.gait.height == pytest.approx(cfg.geometry.body_height_m)
-    assert len(servos.last) == 18
+    assert len(servos.last) == 19  # 18 legs + the camera pan, centred
     assert all(10 <= v <= 170 for v in servos.last.values())
 
 
