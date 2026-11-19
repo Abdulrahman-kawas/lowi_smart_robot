@@ -50,7 +50,7 @@ Say *"look"* and it takes a photo and tells you what it sees. Ask it something h
 |---|---|---|
 | **Robot**<br>Raspberry Pi 4, 4 GB | Body loop at 50 Hz on core 0 (inverse kinematics, gait, balance) · LiDAR and IMU reflexes · command gateway · MQTT broker · fast voice (Whisper tiny, LFM2.5-350M, Piper) | Has to keep working with no network at all |
 | **Home server**<br>i7-8700, 15 GB, no GPU | Brain (planner, skills, memory, dashboard) · Lowi on Telegram and WhatsApp · vision with LFM2.5-VL-1.6B · harder questions with LFM2.5-1.2B · Whisper small | Heavy work that can wait a second |
-| **AWS**<br>Lightsail and EC2 | Lightsail runs Lowi until it moves to the home server, then stays as a standby copy · an EC2 worker for 3D mapping (SLAM) that starts only for a job and stops itself | Extra power for short jobs, billed by the hour. The robot never needs it |
+| **AWS**<br>EC2, on demand | An EC2 worker for 3D mapping (SLAM) that starts only for a job and stops itself (planned). Lowi left Lightsail for the home server on 2026-11-17 | Extra power for short jobs, billed by the hour. The robot never needs it |
 | **AI cloud**<br>optional | Kimi on NVIDIA NIM, Claude, Gemini | Deep reasoning, only when the internet is up |
 | **Your phone** | Telegram, WhatsApp, the dashboard, the Lowi app | Remote control always goes through the brain |
 | **Your laptop** | Simulator, tests, deploys over SSH | Build and test without touching the hardware |
@@ -345,6 +345,9 @@ it does.
   E-stop is one tap. Releasing it shows a fresh photo and needs a long press, and works once.
 - **Honest status.** Link, latency, frame age, mode, E-stop and the reason the robot is slowing
   down are always on screen. When driving is off, the controls grey out and say why.
+- **Hold to talk.** Hold Talk and speak Arabic, Japanese or English, for up to 30 s. The brain hears it with
+  Whisper, answers with the local model first, and the app plays the answer in Lowi's own voice. A spoken stop
+  word sends STOP at once (about 1 s on the server). Talking never moves the robot.
 - **iPad.** The camera next to a LiDAR radar, the robot's state, a photo with a question, and the
   event log. A keyboard (W A S D, Q E, Space, Esc) and game controllers work too.
 - English and Japanese, Dynamic Type and VoiceOver.
@@ -357,7 +360,8 @@ it does.
 </table>
 
 Remote limits today: 0.05 m/s, 0.3 rad/s, moves of at most 1 s. The screenshots come from the
-simulator, whose camera shows a grey frame with an orange box. Setup, pairing and the API:
+simulator, whose camera shows a grey frame with an orange box. The app has been paired with the home
+server from a real iPhone; driving with the body running is the next check. Setup, pairing and the API:
 [spider-robot/mobile/README.md](spider-robot/mobile/README.md).
 
 ---
@@ -381,16 +385,17 @@ spider-robot/
 
 | Stage | What | Status |
 |---|---|---|
-| Software | Body, gateway, voice, brain and simulator, with 685 tests | ✅ Done |
+| Software | Body, gateway, voice, brain and simulator, with 717 tests | ✅ Done |
 | Pi bring-up | OS, services, certificates, servo port, LiDAR, broker fault tests | ✅ Done |
-| Home server | Brain, vision and planner models installed and answering the robot | ✅ Done |
+| Home server | Brain, vision and planner models installed and answering the robot; Lowi moved here from AWS (2026-11-17) | ✅ Done |
+| Whole chain | Brain to robot over Tailscale and mTLS: Stop acked 20 of 20 (12 ms median), E-stop latched in 23 ms, a photo answered by the server's vision in 7 s | ✅ Bench test, 2026-11-17 |
 | Real-time check | One hour at 50 Hz under full load (P06) | ⏳ Next |
-| Camera, mic and speaker | Plug in and run `hw_check.sh` | ⏳ Parts on the way |
+| Camera, mic and speaker | Camera fitted and checked: fresh photos, no missed body ticks. Mic and speaker next (`hw_check.sh`) | 🔨 Camera done |
 | Lowi and the robot | Hard questions go to Lowi, with offline fallbacks | 🔨 In progress |
 | First motion | Servo calibration and walking on a stand (P08) | 🔜 |
 | Hardware E-stop and floor walking | Relay, watchdog, fuse, obstacle tests (P09) | 🔜 |
 | Voice tuning | 200 recorded phrases and accuracy targets (P10) | 🔜 |
-| Mobile app | iPhone and iPad: drive from the camera, with 24 unit tests and UI tests | ✅ Built, tested on the simulator |
+| Mobile app | iPhone and iPad: drive from the camera and hold to talk in Lowi's voice, with 32 unit tests and UI tests | ✅ Paired on a real iPhone |
 | Edge sensors | VL53L1X stair-edge and side sensors | 🗓️ Planned |
 | 3D mapping | LiDAR recordings to SLAM on an on-demand AWS worker | 🗓️ Planned |
 | Raspberry Pi 5 (16 GB) | A strong offline Lowi on the robot itself, around March 2027 | 🗓️ Planned |

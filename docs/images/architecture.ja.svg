@@ -132,7 +132,7 @@ text { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragin
 <circle cx="887" cy="575" r="3" fill="#ffb547"/>
 <text x="900" y="580" font-size="15" fill="#e8edf3">ダッシュボード（Tailscale）</text>
 <circle cx="887" cy="605" r="3" fill="#ffb547"/>
-<text x="900" y="610" font-size="15" fill="#e8edf3">モバイルアプリ：開発予定</text>
+<text x="900" y="610" font-size="15" fill="#e8edf3">Lowiアプリ：iPhone・iPad</text>
 <rect x="874" y="658" width="272" height="38" rx="10" fill="#ffb547" fill-opacity="0.1" stroke="#ffb547" stroke-opacity="0.25"/>
 <text x="888" y="683" font-size="14"><tspan fill="#ffb547" font-weight="700">理由  </tspan><tspan fill="#cfd7e2">必ずブレインを経由</tspan></text>
 <rect x="40" y="540" width="300" height="170" rx="16" fill="#161d27" stroke="#273142"/>
@@ -152,15 +152,15 @@ text { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragin
 <circle cx="486" cy="562" r="21" fill="#ff9900" fill-opacity="0.13" stroke="#ff9900" stroke-opacity="0.5"/>
 <path d="M476 568 a5 5 0 0 1 1-10 a7 7 0 0 1 13-2 a5 5 0 0 1 6 6 a4 4 0 0 1-1 6 z" fill="none" stroke="#ff9900" stroke-width="2" stroke-linejoin="round"/>
 <text x="518" y="558" font-size="19" fill="#e8edf3" font-weight="700">AWS</text>
-<text x="518" y="580" font-size="13.5" fill="#9aa5b4">Lightsail・必要時のEC2</text>
+<text x="518" y="580" font-size="13.5" fill="#9aa5b4">必要時のEC2</text>
 <circle cx="728" cy="544" r="4" fill="#ff9900"><animate attributeName="opacity" values="1;.25;1" dur="2s" repeatCount="indefinite"/></circle>
 <line x1="466" y1="600" x2="734" y2="600" stroke="#273142"/>
 <circle cx="477" cy="625" r="3" fill="#ff9900"/>
-<text x="490" y="630" font-size="15" fill="#e8edf3">Lightsail：移行までLowiが稼働</text>
+<text x="490" y="630" font-size="15" fill="#e8edf3">必要時のみ3Dマッピング（SLAM）</text>
 <circle cx="477" cy="655" r="3" fill="#ff9900"/>
-<text x="490" y="660" font-size="15" fill="#e8edf3">移行後は予備として待機</text>
+<text x="490" y="660" font-size="15" fill="#e8edf3">Lowiは2026-11-17に自宅へ移行</text>
 <circle cx="477" cy="685" r="3" fill="#ff9900"/>
-<text x="490" y="690" font-size="15" fill="#e8edf3">必要時のみ3Dマッピング（SLAM）</text>
+<text x="490" y="690" font-size="15" fill="#e8edf3">予定、まだ未構築</text>
 <rect x="464" y="718" width="272" height="38" rx="10" fill="#ff9900" fill-opacity="0.1" stroke="#ff9900" stroke-opacity="0.25"/>
 <text x="478" y="743" font-size="14"><tspan fill="#ff9900" font-weight="700">理由  </tspan><tspan fill="#cfd7e2">自動で停止。必須ではない</tspan></text>
 <circle cx="54" cy="743" r="4.5" fill="#4ea1ff"/><text x="68" y="748" font-size="13.5" fill="#9aa5b4">ロボット → サーバー：難しい質問・写真</text>
