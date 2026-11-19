@@ -15,7 +15,7 @@ except "fixed" segments (holds, breathing), which keep their length at every spe
 validate() samples a move every 10 ms of real time, at the speed it will run, and checks:
   * at least 3 feet on the floor, and the body centre inside their polygon by support_margin_m
   * no foot slides while it is on the floor
-  * every leg reachable by IK, every servo inside its min_deg/max_deg (no clamping)
+  * every leg reachable by IK, every servo inside its limits (BodyConfig.limits_of, no clamping)
   * every servo slower than max_joint_speed_dps
   * body height between the sit height and the stand height + 4 cm
   * body shift within max_shift_m (2 cm for attack_stance) of where the move started
@@ -216,8 +216,8 @@ class Geometry:
         servo = [[getattr(leg, j) for j in JOINTS] for leg in ordered]
         self.direction = np.array([[s.direction for s in row] for row in servo], dtype=float)
         self.trim = np.array([[s.trim_deg for s in row] for row in servo])
-        self.lo = np.array([[s.min_deg for s in row] for row in servo])
-        self.hi = np.array([[s.max_deg for s in row] for row in servo])
+        limits = np.array([[self.cfg.limits_of(s) for s in row] for row in servo])
+        self.lo, self.hi = limits[..., 0], limits[..., 1]
         self.joint_neutral = np.array([g.coxa_neutral_deg, g.femur_neutral_deg,
                                        g.tibia_neutral_deg])
         self.stand = g.body_height_m

@@ -68,8 +68,8 @@ camera:
   max_bytes: 120000
 
 
-# Servo controller: Lynxmotion SSC-32U on USB (chosen). Left legs on VS1 (channels 0-15),
-# right legs on VS2 (channels 16-31); two UBECs at 6.0 V, VS1=VS2 jumpers REMOVED.
+# Servo controller: Lynxmotion SSC-32U on USB (chosen). Right legs on VS1 (channels 0-15),
+# left legs and the camera (27) on VS2 (channels 16-31); two UBECs at 6.0 V, VS1=VS2 jumpers REMOVED.
 servo_driver: ssc32u
 ssc:
   port: /dev/ttyUSB0       # better: the /dev/serial/by-id/usb-FTDI_... path (ls /dev/serial/by-id/)
@@ -114,48 +114,53 @@ gait:
 
 state_hz: 4
 
-# Leg mounts (body frame: x forward, y left). SSC-32U channels: coxa, femur, tibia = ch, ch+1, ch+2.
+# Leg mounts (body frame: x forward, y left). SSC-32U channels as the owner wired them on 2026-11-19
+# (fixed: change the wiring, not these numbers). Coxa at the body, tibia at the tip. LM counts down
+# (22, 21, 20) and LR skips 17 (19, 18, 16). Channel 27 turns the camera (10 kg, 180-degree servo; this
+# code does not drive it yet). Free: 0, 4, 8-12, 17, 23-26, 28.
 # direction/trim come from calibration.yaml (spider-calibrate).
 legs:
   - name: LF
     mount_x: 0.1
     mount_y: 0.06
     mount_angle_deg: 45
-    coxa:  {channel: 0}
-    femur: {channel: 1}
-    tibia: {channel: 2}
+    coxa:  {channel: 29}
+    femur: {channel: 30}
+    tibia: {channel: 31}
   - name: LM
     mount_x: 0.0
     mount_y: 0.08
     mount_angle_deg: 90
-    coxa:  {channel: 4}
-    femur: {channel: 5}
-    tibia: {channel: 6}
+    coxa:  {channel: 22}
+    femur: {channel: 21}
+    tibia: {channel: 20}
   - name: LR
     mount_x: -0.1
     mount_y: 0.06
     mount_angle_deg: 135
-    coxa:  {channel: 8}
-    femur: {channel: 9}
-    tibia: {channel: 10}
+    coxa:  {channel: 19}
+    femur: {channel: 18}
+    # A 180-degree servo for now, until a 35 kg 270-degree one replaces it: its own pulse range.
+    # Check 500-2500 us = 180 deg on the bench before the first move.
+    tibia: {channel: 16, pulse: {min_us: 500, max_us: 2500, range_deg: 180}}
   - name: RF
     mount_x: 0.1
     mount_y: -0.06
     mount_angle_deg: -45
-    coxa:  {channel: 16}
-    femur: {channel: 17}
-    tibia: {channel: 18}
+    coxa:  {channel: 13}
+    femur: {channel: 14}
+    tibia: {channel: 15}
   - name: RM
     mount_x: 0.0
     mount_y: -0.08
     mount_angle_deg: -90
-    coxa:  {channel: 20}
-    femur: {channel: 21}
-    tibia: {channel: 22}
+    coxa:  {channel: 5}
+    femur: {channel: 6}
+    tibia: {channel: 7}
   - name: RR
     mount_x: -0.1
     mount_y: -0.06
     mount_angle_deg: -135
-    coxa:  {channel: 24}
-    femur: {channel: 25}
-    tibia: {channel: 26}
+    coxa:  {channel: 1}
+    femur: {channel: 2}
+    tibia: {channel: 3}
