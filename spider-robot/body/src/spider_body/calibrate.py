@@ -8,6 +8,9 @@
                                between joints), each gliding to the middle over --seconds
   spider-calibrate trim        fine-tune each joint around that neutral pose
   spider-calibrate direction   find which servos are mounted mirrored
+     trim and direction take --leg too (one leg at a time, saved after each leg)
+  spider-calibrate show        every servo: channel, range, direction, trim and its real
+                               centre pulse, to compare how far each one is off
   spider-calibrate pose sit|stand   check the result with real IK
   spider-calibrate relax       cut all servo pulses
 
@@ -36,8 +39,16 @@ _POSITIVE = {
 }
 
 
-def _joint_ids(cfg: BodyConfig) -> list[str]:
-    return [f"{leg.name}.{j}" for leg in cfg.legs for j in JOINTS]
+def _joint_ids(cfg: BodyConfig, legs: list[str] | None = None) -> list[str]:
+    names = legs or [leg.name for leg in cfg.legs]
+    return [f"{name}.{j}" for name in names for j in JOINTS]
+
+
+def _by_leg(jids: list[str]) -> list[list[str]]:
+    out: dict[str, list[str]] = {}
+    for jid in jids:
+        out.setdefault(jid.split(".")[0], []).append(jid)
+    return list(out.values())
 
 
 FIRST_MOVE = ("Legs in the air. The first move after the servo board powers up can go at full "
@@ -77,41 +88,64 @@ def cmd_center(cfg: BodyConfig, bank, legs: list[str] | None = None, seconds: fl
     bank.relax()
 
 
-def cmd_trim(cfg: BodyConfig, bank, out: Path) -> None:
+def cmd_trim(cfg: BodyConfig, bank, out: Path, legs: list[str] | None = None,
+             ask: Callable[[str], str] = input) -> None:
+    """Each joint until it sits exactly at its reference; saved after every leg, so stopping
+    halfway keeps the legs already done (the other legs keep their saved trims)."""
     print("Commands: + / - (1 deg), ++ / -- (5 deg), . / , (0.25 deg), n = next, q = save+quit")
+    for leg_jids in _by_leg(_joint_ids(cfg, legs)):
+        for jid in leg_jids:
+            servo = cfg.servo(jid)
+            while True:
+                bank.write_raw(jid, 90.0 + servo.trim_deg)
+                ans = ask(f"{jid} (channel {servo.channel}) trim={servo.trim_deg:+.2f} > ").strip()
+                step = {"+": 1, "-": -1, "++": 5, "--": -5, ".": 0.25, ",": -0.25}.get(ans)
+                if step is not None:
+                    servo.trim_deg = max(-30.0, min(30.0, servo.trim_deg + step))
+                elif ans == "n":
+                    break
+                elif ans == "q":
+                    save_calibration(cfg, out)
+                    bank.relax()
+                    print(f"saved {out}")
+                    return
+        save_calibration(cfg, out)
+        print(f"{leg_jids[0].split('.')[0]} saved to {out}")
+    bank.relax()
+
+
+def cmd_show(cfg: BodyConfig) -> list[str]:
+    """One line per servo, and how far apart the trims are, to compare the calibration."""
+    lines = [f"{'joint':10s} {'ch':>3s} {'range':>5s} {'dir':>4s} {'trim':>7s} {'centre':>7s}"]
+    trims: dict[str, list[float]] = {}
     for jid in _joint_ids(cfg):
-        servo = cfg.servo(jid)
-        while True:
+        s = cfg.servo(jid)
+        pulse = cfg.pulse_of(s)
+        centre = pulse.pulse_us(90.0 + s.trim_deg)
+        lines.append(f"{jid:10s} {s.channel:3d} {pulse.range_deg:4.0f}° {s.direction:+4d} "
+                     f"{s.trim_deg:+6.2f}° {centre:5.0f} us")
+        trims.setdefault(jid.split(".")[1], []).append(s.trim_deg)
+    for joint, values in trims.items():
+        lines.append(f"{joint}: trims from {min(values):+.2f}° to {max(values):+.2f}° "
+                     f"(spread {max(values) - min(values):.2f}°)")
+    return lines
+
+
+def cmd_direction(cfg: BodyConfig, bank, out: Path, legs: list[str] | None = None,
+                  ask: Callable[[str], str] = input) -> None:
+    for leg_jids in _by_leg(_joint_ids(cfg, legs)):
+        for jid in leg_jids:
+            servo = cfg.servo(jid)
+            joint = jid.split(".")[1]
             bank.write_raw(jid, 90.0 + servo.trim_deg)
-            ans = input(f"{jid} trim={servo.trim_deg:+.2f} > ").strip()
-            step = {"+": 1, "-": -1, "++": 5, "--": -5, ".": 0.25, ",": -0.25}.get(ans)
-            if step is not None:
-                servo.trim_deg = max(-30.0, min(30.0, servo.trim_deg + step))
-            elif ans == "n":
-                break
-            elif ans == "q":
-                save_calibration(cfg, out)
-                bank.relax()
-                print(f"saved {out}")
-                return
-    save_calibration(cfg, out)
+            ask(f"{jid} (channel {servo.channel}): watch the joint, press Enter")
+            bank.write_raw(jid, 90.0 + servo.trim_deg + 15.0)
+            ans = ask(f"Did {jid} {_POSITIVE[joint]}? [y/n] ").strip().lower()
+            servo.direction = 1 if ans.startswith("y") else -1
+            bank.write_raw(jid, 90.0 + servo.trim_deg)
+        save_calibration(cfg, out)
+        print(f"{leg_jids[0].split('.')[0]} saved to {out}")
     bank.relax()
-    print(f"saved {out}")
-
-
-def cmd_direction(cfg: BodyConfig, bank, out: Path) -> None:
-    for jid in _joint_ids(cfg):
-        servo = cfg.servo(jid)
-        joint = jid.split(".")[1]
-        bank.write_raw(jid, 90.0 + servo.trim_deg)
-        input(f"{jid}: watch the joint, press Enter")
-        bank.write_raw(jid, 90.0 + servo.trim_deg + 15.0)
-        ans = input(f"Did {jid} {_POSITIVE[joint]}? [y/n] ").strip().lower()
-        servo.direction = 1 if ans.startswith("y") else -1
-        bank.write_raw(jid, 90.0 + servo.trim_deg)
-    save_calibration(cfg, out)
-    bank.relax()
-    print(f"saved {out}")
 
 
 def cmd_pose(cfg: BodyConfig, bank, which: str) -> None:
@@ -131,10 +165,11 @@ def cmd_pose(cfg: BodyConfig, bank, which: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="spider-calibrate")
     p.add_argument("--config", default="config/robot.yaml")
-    p.add_argument("action", choices=["check", "center", "trim", "direction", "pose", "relax"])
+    p.add_argument("action",
+                   choices=["check", "center", "trim", "direction", "pose", "relax", "show"])
     p.add_argument("pose", nargs="?", default="stand", choices=["stand", "sit"])
     p.add_argument("--leg", action="append", choices=["LF", "LM", "LR", "RF", "RM", "RR"],
-                   help="center: only this leg, joint by joint (repeat for more legs, in order)")
+                   help="center, trim, direction: only this leg (repeat for more, in order)")
     p.add_argument("--seconds", type=float, default=2.0,
                    help="center: time each joint takes to glide to the middle (SSC-32U)")
     args = p.parse_args(argv)
@@ -142,6 +177,9 @@ def main(argv: list[str] | None = None) -> int:
         p.error("--seconds must be between 0 and 10")
     cfg = load_config(args.config)
     out = Path(args.config).with_name("calibration.yaml")
+    if args.action == "show":  # reads the files only: no servo board needed, nothing moves
+        print("\n".join(cmd_show(cfg)))
+        return 0
     bank = make_servo_bank(cfg)
     try:
         if args.action == "check":
@@ -152,9 +190,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.action == "center":
             cmd_center(cfg, bank, args.leg, args.seconds)
         elif args.action == "trim":
-            cmd_trim(cfg, bank, out)
+            cmd_trim(cfg, bank, out, args.leg)
         elif args.action == "direction":
-            cmd_direction(cfg, bank, out)
+            cmd_direction(cfg, bank, out, args.leg)
         elif args.action == "pose":
             cmd_pose(cfg, bank, args.pose)
         else:

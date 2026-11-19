@@ -63,3 +63,49 @@ def test_the_command_line(monkeypatch, tmp_path):
     assert seen == {"legs": ["LF", "RM"], "seconds": 3.0}
     with pytest.raises(SystemExit):
         calibrate.main(["--config", config, "center", "--seconds", "20"])
+
+
+def answers(*seq):
+    it = iter(seq)
+    return lambda q: next(it)
+
+
+def test_trim_one_leg_saves_it_and_keeps_the_other_legs(cfg, tmp_path):
+    import yaml
+
+    out = tmp_path / "calibration.yaml"
+    cfg.servo("RF.coxa").trim_deg = 3.0  # already calibrated earlier
+    bank, ser = ssc(cfg)
+    calibrate.cmd_trim(cfg, bank, out, ["LF"], ask=answers("+", "+", "n", "n", "-", "n"))
+    saved = yaml.safe_load(out.read_text())
+    assert saved["LF.coxa"]["trim_deg"] == 2.0 and saved["LF.femur"]["trim_deg"] == 0.0
+    assert saved["LF.tibia"]["trim_deg"] == -1.0 and saved["RF.coxa"]["trim_deg"] == 3.0
+    assert "#29P1515\r" in ser.written  # +2 deg on a 270-degree servo = +15 us
+
+
+def test_direction_one_leg(cfg, tmp_path):
+    import yaml
+
+    out = tmp_path / "calibration.yaml"
+    bank, ser = ssc(cfg)
+    calibrate.cmd_direction(cfg, bank, out, ["RR"], ask=answers("", "y", "", "n", "", "y"))
+    saved = yaml.safe_load(out.read_text())
+    assert [saved[f"RR.{j}"]["direction"] for j in ("coxa", "femur", "tibia")] == [1, -1, 1]
+
+
+def test_show_compares_every_servo_without_moving_anything(cfg, monkeypatch, capsys):
+    cfg.servo("LF.femur").trim_deg = 4.0
+    lines = calibrate.cmd_show(cfg)
+    lr_tibia = next(line for line in lines if line.startswith("LR.tibia"))
+    assert " 16 " in lr_tibia and "180°" in lr_tibia and "1500 us" in lr_tibia
+    assert any(line.startswith("LF.femur") and "+4.00°" in line and "1530 us" in line
+               for line in lines)
+    assert "femur: trims from +0.00° to +4.00° (spread 4.00°)" in lines
+
+    def no_board(cfg):
+        raise AssertionError("show must not open the servo board")
+
+    monkeypatch.setattr(calibrate, "make_servo_bank", no_board)
+    config = str(calibrate.Path(__file__).resolve().parents[1] / "config" / "robot.sim.yaml")
+    assert calibrate.main(["--config", config, "show"]) == 0
+    assert "LF.coxa" in capsys.readouterr().out
