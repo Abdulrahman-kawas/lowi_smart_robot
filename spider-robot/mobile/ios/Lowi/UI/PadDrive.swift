@@ -51,6 +51,7 @@ struct Sidebar: View {
                 surroundings
                 robot
                 photo
+                talk
                 events
                 InputHints()
             }
@@ -62,6 +63,7 @@ struct Sidebar: View {
                 }
                 VStack(spacing: 14) {
                     photo
+                    talk
                     events
                     InputHints()
                 }
@@ -86,6 +88,10 @@ struct Sidebar: View {
 
     private var photo: some View {
         SideCard(title: "Photo", systemImage: "camera") { PhotoPanel() }
+    }
+
+    private var talk: some View {
+        SideCard(title: "Talk", systemImage: "mic") { TalkPanel() }
     }
 
     private var events: some View {

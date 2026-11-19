@@ -17,6 +17,7 @@ import random
 import re
 import shutil
 import subprocess
+import wave
 
 from .config import Settings
 
@@ -48,8 +49,12 @@ class VoiceService:
     def _gemini(self):
         if self._client is None:
             from google import genai
+            from google.genai import types
 
-            self._client = genai.Client(api_key=self.settings.gemini_api_key or None)
+            # v1beta: with google-genai 3.0.0 the default API version rejects speech_config
+            # ("Unknown name speechConfig", HTTP 400), so every Gemini TTS call failed.
+            self._client = genai.Client(api_key=self.settings.gemini_api_key or None,
+                                        http_options=types.HttpOptions(api_version="v1beta"))
         return self._client
 
     # ------------------------------------------------------------------ hear
@@ -123,6 +128,39 @@ class VoiceService:
             return mp3, "mp3"
         except Exception as exc:  # gTTS is an unofficial endpoint: text only then
             log.warning("TTS failed, text only: %s", exc)
+            return None
+
+    def _speak_wav_sync(self, text: str, voice_name: str) -> bytes:
+        from google.genai import types
+
+        resp = self._gemini().models.generate_content(
+            model=self.settings.gemini_tts_model,
+            contents=f"Say naturally, warmly, and conversationally: {text}",
+            config=types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name))),
+            ),
+        )
+        pcm = resp.candidates[0].content.parts[0].inline_data.data  # 24 kHz, mono, 16-bit
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(24_000)
+            out.writeframes(pcm)
+        return buf.getvalue()
+
+    async def speak_wav(self, text: str, voice_name: str, timeout_s: float = 25.0) -> bytes | None:
+        """Gemini TTS as a WAV the phone can play (no ffmpeg). None when it fails or times out."""
+        text = text.strip()
+        if not text or not self.available:
+            return None
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self._speak_wav_sync, text[:1500], voice_name), timeout_s)
+        except Exception as exc:
+            log.warning("Gemini TTS for the app failed: %r", exc)
             return None
 
     async def speak(self, text: str) -> tuple[bytes, str] | None:

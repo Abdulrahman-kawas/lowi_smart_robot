@@ -77,6 +77,9 @@ final class FakeBrainProtocol: URLProtocol {
         case "/v1/confirm": ["result": "cancelled", "detail": ""]
         case "/v1/photo": ["frame_jpeg": Self.jpegBase64,
                            "answer": "An orange box, about a metre ahead.", "vision_error": NSNull()]
+        case "/v1/talk": ["heard": "What is in front of you?",
+                          "reply": "An orange box, about a metre ahead.", "action": "answer",
+                          "provider": "fake", "elapsed_ms": 850]
         default: ["detail": "not faked"]
         }
         if body["detail"] as? String == "not faked" { status = 404 }

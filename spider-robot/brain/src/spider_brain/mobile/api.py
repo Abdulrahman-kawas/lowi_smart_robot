@@ -6,6 +6,8 @@ Reach it only through `tailscale serve`. Every route but /v1/hello and /v1/pair 
 """
 
 import asyncio
+import base64
+import binascii
 import contextlib
 import json
 from typing import Annotated, Literal
@@ -16,6 +18,7 @@ from pydantic import BaseModel, Field
 from ..robot_client import ConfirmRefused, RobotOffline
 from .devices import RateLimited, clean_name
 from .hub import API_VERSION, Busy, MobileHub, Session
+from .talk import TalkError
 
 AUTH_TIMEOUT_S = 5.0
 SOCKET_SILENCE_S = 3.0  # the app sends a heartbeat every second
@@ -39,6 +42,12 @@ class WakeBody(BaseModel):
 
 class PhotoBody(BaseModel):
     question: str | None = Field(None, max_length=500)
+
+
+class TalkBody(BaseModel):
+    # 16 kHz mono 16-bit WAV: 60 s (the highest SB_TALK_MAX_S) is 1.92 MB, 2.56 MB in base64
+    audio_b64: str = Field(min_length=8, max_length=2_600_000)
+    mime: Literal["audio/wav", "audio/x-wav", "audio/wave"] = "audio/wav"
 
 
 def build_router(hub: MobileHub) -> APIRouter:
@@ -123,6 +132,18 @@ def build_router(hub: MobileHub) -> APIRouter:
             raise HTTPException(503, f"robot offline: {exc}") from exc
         except (TimeoutError, RuntimeError) as exc:
             raise HTTPException(504, f"no camera frame: {exc or 'timed out'}") from exc
+
+    @router.post("/talk")
+    async def talk(who: Device, body: TalkBody) -> dict:
+        """Hold to talk: speech in, a text answer out. A stop word sends STOP; nothing moves."""
+        try:
+            audio = base64.b64decode(body.audio_b64, validate=True)
+        except binascii.Error as exc:
+            raise HTTPException(400, "audio_b64 is not valid base64") from exc
+        try:
+            return await hub.talk.run(who, audio)
+        except TalkError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
 
     @router.websocket("/live")
     async def live(socket: WebSocket) -> None:

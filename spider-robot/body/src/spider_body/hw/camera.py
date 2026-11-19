@@ -46,10 +46,17 @@ def encode_jpeg(frame_bgr: np.ndarray, quality: int, max_bytes: int) -> bytes:
 
 
 class OpenCvCamera:
+    # A V4L2 queue stops filling once it is full, so after an idle gap the queued frames are as old
+    # as the gap: on the Brave 7 LE a 20 s pause gave a 20 s old "snapshot". snapshot() therefore
+    # grabs until the driver's timestamp (CLOCK_MONOTONIC) is later than the request.
+    FRESH_TIMEOUT_S = 1.0
+    MAX_GRABS = 10
+
     def __init__(self, cfg: CameraCfg) -> None:
         self.cfg = cfg
         self._cap = None
         self._lock = threading.Lock()
+        self._warned_stamps = False
 
     def _open(self):
         import cv2
@@ -58,17 +65,43 @@ class OpenCvCamera:
             cap = cv2.VideoCapture(self.cfg.device, cv2.CAP_V4L2)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # fewer stale frames to skip; some ignore it
             if not cap.isOpened():
-                raise RuntimeError(f"cannot open camera /dev/video{self.cfg.device}")
+                dev = self.cfg.device
+                name = dev if isinstance(dev, str) else f"/dev/video{dev}"
+                raise RuntimeError(f"cannot open camera {name}")
             self._cap = cap
         return self._cap
+
+    def _grab_fresh(self, cap) -> None:
+        """Grab until the current frame was captured after this call started."""
+        import cv2
+
+        asked_ms = time.clock_gettime(time.CLOCK_MONOTONIC) * 1000.0
+        deadline = time.monotonic() + self.FRESH_TIMEOUT_S
+        for _ in range(self.MAX_GRABS):
+            if not cap.grab():
+                raise RuntimeError("camera read failed")
+            stamp = cap.get(cv2.CAP_PROP_POS_MSEC)
+            now_ms = time.clock_gettime(time.CLOCK_MONOTONIC) * 1000.0
+            if asked_ms <= stamp <= now_ms + 1000.0:  # captured after the request, same clock
+                return
+            if time.monotonic() > deadline:
+                break
+        # No usable timestamp (zero, or another clock). The grabs above have drained the queue, so
+        # the current frame is recent, but say so once.
+        if not self._warned_stamps:
+            self._warned_stamps = True
+            log.warning("camera gives no CLOCK_MONOTONIC frame timestamps; freshness not proven")
 
     def snapshot(self) -> bytes:
         with self._lock:
             cap = self._open()
-            for _ in range(3):  # drop buffered (old) frames
-                cap.grab()
-            ok, frame = cap.read()
+            try:
+                self._grab_fresh(cap)
+                ok, frame = cap.retrieve()
+            except RuntimeError:
+                ok = False
             if not ok:
                 self._cap = None
                 raise RuntimeError("camera read failed")

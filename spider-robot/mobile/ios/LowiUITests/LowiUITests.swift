@@ -131,6 +131,17 @@ final class StopEverywhereTests: XCTestCase {
             pressStop("stop.photo", on: "Photo, after the answer")
             app.buttons["closePhoto"].tap()
             waitGone("stop.photo")
+
+            app.buttons["talk"].tap()
+            pressStop("stop.talk", on: "Talk")
+            let talk = app.buttons["talkButton"]
+            XCTAssertTrue(talk.waitForExistence(timeout: 5))
+            talk.press(forDuration: 1.0)  // hold, then release: the fake brain answers
+            XCTAssertTrue(app.descendants(matching: .any)["talkReply"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["talkHeard"].exists)
+            pressStop("stop.talk", on: "Talk, after the answer")
+            app.buttons["closeTalk"].tap()
+            waitGone("stop.talk")
         } else {  // iPad: a panel next to the camera
             XCTAssertTrue(app.buttons["takePhoto"].waitForExistence(timeout: 5))
             app.buttons["takePhoto"].tap()
@@ -143,6 +154,12 @@ final class StopEverywhereTests: XCTestCase {
             }
             XCTAssertTrue(app.descendants(matching: .any)["radar"].exists)
             pressStop("stop", on: "Drive with the photo answer")
+            let talk = app.buttons["talkButton"]
+            XCTAssertTrue(talk.waitForExistence(timeout: 5))
+            talk.press(forDuration: 1.0)
+            XCTAssertTrue(app.descendants(matching: .any)["talkReply"].waitForExistence(timeout: 5),
+                          "no answer in the iPad talk panel")
+            pressStop("stop", on: "Drive with the talk answer")
         }
 
         app.buttons["release"].tap()
@@ -294,6 +311,17 @@ final class AccessibilityAuditTests: XCTestCase {
             Thread.sleep(forTimeInterval: 1.5)
         }
 
+        if app.buttons["talk"].exists {
+            app.buttons["talk"].tap()
+            XCTAssertTrue(app.descendants(matching: .any)["stop.talk"].waitForExistence(timeout: 5))
+            try audit(app, "Talk")
+            app.buttons["talkButton"].press(forDuration: 1.0)
+            XCTAssertTrue(app.descendants(matching: .any)["talkReply"].waitForExistence(timeout: 5))
+            try audit(app, "Talk, with an answer")
+            app.buttons["closeTalk"].tap()
+            Thread.sleep(forTimeInterval: 1.5)
+        }
+
         app.buttons["release"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["holdToConfirm"].waitForExistence(timeout: 5))
         try audit(app, "E-stop release")
@@ -320,7 +348,7 @@ final class AccessibilityAuditTests: XCTestCase {
                 if issue.auditType == .contrast, let element, !element.isEnabled {
                     return "disabled controls are exempt from contrast rules"
                 }
-                if issue.auditType == .contrast, ["Settings", "Photo"].contains(label),
+                if issue.auditType == .contrast, ["Settings", "Photo", "Talk"].contains(label),
                    ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 18 {
                     // Measured in the iOS 17.5 screenshot: white on the solid #161D27 bar, 16.9:1.
                     return "iOS 17's audit misreads the sheet title; its measured contrast is 16.9:1"
@@ -344,7 +372,7 @@ final class AccessibilityAuditTests: XCTestCase {
                     return "the drive HUD grows only to the first accessibility size, so the camera keeps its room"
                 }
                 if label == "STOP" { return "STOP grows with the text size up to 140 pt" }
-                if id == "closeSettings" || id == "closePhoto" { return "a system toolbar button" }
+                if ["closeSettings", "closePhoto", "closeTalk"].contains(id) { return "a system toolbar button" }
                 if label.hasPrefix("Photo taken") { return "the caption on the photo is capped like the HUD" }
                 return nil
             }()

@@ -18,5 +18,5 @@ for user in "$ROBOT_ID" spider-gateway spider-voice spider-camera spider-recorde
   fi
   sudo mosquitto_passwd -b "$PW" "$user" "$(sudo cat "$file")"
 done
-sudo chown root:mosquitto "$PW"
+sudo chown mosquitto:mosquitto "$PW"  # mosquitto 2.0.16+ warns otherwise, later versions refuse
 sudo chmod 640 "$PW"

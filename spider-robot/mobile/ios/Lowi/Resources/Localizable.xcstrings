@@ -97,6 +97,16 @@
         }
       }
     },
+    "Allow the microphone, then hold the button again.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクを許可してから、もう一度ボタンを押し続けてください。"
+          }
+        }
+      }
+    },
     "App in the background": {
       "localizations": {
         "ja": {
@@ -437,6 +447,26 @@
         }
       }
     },
+    "Hold the button a little longer while you speak.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話している間、もう少し長くボタンを押してください。"
+          }
+        }
+      }
+    },
+    "Hold the button while you speak. Talking never moves the robot; say “stop” to stop it.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話している間、ボタンを押し続けてください。会話でロボットが動くことはありません。「ストップ」と言うと止まります。"
+          }
+        }
+      }
+    },
     "Hold to release": {
       "localizations": {
         "ja": {
@@ -453,6 +483,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "長押しで立ち上がる"
+          }
+        }
+      }
+    },
+    "Hold to talk": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "押して話す"
+          }
+        }
+      }
+    },
+    "Hold while you speak and release to send. With VoiceOver, double-tap to start and double-tap again to send.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話している間押し続け、離すと送信します。VoiceOver では、ダブルタップで開始し、もう一度ダブルタップで送信します。"
+          }
+        }
+      }
+    },
+    "I did not hear anything. Hold the button and speak.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "何も聞こえませんでした。ボタンを押しながら話してください。"
           }
         }
       }
@@ -537,6 +597,16 @@
         }
       }
     },
+    "Listening… release to send": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞いています… 離すと送信します"
+          }
+        }
+      }
+    },
     "Live view": {
       "localizations": {
         "ja": {
@@ -553,6 +623,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mac"
+          }
+        }
+      }
+    },
+    "Microphone access is off. Turn it on for Lowi in iOS Settings.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクへのアクセスがオフです。iOS の設定で Lowi のマイクをオンにしてください。"
           }
         }
       }
@@ -629,6 +709,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "画像認識から回答がありません：%@"
+          }
+        }
+      }
+    },
+    "No answer is available right now.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在、回答できません。"
+          }
+        }
+      }
+    },
+    "No answer right now: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在回答できません：%@"
           }
         }
       }
@@ -843,6 +943,16 @@
         }
       }
     },
+    "Release to send": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "離して送信"
+          }
+        }
+      }
+    },
     "Release…": {
       "localizations": {
         "ja": {
@@ -913,6 +1023,16 @@
         }
       }
     },
+    "Send what you said": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話した内容を送信"
+          }
+        }
+      }
+    },
     "Settings": {
       "localizations": {
         "ja": {
@@ -939,6 +1059,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "座る"
+          }
+        }
+      }
+    },
+    "Speak answers": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回答を読み上げる"
           }
         }
       }
@@ -1043,6 +1173,16 @@
         }
       }
     },
+    "Talk": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話す"
+          }
+        }
+      }
+    },
     "Test connection": {
       "localizations": {
         "ja": {
@@ -1059,6 +1199,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "アドレスの形式ではありません。"
+          }
+        }
+      }
+    },
+    "That was too long. Keep it under 30 seconds.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長すぎます。30秒以内にしてください。"
           }
         }
       }
@@ -1113,6 +1263,26 @@
         }
       }
     },
+    "The microphone could not start.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクを開始できませんでした。"
+          }
+        }
+      }
+    },
+    "The recording could not be read. Try again.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "録音を読み取れませんでした。もう一度お試しください。"
+          }
+        }
+      }
+    },
     "The robot can move again once it is released. Look at the photo: is the area around it clear, and is nobody touching it?": {
       "localizations": {
         "ja": {
@@ -1143,12 +1313,42 @@
         }
       }
     },
+    "The robot is still answering another question. Try again in a moment.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットは別の質問に回答中です。少し待ってからもう一度お試しください。"
+          }
+        }
+      }
+    },
+    "The robot was stopped.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットを停止しました。"
+          }
+        }
+      }
+    },
     "The server's Tailscale name. In the iOS Simulator, use 127.0.0.1.": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "サーバーの Tailscale 名です。iOS シミュレーターでは 127.0.0.1 を使います。"
+          }
+        }
+      }
+    },
+    "Thinking…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "考え中…"
           }
         }
       }
@@ -1269,6 +1469,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "カメラを待っています"
+          }
+        }
+      }
+    },
+    "You said": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなたの発言"
           }
         }
       }

@@ -22,6 +22,7 @@ from ..robot_client import TELEMETRY_STALE_S, RobotOffline
 from .camera import Frame, FrameFeed
 from .devices import DeviceStore, PairingCodes
 from .drive import Caps, DriveControl
+from .talk import TalkService
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -102,6 +103,10 @@ class MobileHub:
         self._state_sent_at = -math.inf
         self._photo = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()
+        stt = getattr(svc, "stt", None)
+        self.talk = TalkService(s, stop=self.stop, estop=self.estop, context=self._talk_context,
+                                engine=stt.engine if stt is not None else None,
+                                voice=getattr(svc, "voice", None))
 
     def start(self) -> list[asyncio.Task]:
         return [asyncio.create_task(self._pump_bus(), name="mobile-bus"),
@@ -147,6 +152,16 @@ class MobileHub:
 
     def stop(self, device: str) -> int:
         return self.drive.stop_all(device)
+
+    def _talk_context(self) -> str:
+        """What a talk answer may know about the robot: a line of facts, never instructions."""
+        st = self.robot.state
+        if st is None:
+            return "Robot state: offline (no telemetry from the body)."
+        near = (f"{st.lidar.nearest_m:.2f} m at {st.lidar.nearest_bearing_deg:+.0f} deg"
+                if st.lidar is not None else "unknown")
+        return (f"Robot state: mode {st.mode}, E-stop {'latched' if st.estop else 'off'}, "
+                f"nearest obstacle {near}.")
 
     def estop(self, device: str) -> int:
         seq = self.robot.estop()

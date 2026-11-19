@@ -36,6 +36,24 @@
           }
         }
       }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "Privacy - Microphone Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lowi records your voice only while you hold the Talk button, and sends it to your robot's brain so the robot can answer you."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lowi は「話す」ボタンを押している間だけ音声を録音し、ロボットが応答できるようにロボットのブレインへ送信します。"
+          }
+        }
+      }
     }
   },
   "version" : "1.3"

@@ -84,7 +84,8 @@ ollama pull "$ROUTER_MODEL"
 
 # Broker: loopback passwords only for now. The Tailscale listener is added once certificates exist.
 sudo install -d /etc/mosquitto/spider
-sudo install -m 644 "$SR/infra/local/acl" /etc/mosquitto/spider/acl
+# Owned by mosquitto and not world-readable: mosquitto 2.0.16+ warns otherwise, later versions refuse.
+sudo install -m 640 -o mosquitto -g mosquitto "$SR/infra/local/acl" /etc/mosquitto/spider/acl
 sudo install -m 644 "$SR/infra/local/mosquitto.conf" /etc/mosquitto/conf.d/spider.conf
 sudo install -m 644 "$SR/infra/pi/mosquitto.service" /etc/systemd/system/mosquitto.service
 ROBOT_ID="$ROBOT_ID" bash "$SR/infra/pi/mqtt_passwords.sh"

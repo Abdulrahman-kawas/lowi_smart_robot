@@ -35,6 +35,7 @@ final class AppModel {
     var addressText: String { didSet { defaults.set(addressText, forKey: Keys.address) } }
     var deviceName: String { didSet { defaults.set(deviceName, forKey: Keys.device) } }
     var hapticsOn: Bool { didSet { defaults.set(hapticsOn, forKey: Keys.haptics) } }
+    var speakAnswers: Bool { didSet { defaults.set(speakAnswers, forKey: Keys.speak) } }
     private(set) var token: String?
 
     // MARK: live state
@@ -87,11 +88,13 @@ final class AppModel {
     @ObservationIgnored private var eventCounter = 0
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored let clock: @Sendable () -> TimeInterval
+    @ObservationIgnored let speaker = Speaker()  // here, so an answer keeps playing after a sheet closes
 
     private enum Keys {
         static let address = "brainAddress"
         static let device = "deviceName"
         static let haptics = "haptics"
+        static let speak = "speakAnswers"
         static let token = "deviceToken"
     }
 
@@ -106,6 +109,7 @@ final class AppModel {
         addressText = defaults.string(forKey: Keys.address) ?? ""
         deviceName = defaults.string(forKey: Keys.device) ?? UIDevice.current.name
         hapticsOn = defaults.object(forKey: Keys.haptics) as? Bool ?? true
+        speakAnswers = defaults.object(forKey: Keys.speak) as? Bool ?? true
         token = Keychain.read(Keys.token)
         socket.onStatus = { [weak self] status in self?.linkChanged(status) }
         socket.onMessage = { [weak self] message in self?.handle(message) }
@@ -239,6 +243,22 @@ final class AppModel {
     func takePhoto(question: String?) async throws -> PhotoResult {
         guard let api, isPaired else { throw APIError.unauthorized(String(localized: "Not paired")) }
         return try await api.photo(question: question)
+    }
+
+    /// Sends what the owner said and returns the brain's answer. The reply is shown and spoken
+    /// only; nothing here sends motion. A stop word was already acted on by the brain.
+    func talk(wav: Data) async throws -> TalkReply {
+        guard let api, isPaired else { throw APIError.unauthorized(String(localized: "Not paired")) }
+        let reply = try await api.talk(wav: wav)
+        if reply.stoppedRobot, hapticsOn { Haptics.stop() }
+        if speakAnswers {
+            if let audio = reply.audio, speaker.play(audio) {
+                // Lowi's own voice from the brain
+            } else {
+                speaker.say(reply.reply)
+            }
+        }
+        return reply
     }
 
     // MARK: confirmed actions

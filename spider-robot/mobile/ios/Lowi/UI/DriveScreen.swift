@@ -9,6 +9,7 @@ struct DriveScreen: View {
     @Environment(\.verticalSizeClass) private var heightClass
     @State private var showSettings = false
     @State private var showPhoto = false
+    @State private var showTalk = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.2)) { _ in
@@ -18,17 +19,20 @@ struct DriveScreen: View {
                 PadDriveLayout(now: now, block: block, showSettings: $showSettings)
             } else {
                 CameraStage(now: now, block: block, showSettings: $showSettings,
-                            showPhoto: $showPhoto, compact: true)
+                            showPhoto: $showPhoto, showTalk: $showTalk, compact: true)
             }
         }
         .onAppear { model.driveScreenVisible = true }
         .onDisappear { model.driveScreenVisible = false }
-        .onChange(of: showSettings || showPhoto) { _, open in model.sheetOpen = open }
+        .onChange(of: showSettings || showPhoto || showTalk) { _, open in model.sheetOpen = open }
         .sheet(isPresented: $showSettings) {
             SettingsView().environment(model)
         }
         .sheet(isPresented: $showPhoto) {
             PhotoSheet().environment(model)
+        }
+        .sheet(isPresented: $showTalk) {
+            TalkSheet().environment(model)
         }
     }
 }
@@ -41,6 +45,7 @@ struct CameraStage: View {
     var block: DriveBlock?
     @Binding var showSettings: Bool
     var showPhoto: Binding<Bool>? = nil
+    var showTalk: Binding<Bool>? = nil
     var compact: Bool
 
     var body: some View {
@@ -55,7 +60,8 @@ struct CameraStage: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
             VStack(spacing: 8) {
-                TopBar(now: now, showSettings: $showSettings, showPhoto: showPhoto)
+                TopBar(now: now, showSettings: $showSettings, showPhoto: showPhoto,
+                       showTalk: showTalk)
                 if let limiter = model.brain?.robot?.limiter, !limiter.isEmpty {
                     Chip(tint: Theme.amber, wraps: true) {
                         Image(systemName: "tortoise.fill")
@@ -139,6 +145,7 @@ struct TopBar: View {
     var now: TimeInterval
     @Binding var showSettings: Bool
     var showPhoto: Binding<Bool>? = nil
+    var showTalk: Binding<Bool>? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -203,6 +210,11 @@ struct TopBar: View {
             if let showPhoto {
                 RoundIconButton(systemImage: "camera.viewfinder", label: "Photo", id: "photo") {
                     showPhoto.wrappedValue = true
+                }
+            }
+            if let showTalk {
+                RoundIconButton(systemImage: "mic.fill", label: "Talk", id: "talk") {
+                    showTalk.wrappedValue = true
                 }
             }
             RoundIconButton(systemImage: "gearshape.fill", label: "Settings", id: "settings") {
