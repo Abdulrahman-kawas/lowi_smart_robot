@@ -104,8 +104,8 @@ class PcaServoBank:
             f"{leg.name}.{j}": getattr(leg, j) for leg in cfg.legs for j in JOINTS
         }
 
-    def _pulse(self, deg: float) -> float:
-        return self.cfg.pulse.pulse_us(deg)
+    def _pulse(self, s: ServoCfg, deg: float) -> float:
+        return self.cfg.pulse_of(s).pulse_us(deg)
 
     def write(self, servo_deg: dict[str, float]) -> None:
         """Only channels whose 12-bit value changed are sent; at most one transfer per board.
@@ -118,7 +118,7 @@ class PcaServoBank:
             s = self.servos[joint_id]
             deg, _ = clamp_servo(s, deg)
             board = self.boards[s.board]
-            t = board.to_ticks(self._pulse(deg))
+            t = board.to_ticks(self._pulse(s, deg))
             if board.ticks[s.channel] != t:
                 changes.setdefault(s.board, {})[s.channel] = t
         for b, ch in changes.items():
@@ -127,7 +127,7 @@ class PcaServoBank:
     def write_raw(self, joint_id: str, deg: float) -> None:
         """Calibration only: no trims, no direction, only the 0..180 clamp."""
         s = self.servos[joint_id]
-        self.boards[s.board].set_pulse_us(s.channel, self._pulse(max(0.0, min(180.0, deg))))
+        self.boards[s.board].set_pulse_us(s.channel, self._pulse(s, max(0.0, min(180.0, deg))))
 
     def relax(self) -> None:
         for board in self.boards:
@@ -186,14 +186,14 @@ class SscServoBank:
         self._pending: dict[int, int] = {}
         self._last_send = -1e9
 
-    def _us(self, deg: float) -> int:
-        return int(round(self.cfg.pulse.pulse_us(deg)))
+    def _us(self, s: ServoCfg, deg: float) -> int:
+        return int(round(self.cfg.pulse_of(s).pulse_us(deg)))
 
     def write(self, servo_deg: dict[str, float]) -> None:
         for joint_id, deg in servo_deg.items():
             s = self.servos[joint_id]
             deg, _ = clamp_servo(s, deg)
-            us = self._us(deg)
+            us = self._us(s, deg)
             if self._sent.get(s.channel) != us:
                 self._pending[s.channel] = us
             else:
@@ -216,7 +216,7 @@ class SscServoBank:
     def write_raw(self, joint_id: str, deg: float) -> None:
         """Calibration only: no trims, no direction, only the 0..180 clamp; sent at once."""
         s = self.servos[joint_id]
-        self._send({s.channel: self._us(max(0.0, min(180.0, deg)))}, None)
+        self._send({s.channel: self._us(s, max(0.0, min(180.0, deg)))}, None)
 
     def relax(self) -> None:
         """P0 stops the pulses on a channel (servo goes limp). Verify on the bench (S13)."""

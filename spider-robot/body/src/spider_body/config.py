@@ -81,6 +81,10 @@ class ServoCfg(_M):
     trim_deg: float = 0.0
     min_deg: float = 10.0  # mechanical limits in servo degrees
     max_deg: float = 170.0
+    # This servo's own pulse range, for one servo that differs from the rest (a 180-degree
+    # servo among 270-degree ones). None = the shared `pulse`. Logical degrees keep their
+    # meaning either way.
+    pulse: PulseCfg | None = None
 
 
 class LegCfg(_M):
@@ -225,7 +229,7 @@ class BodyConfig(_M):
     robot_id: str = "spider-01"
     mqtt: MqttCfg
     servo_driver: Literal["ssc32u", "pca9685"] = "ssc32u"
-    pulse: PulseCfg = Field(default_factory=PulseCfg)
+    pulse: PulseCfg = Field(default_factory=PulseCfg)  # every servo, unless it has its own
     ssc: SscCfg = Field(default_factory=SscCfg)
     pca: PcaCfg = Field(default_factory=PcaCfg)
     geometry: GeometryCfg = Field(default_factory=GeometryCfg)
@@ -242,6 +246,10 @@ class BodyConfig(_M):
     estop_latch_path: str | None = None
     state_hz: float = 4.0
     legs: list[LegCfg]
+
+    def pulse_of(self, servo: ServoCfg) -> PulseCfg:
+        """The pulse range this servo really uses: its own, or the shared one."""
+        return servo.pulse or self.pulse
 
     @model_validator(mode="after")
     def _check_safety(self) -> BodyConfig:
