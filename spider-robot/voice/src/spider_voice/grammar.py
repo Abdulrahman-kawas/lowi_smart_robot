@@ -21,6 +21,7 @@ MOVE_ACTS = frozenset({
     "dance", "wave", "bow", "reach", "attack_stance", "defense_stance", "alert", "sleep",
     "celebrate", "hi", "offer_hand",
 })
+LOOK_ACTS = frozenset({"look_left", "look_right", "look_center"})
 ROUTER_ACTS = ("forward", "back", "left", "right", "stop", "look", "none")
 
 LEXICON: dict[str, tuple[str, ...]] = {
@@ -31,6 +32,11 @@ LEXICON: dict[str, tuple[str, ...]] = {
     "stand": ("قوم", "انهض", "stand"),
     "sit": ("اقعد", "اجلس", "sit"),
     "look": ("شوف", "انظر", "بص", "look", "see"),
+    "look_left": ("شوف يسار", "شوف شمال", "شوف لليسار", "شوف عاليسار", "انظر يسار",
+                  "بص يسار", "look left"),
+    "look_right": ("شوف يمين", "شوف لليمين", "شوف عاليمين", "انظر يمين", "بص يمين",
+                   "look right"),
+    "look_center": ("شوف قدام", "شوف لقدام", "انظر قدام", "بص قدام", "look ahead"),
     "dance": ("ارقص", "dance"),
     "wave": ("سلّم", "باي"),
     "bow": ("انحني",),
@@ -52,6 +58,9 @@ CANNED_SAY = {
     "stand": "حاضر",
     "sit": "حاضر",
     "look": "لحظة أشوف",
+    "look_left": "أكيد",
+    "look_right": "أكيد",
+    "look_center": "أكيد",
     # never a word of the lexicon or a stop word: the robot must not command itself
     "dance": "يلا",
     "wave": "مع السلامة",

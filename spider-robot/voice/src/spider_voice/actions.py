@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from spider_common.protocol import Command, Move, Perform, Posture, Reach
+from spider_common.protocol import Command, Look, Move, Perform, Posture, Reach
 
 from .config import MotionCfg
 from .grammar import MOVE_ACTS
@@ -24,6 +24,12 @@ def to_command(act: str, m: MotionCfg) -> Command | None:
         return Posture(posture="sit")
     if act == "reach":
         return Reach(target="nearest", speed=m.move_speed)
+    if act == "look_left":
+        return Look(pan_deg=m.look_deg, speed=m.look_speed)
+    if act == "look_right":
+        return Look(pan_deg=-m.look_deg, speed=m.look_speed)
+    if act == "look_center":
+        return Look(pan_deg=0.0, speed=m.look_speed)
     if act in MOVE_ACTS:  # the act names are the body's move names
         return Perform(name=act, speed=m.move_speed)
     return None
