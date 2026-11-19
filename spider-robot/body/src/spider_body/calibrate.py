@@ -3,6 +3,9 @@
   spider-calibrate check       controller answers? (SSC-32U: prints its firmware version)
   spider-calibrate center      all 18 servos to raw 90 deg: now attach the horns so that
                                coxa points straight out, femur is horizontal, tibia is vertical
+  spider-calibrate center --leg LF [--leg LM ...] [--seconds 3]
+                               the same, one leg at a time and one joint at a time (Enter
+                               between joints), each gliding to the middle over --seconds
   spider-calibrate trim        fine-tune each joint around that neutral pose
   spider-calibrate direction   find which servos are mounted mirrored
   spider-calibrate pose sit|stand   check the result with real IK
@@ -14,6 +17,8 @@ Results go to config/calibration.yaml (loaded automatically next to robot.yaml).
 from __future__ import annotations
 
 import argparse
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from spider_common.link import InMemoryHub
@@ -35,12 +40,40 @@ def _joint_ids(cfg: BodyConfig) -> list[str]:
     return [f"{leg.name}.{j}" for leg in cfg.legs for j in JOINTS]
 
 
-def cmd_center(cfg: BodyConfig, bank) -> None:
-    for jid in _joint_ids(cfg):
-        bank.write_raw(jid, 90.0)
-    print("All servos at raw 90 deg. Attach horns: coxa straight out from the body, femur "
-          "horizontal, tibia vertical. Press Enter to relax.")
-    input()
+FIRST_MOVE = ("Legs in the air. The first move after the servo board powers up can go at full "
+              "speed (the board does not know where a servo is yet): turn each joint near its "
+              "middle by hand first.")
+
+
+def cmd_center(cfg: BodyConfig, bank, legs: list[str] | None = None, seconds: float = 2.0,
+               ask: Callable[[str], str] = input,
+               wait: Callable[[float], None] = time.sleep) -> None:
+    """Raw 90 deg (the pulse centre) on every joint, or one leg at a time: coxa, femur, tibia,
+    each after Enter and gliding over `seconds`, then that leg relaxes."""
+    t_ms = int(round(seconds * 1000)) or None
+    if not legs:
+        for jid in _joint_ids(cfg):
+            bank.write_raw(jid, 90.0, t_ms)
+        print("All servos at raw 90 deg. Attach horns: coxa straight out from the body, femur "
+              "horizontal, tibia vertical. Press Enter to relax.")
+        ask("")
+        bank.relax()
+        return
+    print(FIRST_MOVE)
+    for name in legs:
+        leg = next(leg for leg in cfg.legs if leg.name == name)
+        jids = [f"{name}.{j}" for j in JOINTS]
+        chans = ", ".join(f"{j} {getattr(leg, j).channel}" for j in JOINTS)
+        print(f"{name}: {chans}")
+        for jid in jids:
+            joint = jid.split(".")[1]
+            ask(f"{jid} (channel {getattr(leg, joint).channel}): Enter to move it to the "
+                f"middle over {seconds:g} s ")
+            bank.write_raw(jid, 90.0, t_ms)
+            wait(seconds)
+        ask(f"{name} at raw 90 deg. Attach its horns: coxa straight out, femur horizontal, "
+            f"tibia vertical. Enter to relax {name} ")
+        bank.relax_joints(jids)
     bank.relax()
 
 
@@ -100,7 +133,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", default="config/robot.yaml")
     p.add_argument("action", choices=["check", "center", "trim", "direction", "pose", "relax"])
     p.add_argument("pose", nargs="?", default="stand", choices=["stand", "sit"])
+    p.add_argument("--leg", action="append", choices=["LF", "LM", "LR", "RF", "RM", "RR"],
+                   help="center: only this leg, joint by joint (repeat for more legs, in order)")
+    p.add_argument("--seconds", type=float, default=2.0,
+                   help="center: time each joint takes to glide to the middle (SSC-32U)")
     args = p.parse_args(argv)
+    if not 0.0 <= args.seconds <= 10.0:
+        p.error("--seconds must be between 0 and 10")
     cfg = load_config(args.config)
     out = Path(args.config).with_name("calibration.yaml")
     bank = make_servo_bank(cfg)
@@ -111,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("PCA9685 boards initialised on I2C")
         elif args.action == "center":
-            cmd_center(cfg, bank)
+            cmd_center(cfg, bank, args.leg, args.seconds)
         elif args.action == "trim":
             cmd_trim(cfg, bank, out)
         elif args.action == "direction":
