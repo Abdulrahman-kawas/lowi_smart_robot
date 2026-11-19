@@ -1,0 +1,1564 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "%@ is driving": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ が操作中"
+          }
+        }
+      }
+    },
+    "%@ m": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ m"
+          }
+        }
+      }
+    },
+    "%@ m/s, %@ °/s": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ m/s, %2$@ °/s"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ m/s・%2$@ °/s"
+          }
+        }
+      }
+    },
+    "%@ s old": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 秒前"
+          }
+        }
+      }
+    },
+    "%@: left stick drives, right stick turns, B stops, Y E-stops": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@：左スティックで移動、右スティックで旋回、B で停止、Y で非常停止"
+          }
+        }
+      }
+    },
+    "%lld ms": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ms"
+          }
+        }
+      }
+    },
+    "1. Brain address": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. ブレインのアドレス"
+          }
+        }
+      }
+    },
+    "123456": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "123456"
+          }
+        }
+      }
+    },
+    "2. Pair this device": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. このデバイスをペアリング"
+          }
+        }
+      }
+    },
+    "App in the background": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリがバックグラウンドにあります"
+          }
+        }
+      }
+    },
+    "Ask about the photo (optional)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真について質問（任意）"
+          }
+        }
+      }
+    },
+    "Brain": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレイン"
+          }
+        }
+      }
+    },
+    "Brain address": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレインのアドレス"
+          }
+        }
+      }
+    },
+    "Brain ↔ robot": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレイン ↔ ロボット"
+          }
+        }
+      }
+    },
+    "Camera frame": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラ画像"
+          }
+        }
+      }
+    },
+    "Camera frame %@ s old": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラ画像が %@ 秒前のものです"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンセル"
+          }
+        }
+      }
+    },
+    "Close the window on top to drive": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作するには上の画面を閉じてください"
+          }
+        }
+      }
+    },
+    "Connect to Lowi": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lowi に接続"
+          }
+        }
+      }
+    },
+    "Controller": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントローラー"
+          }
+        }
+      }
+    },
+    "Device name": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デバイス名"
+          }
+        }
+      }
+    },
+    "Dismisses the message": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージを閉じます"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完了"
+          }
+        }
+      }
+    },
+    "Double-tap and hold until it fills.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダブルタップしたまま、いっぱいになるまで押し続けてください。"
+          }
+        }
+      }
+    },
+    "Drive ended": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作終了"
+          }
+        }
+      }
+    },
+    "Drive joystick": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動用ジョイスティック"
+          }
+        }
+      }
+    },
+    "Drive refused": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作拒否"
+          }
+        }
+      }
+    },
+    "Driving": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作中"
+          }
+        }
+      }
+    },
+    "Driving is off: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作できません：%@"
+          }
+        }
+      }
+    },
+    "E-STOP": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止"
+          }
+        }
+      }
+    },
+    "E-stop": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止"
+          }
+        }
+      }
+    },
+    "E-stop is latched": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止がかかっています"
+          }
+        }
+      }
+    },
+    "E-stop latched": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止中"
+          }
+        }
+      }
+    },
+    "E-stop off": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止なし"
+          }
+        }
+      }
+    },
+    "E-stop released.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止を解除しました。"
+          }
+        }
+      }
+    },
+    "E-stopped": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止中"
+          }
+        }
+      }
+    },
+    "Emergency stop": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止"
+          }
+        }
+      }
+    },
+    "Enter the brain's address first.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にブレインのアドレスを入力してください。"
+          }
+        }
+      }
+    },
+    "Events": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イベント"
+          }
+        }
+      }
+    },
+    "Fallen": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "転倒"
+          }
+        }
+      }
+    },
+    "Forgets the token on this device. To cut it off on the server as well, run `spider-brain devices revoke \"%@\"`.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのトークンを削除します。サーバー側でも無効にするには `spider-brain devices revoke \"%@\"` を実行してください。"
+          }
+        }
+      }
+    },
+    "Haptics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "触覚フィードバック"
+          }
+        }
+      }
+    },
+    "Health": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヘルスチェック"
+          }
+        }
+      }
+    },
+    "Hold to release": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長押しで解除"
+          }
+        }
+      }
+    },
+    "Hold to stand up": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長押しで立ち上がる"
+          }
+        }
+      }
+    },
+    "LIVE": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LIVE"
+          }
+        }
+      }
+    },
+    "Language": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "言語"
+          }
+        }
+      }
+    },
+    "Latches the E-stop. Releasing it needs a fresh photo and a long press.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止をかけます。解除には新しい写真と長押しが必要です。"
+          }
+        }
+      }
+    },
+    "LiDAR": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LiDAR"
+          }
+        }
+      }
+    },
+    "Limiter": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動作制限"
+          }
+        }
+      }
+    },
+    "Link latency %lld milliseconds": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通信遅延 %lld ミリ秒"
+          }
+        }
+      }
+    },
+    "Link lost": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通信断"
+          }
+        }
+      }
+    },
+    "Link to the robot": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットとの接続"
+          }
+        }
+      }
+    },
+    "Live view": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブ映像"
+          }
+        }
+      }
+    },
+    "Mac": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac"
+          }
+        }
+      }
+    },
+    "Mode": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モード"
+          }
+        }
+      }
+    },
+    "Motion limited: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動作制限：%@"
+          }
+        }
+      }
+    },
+    "Motion owner": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動作の制御元"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前"
+          }
+        }
+      }
+    },
+    "Nearest obstacle %@ m, %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Nearest obstacle %1$@ m, %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最も近い障害物 %1$@ m（%2$@）"
+          }
+        }
+      }
+    },
+    "No LiDAR data": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LiDAR のデータがありません"
+          }
+        }
+      }
+    },
+    "No answer from vision: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像認識から回答がありません：%@"
+          }
+        }
+      }
+    },
+    "No link to the brain": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレインと接続されていません"
+          }
+        }
+      }
+    },
+    "Not connected to the brain.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレインに接続されていません。"
+          }
+        }
+      }
+    },
+    "Not paired": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未ペアリング"
+          }
+        }
+      }
+    },
+    "Not paired yet. Say “stop” to the robot or send /estop in Telegram.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだペアリングされていません。ロボットに「stop」と言うか、Telegram で /estop を送ってください。"
+          }
+        }
+      }
+    },
+    "Not paired yet. Say “stop” to the robot or send /stop in Telegram.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだペアリングされていません。ロボットに「stop」と言うか、Telegram で /stop を送ってください。"
+          }
+        }
+      }
+    },
+    "Nothing seen nearby": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近くに障害物はありません"
+          }
+        }
+      }
+    },
+    "Nothing yet": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだありません"
+          }
+        }
+      }
+    },
+    "Obstacle stop": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "障害物で停止"
+          }
+        }
+      }
+    },
+    "On the server, run `spider-brain pair`. Enter the 6-digit code it prints or sends you on Telegram.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバーで `spider-brain pair` を実行し、表示される（または Telegram に届く）6 桁のコードを入力してください。"
+          }
+        }
+      }
+    },
+    "Pair": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリング"
+          }
+        }
+      }
+    },
+    "Pairing code": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングコード"
+          }
+        }
+      }
+    },
+    "Phone ↔ brain": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スマホ ↔ ブレイン"
+          }
+        }
+      }
+    },
+    "Photo": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真"
+          }
+        }
+      }
+    },
+    "Photo from the robot": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットからの写真"
+          }
+        }
+      }
+    },
+    "Photo taken %lld s ago": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 秒前に撮影"
+          }
+        }
+      }
+    },
+    "Photo taken just now": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "たった今撮影"
+          }
+        }
+      }
+    },
+    "Photo the robot took just now": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットがたった今撮った写真"
+          }
+        }
+      }
+    },
+    "Posture sent.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "姿勢の指示を送りました。"
+          }
+        }
+      }
+    },
+    "Refused": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拒否"
+          }
+        }
+      }
+    },
+    "Refused, with no reason given.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "理由なしで拒否されました。"
+          }
+        }
+      }
+    },
+    "Release the E-stop?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非常停止を解除しますか？"
+          }
+        }
+      }
+    },
+    "Release…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解除…"
+          }
+        }
+      }
+    },
+    "Robot": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボット"
+          }
+        }
+      }
+    },
+    "Robot camera": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットのカメラ"
+          }
+        }
+      }
+    },
+    "Robot is %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットは「%@」状態"
+          }
+        }
+      }
+    },
+    "Robot is %@: stand it up first": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットは「%@」状態です。先に立たせてください"
+          }
+        }
+      }
+    },
+    "Robot offline": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットがオフラインです"
+          }
+        }
+      }
+    },
+    "STOP": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
+          }
+        }
+      }
+    },
+    "Shows a fresh photo from the robot, then asks for a long press.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットの新しい写真を表示してから、長押しで確認します。"
+          }
+        }
+      }
+    },
+    "Sit": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "座る"
+          }
+        }
+      }
+    },
+    "Speed": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "速度"
+          }
+        }
+      }
+    },
+    "Stand": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立つ"
+          }
+        }
+      }
+    },
+    "Stand the robot up?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットを立たせますか？"
+          }
+        }
+      }
+    },
+    "Stop the robot": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットを停止"
+          }
+        }
+      }
+    },
+    "Surroundings": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "周囲"
+          }
+        }
+      }
+    },
+    "Tailscale": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tailscale"
+          }
+        }
+      }
+    },
+    "Tailscale is off on this device. Turn it on in the Tailscale app, then test again.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスで Tailscale がオフになっています。Tailscale アプリでオンにしてから、もう一度テストしてください。"
+          }
+        }
+      }
+    },
+    "Take photo": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真を撮る"
+          }
+        }
+      }
+    },
+    "Take photo and ask": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撮影して質問"
+          }
+        }
+      }
+    },
+    "Taken over": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作の割り込み"
+          }
+        }
+      }
+    },
+    "Test connection": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続をテスト"
+          }
+        }
+      }
+    },
+    "That is not an address.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アドレスの形式ではありません。"
+          }
+        }
+      }
+    },
+    "The app follows the language you choose for it in iOS Settings.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリの言語は iOS の設定で選べます。"
+          }
+        }
+      }
+    },
+    "The app talks only to the brain on your home server, over Tailscale.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリは Tailscale 経由で、ホームサーバーのブレインとだけ通信します。"
+          }
+        }
+      }
+    },
+    "The brain answered.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレインから応答がありました。"
+          }
+        }
+      }
+    },
+    "The brain refused it (HTTP %lld).": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレインに拒否されました（HTTP %lld）。"
+          }
+        }
+      }
+    },
+    "The brain sent an answer the app does not understand.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブレインから、アプリが理解できない応答が返ってきました。"
+          }
+        }
+      }
+    },
+    "The robot can move again once it is released. Look at the photo: is the area around it clear, and is nobody touching it?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解除するとロボットは再び動けるようになります。写真を見て、周りに物がなく、誰もロボットに触れていないことを確かめてください。"
+          }
+        }
+      }
+    },
+    "The robot is limp and will push itself up on its legs. Look at the photo: is the area around it clear, and is nobody touching it?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットは脱力していて、脚で体を押し上げて立ち上がります。写真を見て、周りに物がなく、誰もロボットに触れていないことを確かめてください。"
+          }
+        }
+      }
+    },
+    "The robot is limp: standing it up needs a fresh photo and a long press": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットが脱力しています。立たせるには新しい写真と長押しが必要です"
+          }
+        }
+      }
+    },
+    "The server's Tailscale name. In the iOS Simulator, use 127.0.0.1.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバーの Tailscale 名です。iOS シミュレーターでは 127.0.0.1 を使います。"
+          }
+        }
+      }
+    },
+    "This confirmation works once and expires in %lld s.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この確認は 1 回だけ有効で、あと %lld 秒で期限が切れます。"
+          }
+        }
+      }
+    },
+    "This device": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイス"
+          }
+        }
+      }
+    },
+    "This phone is no longer paired with the brain. Pair it again.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この端末とブレインのペアリングが解除されました。もう一度ペアリングしてください。"
+          }
+        }
+      }
+    },
+    "Tilt": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "傾き"
+          }
+        }
+      }
+    },
+    "Touch and hold, then slide left or right to turn. With VoiceOver, use Q and E on a keyboard or the right stick of a game controller.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長押ししたまま左右にスライドすると旋回します。VoiceOver 使用時は、キーボードの Q と E、またはゲームコントローラーの右スティックを使ってください。"
+          }
+        }
+      }
+    },
+    "Touch and hold, then slide to walk forward, back or sideways. With VoiceOver, drive with a keyboard or a game controller.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長押ししたままスライドすると、前後左右に歩きます。VoiceOver 使用時は、キーボードかゲームコントローラーで操作してください。"
+          }
+        }
+      }
+    },
+    "Turn control": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋回コントロール"
+          }
+        }
+      }
+    },
+    "Unpair": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解除する"
+          }
+        }
+      }
+    },
+    "Unpair this device": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのペアリングを解除"
+          }
+        }
+      }
+    },
+    "Unpair this device?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのペアリングを解除しますか？"
+          }
+        }
+      }
+    },
+    "W S forward, back · A D sideways · Q E turn · Space stop · Esc E-stop": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "W S 前後 · A D 左右 · Q E 旋回 · Space 停止 · Esc 非常停止"
+          }
+        }
+      }
+    },
+    "Waiting for the camera": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラを待っています"
+          }
+        }
+      }
+    },
+    "back": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "後ろ"
+          }
+        }
+      }
+    },
+    "back-left": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左後ろ"
+          }
+        }
+      }
+    },
+    "back-right": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右後ろ"
+          }
+        }
+      }
+    },
+    "connecting": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続中"
+          }
+        }
+      }
+    },
+    "fallen": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "転倒"
+          }
+        }
+      }
+    },
+    "frame %@ s old": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像 %@ 秒前"
+          }
+        }
+      }
+    },
+    "front": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前"
+          }
+        }
+      }
+    },
+    "front-left": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左前"
+          }
+        }
+      }
+    },
+    "front-right": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右前"
+          }
+        }
+      }
+    },
+    "latched": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作動中"
+          }
+        }
+      }
+    },
+    "left": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左"
+          }
+        }
+      }
+    },
+    "no frame": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像なし"
+          }
+        }
+      }
+    },
+    "nobody": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "なし"
+          }
+        }
+      }
+    },
+    "none": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "なし"
+          }
+        }
+      }
+    },
+    "not paired": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未ペアリング"
+          }
+        }
+      }
+    },
+    "off": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "なし"
+          }
+        }
+      }
+    },
+    "offline": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン"
+          }
+        }
+      }
+    },
+    "reconnecting (%lld)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再接続中（%lld）"
+          }
+        }
+      }
+    },
+    "relaxed": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "脱力"
+          }
+        }
+      }
+    },
+    "right": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右"
+          }
+        }
+      }
+    },
+    "ring %@ m": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外周 %@ m"
+          }
+        }
+      }
+    },
+    "robot offline": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボット オフライン"
+          }
+        }
+      }
+    },
+    "roll %@°, pitch %@°": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "roll %1$@°, pitch %2$@°"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロール %1$@°・ピッチ %2$@°"
+          }
+        }
+      }
+    },
+    "server.tailnet.ts.net": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "server.tailnet.ts.net"
+          }
+        }
+      }
+    },
+    "sitting": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着座"
+          }
+        }
+      }
+    },
+    "standing": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起立"
+          }
+        }
+      }
+    },
+    "unknown": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明"
+          }
+        }
+      }
+    },
+    "walking": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歩行中"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

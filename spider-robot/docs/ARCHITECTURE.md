@@ -69,6 +69,7 @@ Off by default. It starts only when the owner asks for a LiDAR recording or mapp
 ```
 phone ── Telegram (outbound long polling, no open ports) ─┐
 phone ── tailscale serve ── dashboard ────────────────────┤
+phone ── tailscale serve ── Lowi app API (/v1) ───────────┤
                                                           ▼
                                                     home server
                                                     (brain, vision)
@@ -143,6 +144,7 @@ never speaks MQTT.
 |---|---|---|
 | Telegram | tasks, status, photos, approvals, alerts, E-stop | exists |
 | Dashboard through `tailscale serve` | live supervision; still binds to loopback | exists; serve to configure |
+| Lowi app (iPhone, iPad) through `tailscale serve`, `/v1` on the dashboard port | live view from snapshots (at most 2 frames/s), dead-man driving, photo, E-stop and confirmed release | brain API exists (`brain/src/spider_brain/mobile/`); app to build |
 | SSH over Tailscale to the Pi | maintenance, and the fallback when the server is down | to configure |
 
 Nobody may be near the robot during remote use, so:
@@ -150,6 +152,10 @@ Nobody may be near the robot during remote use, so:
 - Remote motion uses lower speed and duration caps than local voice.
 - Keep autonomy at `guarded`, with approval for longer walks.
 - Releasing an E-stop remotely needs a fresh camera frame and an explicit confirmation.
+- The app drives only while a finger or stick is held: 1 s moves renewed about every 0.4 s, all
+  sent as the `remote` source. The brain stops the robot when renewals stop for 0.6 s or the
+  driving phone's socket drops, and any refusal or safety stop ends the hold until the owner
+  presses again.
 - Only `SB_TELEGRAM_OWNER_IDS` are served, so that Telegram account is effectively the robot's key.
   Turn on two-step verification.
 

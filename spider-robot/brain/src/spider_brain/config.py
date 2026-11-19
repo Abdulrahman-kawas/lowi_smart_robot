@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Autonomy = Literal["autonomous", "guarded", "supervised"]
@@ -146,6 +146,18 @@ class Settings(BaseSettings):
     dashboard_origins: list[str] = Field(default_factory=list)
     run_token_seconds: float = 5.0
 
+    # Mobile app API: /v1 on the dashboard's port, published with `tailscale serve` -------------
+    # Everything the app does goes out as the gateway's "remote" source, so the gateway's remote
+    # caps and the body's limits apply. The values below can only be lower than those caps.
+    mobile: bool = False
+    mobile_data_dir: str = "data/mobile"  # paired devices (token hashes) and the pairing code
+    mobile_max_speed_mps: float = Field(0.05, gt=0.0, le=0.05)
+    mobile_max_wz_rps: float = Field(0.3, gt=0.0, le=0.3)
+    mobile_move_s: float = Field(1.0, gt=0.0, le=1.0)
+    mobile_deadman_s: float = Field(0.6, gt=0.0, le=0.6)  # no drive renewal for this long: stop
+    mobile_max_frame_age_s: float = Field(2.0, gt=0.0, le=2.0)  # no driving on an older frame
+    mobile_pair_code_s: float = Field(120.0, gt=0.0, le=600.0)
+
     @property
     def telegram_enabled(self) -> bool:
         return bool(self.telegram_token and self.telegram_owner_ids)
@@ -154,6 +166,16 @@ class Settings(BaseSettings):
     def approvals_available(self) -> bool:
         """Someone can press Approve: the dashboard or the owner's Telegram."""
         return self.dashboard or self.telegram_enabled
+
+    @model_validator(mode="after")
+    def _mobile_through_gateway(self) -> Settings:
+        source = self.human_source or self.robot_source
+        if self.mobile and source != "remote":
+            raise ValueError(
+                "SB_MOBILE needs the command gateway: set SB_ROBOT_SOURCE=planner and "
+                "SB_HUMAN_SOURCE=remote, so the app is held to the remote caps."
+            )
+        return self
 
     @field_validator("host")
     @classmethod

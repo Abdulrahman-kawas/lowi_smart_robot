@@ -50,6 +50,9 @@ _GLOBAL_STOPPERS = {"tilt", "fallen", "link_lost", "estop", "preempted"}
 # events that stop a motion only when they refer to one of its own Move commands
 _OWN_STOPPERS = {"obstacle_stop", "error", "rejected"}
 TELEMETRY_STALE_S = 1.5
+# The gateway lets the remote source ask for one camera frame per 0.5 s, counting snapshots and
+# confirmation frames together. Asking at 0.6 s leaves room for network jitter.
+CAMERA_GAP_S = 0.6
 COMPASS = [
     ("front", 0), ("front-left", 45), ("left", 90), ("back-left", 135),
     ("back", 180), ("back-right", -135), ("right", -90), ("front-right", -45),
@@ -73,6 +76,7 @@ class Confirmation:
     sha256: str
     ttl_s: float
     jpeg: bytes
+    asked_at: float = 0.0  # monotonic time of the request: the frame cannot be older than this
 
 
 @dataclass
@@ -109,6 +113,13 @@ class RobotClient:
             {self.topics.source_event(s) for s in (source, human_source) if s}
             or {self.topics.event}
         )
+        self.human_source = human_source or source  # None: straight to the body, no gateway
+        # Every frame the remote source asks for, from any caller, shares one gateway allowance.
+        self._camera_topic = self.topics.request("remote") if "remote" in (
+            source, human_source) else None
+        self._camera_lock = asyncio.Lock()
+        self._camera_waiting = 0
+        self._last_camera = -math.inf
         self.handlers: list[tuple[str, Callable[[str, bytes], None]]] = []  # topic filter, handler
         self.bus = bus
         self.state: RobotState | None = None
@@ -145,7 +156,8 @@ class RobotClient:
                 elif msg.topic == self.topics.state:
                     self._on_state(RobotState.model_validate_json(msg.payload))
                 elif msg.topic in self._event_topics:
-                    self._on_event(RobotEvent.model_validate_json(msg.payload))
+                    source = msg.topic.split("/")[-2] if self.via_gateway else None
+                    self._on_event(RobotEvent.model_validate_json(msg.payload), source)
                 elif topic_matches(self.topics.camera_filter, msg.topic):
                     rid = msg.topic.rsplit("/", 1)[-1]
                     fut = self._snapshots.pop(rid, None)
@@ -166,7 +178,7 @@ class RobotClient:
             self._last_bus_state = time.monotonic()
             self.bus.publish("robot_state", state=json.loads(st.model_dump_json()))
 
-    def _on_event(self, ev: RobotEvent) -> None:
+    def _on_event(self, ev: RobotEvent, source: str | None = None) -> None:
         n = next(self._event_no)
         self._last_event_no = n
         self.events.append((n, ev))
@@ -177,7 +189,8 @@ class RobotClient:
             if fut is not None and not fut.done():
                 fut.set_exception(RuntimeError(ev.detail))
         if self.bus is not None:
-            self.bus.publish("robot_event", event=ev.kind, seq=ev.seq, detail=ev.detail)
+            self.bus.publish("robot_event", event=ev.kind, seq=ev.seq, detail=ev.detail,
+                             source=source)
 
     async def heartbeat_loop(self, hz: float) -> None:
         while True:
@@ -211,40 +224,65 @@ class RobotClient:
         ok = self.link.publish(topic, cmd.model_dump_json(), qos=qos)
         return seq if ok else -1
 
-    def stop(self) -> None:
-        self._send(Stop())
+    def stop(self, human: bool = False) -> int:
+        return self._send(Stop(), human=human)
 
-    def cancel_motion(self) -> None:
+    def cancel_motion(self) -> int:
         """Owner pressed Stop/Pause/E-STOP: end the running walk/turn now and stop the robot."""
         self._abort.set()
-        self._send(Stop(), human=True)
+        return self._send(Stop(), human=True)
 
-    def move(self, vx: float, vy: float, wz: float, duration_s: float, gait: str = "tripod") -> int:
+    def move(
+        self, vx: float, vy: float, wz: float, duration_s: float, gait: str = "tripod",
+        human: bool = False,
+    ) -> int:
         """Raw velocity command (teleop). The body clamps it and stops after duration_s."""
-        return self._send(Move(vx=vx, vy=vy, wz=wz, duration_s=duration_s, gait=gait), qos=0)
+        return self._send(Move(vx=vx, vy=vy, wz=wz, duration_s=duration_s, gait=gait), qos=0,
+                          human=human)
 
-    def estop(self) -> None:
-        self._send(EStop(), human=True)
+    def estop(self) -> int:
+        return self._send(EStop(), human=True)
 
-    def estop_release(self, confirmation: Confirmation | None = None) -> None:
+    def estop_release(self, confirmation: Confirmation | None = None) -> int:
         """Through the gateway a release needs a Confirmation, or it is refused."""
         if confirmation is None:
-            self._send(EStopRelease(), human=True)
-        else:
-            self._send(EStopRelease(challenge=confirmation.id, frame_sha256=confirmation.sha256),
-                       human=True)
+            return self._send(EStopRelease(), human=True)
+        return self._send(EStopRelease(challenge=confirmation.id,
+                                       frame_sha256=confirmation.sha256), human=True)
 
-    def posture_confirmed(self, posture: str, confirmation: Confirmation) -> None:
-        self._send(Posture(posture=posture, challenge=confirmation.id,
-                           frame_sha256=confirmation.sha256), human=True)
+    def posture_confirmed(self, posture: str, confirmation: Confirmation) -> int:
+        return self._send(Posture(posture=posture, challenge=confirmation.id,
+                                  frame_sha256=confirmation.sha256), human=True)
+
+    # ------------------------------------------------------------------ camera allowance
+    async def _camera_turn(self, topic: str) -> None:
+        """Wait until the remote source may ask for another frame. No-op for other sources."""
+        if topic != self._camera_topic:
+            return
+        self._camera_waiting += 1
+        try:
+            async with self._camera_lock:
+                wait = self._last_camera + CAMERA_GAP_S - time.monotonic()
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                self._last_camera = time.monotonic()
+        finally:
+            self._camera_waiting -= 1
+
+    def camera_free(self) -> bool:
+        """A live view may ask for a frame now without delaying a photo or a confirmation."""
+        return (self._camera_waiting == 0 and not self._camera_lock.locked()
+                and time.monotonic() - self._last_camera >= CAMERA_GAP_S)
 
     async def request_confirm(self, action: str, timeout_s: float = 10.0) -> Confirmation:
         """Ask the gateway for a fresh frame and a challenge bound to it."""
         self.require_state()
         rid = uuid.uuid4().hex[:12]
         frame: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
+        await self._camera_turn(self._human_topic)
         self._snapshots[rid] = frame
         mark = self._last_event_no
+        asked_at = time.monotonic()
         seq = self._send(ConfirmRequest(action=action, request_id=rid), human=True)
         try:
             ev = await self._wait_ack(seq, mark, timeout_s)
@@ -260,10 +298,19 @@ class RobotClient:
             self._snapshots.pop(rid, None)
         if hashlib.sha256(jpeg).hexdigest() != challenge.sha256:
             raise ConfirmRefused("the received frame does not match the challenge")
-        return Confirmation(challenge.id, challenge.action, challenge.sha256, challenge.ttl_s, jpeg)
+        return Confirmation(challenge.id, challenge.action, challenge.sha256, challenge.ttl_s, jpeg,
+                            asked_at)
 
     def _events_since(self, mark: int) -> list[RobotEvent]:
         return [ev for n, ev in self.events if n > mark]
+
+    def event_mark(self) -> int:
+        """Pass to wait_ack to look only at events that arrive after this point."""
+        return self._last_event_no
+
+    async def wait_ack(self, seq: int, mark: int, timeout_s: float = 3.0) -> RobotEvent | None:
+        """The ack, rejection or E-stop event for one command, or None after timeout_s."""
+        return await self._wait_ack(seq, mark, timeout_s)
 
     async def _wait_ack(self, seq: int, mark: int, timeout_s: float = 3.0) -> RobotEvent | None:
         end = time.monotonic() + timeout_s
@@ -402,14 +449,23 @@ class RobotClient:
             await asyncio.sleep(interval_s)
         return rtts
 
-    async def snapshot(self, timeout_s: float = 8.0) -> bytes:
+    async def snapshot(self, timeout_s: float = 8.0, human: bool = False) -> bytes:
+        jpeg, _ = await self.snapshot_timed(timeout_s, human)
+        return jpeg
+
+    async def snapshot_timed(
+        self, timeout_s: float = 8.0, human: bool = False
+    ) -> tuple[bytes, float]:
+        """A frame and the monotonic time it was asked for, an upper bound on its age."""
         self.require_state()
+        await self._camera_turn(self._human_topic if human else self._cmd_topic)
         rid = uuid.uuid4().hex[:12]
         fut: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
         self._snapshots[rid] = fut
-        self._send(Snapshot(request_id=rid))
+        asked_at = time.monotonic()
+        self._send(Snapshot(request_id=rid), human=human)
         try:
-            return await asyncio.wait_for(fut, timeout_s)
+            return await asyncio.wait_for(fut, timeout_s), asked_at
         finally:
             self._snapshots.pop(rid, None)
 
