@@ -123,3 +123,15 @@ def test_after_direction_plus_turns_a_mirrored_joint_the_same_way(cfg, tmp_path)
     assert saved["LF.femur"]["trim_deg"] == 2.0  # + twice = up, raw +2
     assert saved["RF.femur"]["trim_deg"] == -2.0  # + twice = up too, so raw -2 on a mirrored servo
     assert "#30P1515\r" in ser.written and "#14P1485\r" in ser.written
+
+
+def test_the_coxa_may_trim_further_than_femur_and_tibia(cfg, tmp_path):
+    import yaml
+
+    out = tmp_path / "calibration.yaml"
+    bank, ser = ssc(cfg)
+    calibrate.cmd_trim(cfg, bank, out, ["LF"],
+                       ask=answers(*["--"] * 13, "n", *["++"] * 8, "n", "n"))
+    saved = yaml.safe_load(out.read_text())
+    assert saved["LF.coxa"]["trim_deg"] == -60.0  # 13 x 5 = 65, stops at 60
+    assert saved["LF.femur"]["trim_deg"] == 30.0  # 8 x 5 = 40, stops at 30

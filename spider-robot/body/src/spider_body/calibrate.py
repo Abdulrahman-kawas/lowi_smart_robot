@@ -34,6 +34,11 @@ from .hw.lidar import NoLidar
 from .hw.servos import make_servo_bank
 from .robot import Robot
 
+# How far a trim may go, by joint. The coxa swings about +-20 deg when walking or turning, so it
+# keeps room even 60 deg off centre; femur and tibia need most of their travel (sit, lift, stand),
+# and the femur already needs +86 deg to sit.
+TRIM_LIMIT_DEG = {"coxa": 60.0, "femur": 30.0, "tibia": 30.0}
+
 _POSITIVE = {
     "coxa": "rotate COUNTER-CLOCKWISE seen from above",
     "femur": "lift UP",
@@ -108,7 +113,11 @@ def cmd_trim(cfg: BodyConfig, bank, out: Path, legs: list[str] | None = None,
                 step = {"+": 1, "-": -1, "++": 5, "--": -5, ".": 0.25, ",": -0.25}.get(ans)
                 if step is not None:
                     trim = servo.trim_deg + step * servo.direction
-                    servo.trim_deg = max(-30.0, min(30.0, trim))
+                    limit = TRIM_LIMIT_DEG[jid.split(".")[1]]
+                    servo.trim_deg = max(-limit, min(limit, trim))
+                    if abs(trim) > limit:
+                        print(f"{jid}: trim stops at {limit:+.0f} deg; past it this joint would "
+                              "lose the travel it needs: re-seat its horn one tooth instead")
                 elif ans == "n":
                     break
                 elif ans == "q":
