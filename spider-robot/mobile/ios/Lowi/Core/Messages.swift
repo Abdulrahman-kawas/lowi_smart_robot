@@ -7,6 +7,29 @@ struct Caps: Codable, Sendable, Equatable {
     var maxSpeedMps: Double
     var maxWzRps: Double
     var moveS: Double
+    var moves: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case maxSpeedMps
+        case maxWzRps
+        case moveS
+        case moves
+    }
+
+    init(maxSpeedMps: Double, maxWzRps: Double, moveS: Double, moves: [String] = []) {
+        self.maxSpeedMps = maxSpeedMps
+        self.maxWzRps = maxWzRps
+        self.moveS = moveS
+        self.moves = moves
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        maxSpeedMps = try container.decode(Double.self, forKey: .maxSpeedMps)
+        maxWzRps = try container.decode(Double.self, forKey: .maxWzRps)
+        moveS = try container.decode(Double.self, forKey: .moveS)
+        moves = try container.decodeIfPresent([String].self, forKey: .moves) ?? []
+    }
 }
 
 struct RobotStatus: Decodable, Sendable, Equatable {
@@ -19,10 +42,41 @@ struct RobotStatus: Decodable, Sendable, Equatable {
     var linkOk: Bool?
     var rollDeg: Double?
     var pitchDeg: Double?
+    var cameraPanDeg: Double?
     var perform: String?
 
     /// The body accepts moves only while standing or already walking.
     var canWalk: Bool { mode == "standing" || mode == "walking" }
+}
+
+struct MovesState: Decodable, Sendable, Equatable {
+    var voice: Bool
+    var remote: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case voice
+        case remote
+    }
+
+    init(voice: Bool = true, remote: Bool = false) {
+        self.voice = voice
+        self.remote = remote
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        voice = try container.decodeIfPresent(Bool.self, forKey: .voice) ?? true
+        remote = try container.decodeIfPresent(Bool.self, forKey: .remote) ?? false
+    }
+}
+
+/// The app's top speed as the gateway keeps it, and the most it may be set to (the gateway's
+/// remote ceiling). Nil from a gateway older than 2026-11-20.
+struct RemoteLimits: Decodable, Sendable, Equatable {
+    var maxSpeedMps: Double
+    var maxWzRps: Double
+    var ceilingSpeedMps: Double
+    var ceilingWzRps: Double
 }
 
 struct GatewayView: Decodable, Sendable, Equatable {
@@ -30,6 +84,8 @@ struct GatewayView: Decodable, Sendable, Equatable {
     var owner: String?
     var estop: Bool?
     var remoteAlive: Bool
+    var moves: MovesState? = nil
+    var remoteLimits: RemoteLimits? = nil
 }
 
 struct DriveView: Decodable, Sendable, Equatable {
@@ -131,22 +187,37 @@ enum ServerMessage: Sendable, Equatable {
 /// What the app sends on /v1/live.
 enum ClientMessage: Sendable, Equatable {
     case auth(token: String)
-    case drive(DriveInput, holdId: String)
+    /// speed and turnSpeed: the Walking and Turning setting, a fraction of the top speed.
+    case drive(DriveInput, holdId: String, speed: Double = 1, turnSpeed: Double = 1)
     case stop
     case estop
+    case look(panDeg: Double, speed: Double)
+    case perform(name: String, speed: Double, leg: String?)
+    case movesSwitch(voice: Bool?, remote: Bool?)
+    case speedLimit(maxSpeedMps: Double, maxWzRps: Double)
     case posture(String)
     case video(Bool)
     case heartbeat(Double)
 
     var json: String {
-        let object: [String: Any]
+        var object: [String: Any]
         switch self {
         case .auth(let token): object = ["type": "auth", "token": token]
-        case .drive(let input, let holdId):
+        case .drive(let input, let holdId, let speed, let turnSpeed):
             object = ["type": "drive", "x": input.x, "y": input.y, "turn": input.turn,
-                      "hold_id": holdId]
+                      "hold_id": holdId, "speed": speed, "turn_speed": turnSpeed]
         case .stop: object = ["type": "stop"]
         case .estop: object = ["type": "estop"]
+        case .look(let pan, let speed): object = ["type": "look", "pan_deg": pan, "speed": speed]
+        case .perform(let name, let speed, let leg):
+            object = ["type": "perform", "name": name, "speed": speed]
+            if let leg { object["leg"] = leg }
+        case .movesSwitch(let voice, let remote):
+            object = ["type": "moves_switch"]
+            if let voice { object["voice"] = voice }
+            if let remote { object["remote"] = remote }
+        case .speedLimit(let speed, let turn):
+            object = ["type": "speed_limit", "max_speed_mps": speed, "max_wz_rps": turn]
         case .posture(let posture): object = ["type": "posture", "posture": posture]
         case .video(let on): object = ["type": "video", "on": on]
         case .heartbeat(let t): object = ["type": "heartbeat", "t": t]

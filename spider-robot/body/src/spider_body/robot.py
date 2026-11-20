@@ -38,6 +38,7 @@ from spider_common.protocol import (
     EStopRelease,
     EventKind,
     Heartbeat,
+    Look,
     Move,
     Perform,
     Posture,
@@ -50,7 +51,7 @@ from spider_common.protocol import (
     Topics,
 )
 
-from .config import JOINTS, BodyConfig
+from .config import CAMERA_PAN, JOINTS, BodyConfig
 from .gait import GaitEngine
 from .hw.camera import Camera
 from .hw.kick import NoKick
@@ -141,6 +142,11 @@ class Robot:
         self.perform: Runner | None = None
         self._frame = None  # (body, feet) of the move pose being sent, while it runs or holds
         self._after_recover: str | None = None  # "sit": sit down once back in the stand pose
+        # Front camera pan (Look): deg, + left. None while the servos are limp: nobody knows
+        # where the camera hangs, and the first command after limp snaps to pan_target.
+        self.pan_deg: float | None = None
+        self.pan_target = 0.0
+        self._pan_rate = 0.0  # deg/s of the glide in progress
 
     # ------------------------------------------------------------------ events
     def emit(
@@ -172,12 +178,13 @@ class Robot:
                 return
         if isinstance(cmd, (EStop, Stop)):
             self._fence[cmd.session] = max(self._fence.get(cmd.session, -1), cmd.seq)
-        elif isinstance(cmd, Move) and cmd.seq <= self._fence.get(cmd.session, -1):
+        elif isinstance(cmd, (Move, Look)) and cmd.seq <= self._fence.get(cmd.session, -1):
             return  # sent before a Stop that already arrived: drop silently
 
         if isinstance(cmd, EStop):
             self._cancel_move("estop")
             self.gait.freeze()  # hold every foot where it is: no jump
+            self._hold_pan()  # and the camera where it is
             self.estop = True
             if self.mode in _ACTIVE:
                 self.mode = "estop"
@@ -198,6 +205,8 @@ class Robot:
             task.add_done_callback(self._tasks.discard)
         elif isinstance(cmd, (Perform, Reach)):
             self._handle_perform(cmd)
+        elif isinstance(cmd, Look):
+            self._handle_look(cmd)
         elif self.estop:
             self.emit("rejected", cmd.seq, "estop is latched; send estop_release first")
         elif isinstance(cmd, Move):
@@ -214,6 +223,7 @@ class Robot:
         if self._cold_estop:  # this process never knew the pose: go limp rather than guess
             self._cold_estop = False
             self.servos.relax()
+            self._pan_limp()
             self.mode = "relaxed"
             self.emit("ack", cmd.seq, "estop released; servos relaxed", cmd.trace)
             return
@@ -226,6 +236,16 @@ class Robot:
         """Stop means stop: a height or body-pose change in progress ends where it is."""
         self.target_height = self.gait.height
         self.pose_target = list(self.pose)
+        self._hold_pan()
+
+    def _hold_pan(self) -> None:
+        """Stop and E-stop end a camera glide where it is, like a leg."""
+        if self.pan_deg is not None:
+            self.pan_target = self.pan_deg
+
+    def _pan_limp(self) -> None:
+        """The servos were cut: the camera hangs where it is. It centres on the next wake."""
+        self.pan_deg, self.pan_target = None, 0.0
 
     def _sit_h(self) -> float:
         return self.cfg.geometry.sit_height_m
@@ -288,6 +308,7 @@ class Robot:
                 self.emit("rejected", cmd.seq, "sit down first, then relax")
             else:
                 self.servos.relax()
+                self._pan_limp()
                 self.mode = "relaxed"
                 self._wake_tick = None
                 self.emit("ack", cmd.seq, "relaxed")
@@ -328,6 +349,25 @@ class Robot:
         self.pose_target = [math.radians(cmd.roll_deg), math.radians(cmd.pitch_deg),
                             math.radians(cmd.yaw_deg)]
         self.emit("ack", cmd.seq, "body pose")
+
+    def _handle_look(self, cmd: Look) -> None:
+        """Turn the camera: one absolute target, reached by a capped glide in tick()."""
+        pan = self.cfg.camera_pan
+        if pan is None:
+            self.emit("rejected", cmd.seq, "no camera pan servo in robot.yaml", cmd.trace)
+            return
+        if self.estop:
+            self.emit("rejected", cmd.seq, "estop is latched; send estop_release first", cmd.trace)
+            return
+        if self.mode not in ("sitting", "standing", "walking"):
+            self.emit("rejected", cmd.seq, f"cannot look while {self.mode}; sit or stand first",
+                      cmd.trace)
+            return
+        lo, hi = self.cfg.pan_range()
+        self.pan_target = max(lo, min(hi, cmd.pan_deg))
+        self._pan_rate = pan.max_rate_dps * cmd.speed
+        note = "" if self.pan_target == cmd.pan_deg else f" (limited to {lo:+.0f}..{hi:+.0f})"
+        self.emit("ack", cmd.seq, f"look {self.pan_target:+.0f} deg{note}", cmd.trace)
 
     async def _snapshot(self, cmd: Snapshot) -> None:
         try:
@@ -534,6 +574,7 @@ class Robot:
             self._frame = None
             self.gait.halt_now()
             self.servos.relax()
+            self._pan_limp()
             self.mode = "fallen"
             self._wake_tick = None
             self.emit("fallen", self.last_seq, f"roll={roll} pitch={pitch}; servos relaxed")
@@ -596,6 +637,13 @@ class Robot:
             for i in range(3):
                 self.pose[i] = _approach(self.pose[i], self.pose_target[i], _POSE_RATE * dt)
 
+        # 5b. camera pan: a capped glide, frozen under an E-stop like the legs
+        if self.cfg.camera_pan is not None and self.mode in _ACTIVE and not self.estop:
+            if self.pan_deg is None:  # first command after limp: the board snaps there anyway
+                self.pan_deg = self.pan_target
+            else:
+                self.pan_deg = _approach(self.pan_deg, self.pan_target, self._pan_rate * dt)
+
         if self.mode in ("standing", "walking"):
             self.mode = "walking" if self.gait.moving else "standing"
 
@@ -609,6 +657,8 @@ class Robot:
                 feet = self.gait.step(dt)
             angles = self.solve(feet)
             if angles is not None:
+                if self.cfg.camera_pan is not None and self.pan_deg is not None:
+                    angles[CAMERA_PAN] = self.cfg.pan_servo_deg(self.pan_deg)
                 self.servos.write(self._staged(angles))
             elif self.perform is not None:  # validated, so this is a bug: stop the move
                 self._cancel_move("IK failed")
@@ -623,7 +673,7 @@ class Robot:
             return angles
         if not self.estop:  # an E-stop during the wake must not power any further leg
             self._wake_tick += 1
-        awake = set(_WAKE_ORDER[:legs_on])
+        awake = set(_WAKE_ORDER[:legs_on])  # the camera ("camera_pan") waits for every leg
         return {joint: deg for joint, deg in angles.items() if joint.split(".")[0] in awake}
 
     def note_wakeup(self, late_ms: float) -> None:
@@ -687,4 +737,5 @@ class Robot:
             loop_late_hist=list(self.loop_late_hist),
             rt_ok=self.rt_ok,
             perform=self.perform.spec.name if self.perform is not None else None,
+            camera_pan_deg=None if self.pan_deg is None else round(self.pan_deg, 1),
         )

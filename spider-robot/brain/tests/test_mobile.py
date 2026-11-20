@@ -27,8 +27,8 @@ from spider_body.hw.servos import FakeServoBank
 from spider_body.main import command_loop, control_loop, state_loop
 from spider_body.robot import Robot
 from spider_common.link import InMemoryHub
-from spider_common.protocol import Topics
-from spider_gateway.gateway import Gateway
+from spider_common.protocol import MOVE_NAMES, RobotState, Topics
+from spider_gateway.gateway import Gateway, GatewayConfig
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
 
@@ -69,8 +69,9 @@ def test_settings_keep_the_app_on_the_remote_source_and_under_its_caps(tmp_path)
     with pytest.raises(ValidationError, match="gateway"):
         Settings(_env_file=None, mobile=True, robot_source="planner")  # owner would be planner
     ok = Settings(_env_file=None, mobile=True, robot_source="planner", human_source="remote")
-    assert ok.mobile_max_speed_mps == 0.05 and ok.mobile_deadman_s == 0.6
-    for field, value in [("mobile_max_speed_mps", 0.06), ("mobile_max_wz_rps", 0.31),
+    assert ok.mobile_max_speed_mps == 0.12 and ok.mobile_max_wz_rps == 0.6  # the body's limits
+    assert ok.mobile_deadman_s == 0.6
+    for field, value in [("mobile_max_speed_mps", 0.13), ("mobile_max_wz_rps", 0.61),
                          ("mobile_move_s", 1.5), ("mobile_deadman_s", 0.8),
                          ("mobile_max_frame_age_s", 3.0)]:
         with pytest.raises(ValidationError):
@@ -168,6 +169,28 @@ def test_drive_is_clamped_to_the_remote_caps():
     assert math.hypot(vx, vy) <= 0.05 and wz == pytest.approx(0.3) and duration == 1.0
     drive.drive("phone", float("nan"), 0, 0, "h2")
     assert robot.kinds() == ["move"] and notes[-1][1] == "drive_refused"
+
+
+def test_drive_speed_and_turn_speed_are_fractions_of_the_caps():
+    assert scale(1, 0, 0, CAPS, speed=0.5) == pytest.approx((0.025, 0.0, 0.0))
+    assert scale(0, 0, -1, CAPS, turn_speed=0.4)[2] == pytest.approx(-0.12)
+    assert scale(1, 0, 1, CAPS) == pytest.approx((0.05, 0.0, 0.3))  # an older app: 1 and 1
+    vx, vy, _ = scale(0.7071068, 0.7071068, 0, CAPS, speed=0.7)
+    assert math.hypot(vx, vy) <= 0.05 * 0.7
+    for bad in (0, -0.5, 1.5, float("nan"), float("inf"), True, "0.5", None):
+        with pytest.raises(ValueError):
+            scale(1, 0, 0, CAPS, speed=bad)
+        with pytest.raises(ValueError):
+            scale(1, 0, 0, CAPS, turn_speed=bad)
+
+    drive, robot, clock, notes = make_drive()
+    drive.drive("phone", 1, 0, 1, "h1", speed=0.5, turn_speed=0.4)
+    kind, vx, vy, wz, duration, human = robot.calls[-1]
+    assert vx == pytest.approx(0.025) and wz == pytest.approx(0.12)
+    drive.drive("phone", 1, 0, 0, "h2", speed=2)
+    assert notes[-1][:2] == ("phone", "drive_refused") and notes[-1][4] == "h2"
+    assert "speed must be a number greater than 0 and at most 1" in notes[-1][2]
+    assert robot.kinds() == ["move"]
 
 
 def test_deadman_stops_the_robot_after_0_6_s_without_renewal():
@@ -391,7 +414,8 @@ async def stack(tmp_path):
     body = Robot(cfg, FakeServoBank(), SimLidar(cfg.lidar, world), FakeCamera(cfg.camera),
                  body_link)
     gw_link = hub.endpoint(Gateway.subscriptions(ROBOT))
-    gateway = Gateway(gw_link, ROBOT)
+    gateway = Gateway(gw_link, ROBOT,
+                      config=GatewayConfig(state_dir=tmp_path / "gateway-state"))
     for link in (body_link, gw_link):
         await link.start()
     tasks = [asyncio.create_task(c) for c in (
@@ -480,7 +504,8 @@ async def test_pairing_over_http_and_revocation_closes_the_socket(brain):
     assert r.status_code == 200, r.text
     token = r.json()["token"]
     assert r.json()["device_name"] == "テスト用 iPad"
-    assert r.json()["caps"] == {"max_speed_mps": 0.05, "max_wz_rps": 0.3, "move_s": 1.0}
+    assert r.json()["caps"] == {"max_speed_mps": 0.05, "max_wz_rps": 0.3, "move_s": 1.0,
+                                "moves": list(MOVE_NAMES)}
     assert (await http.get("/v1/state", headers=bearer(token))).status_code == 200
     r = await http.post("/v1/pair", json={"code": code, "device_name": "again"})
     assert r.status_code == 429  # within a second
@@ -621,6 +646,30 @@ async def test_state_lidar_events_and_photo(stack):
     await app.close()
 
 
+async def test_the_app_switches_moves_and_sees_the_gateway_state(stack):
+    app = await live_view(stack)
+    assert app.states[-1]["gateway"]["moves"] == {"voice": True, "remote": False}
+
+    await app.send(type="moves_switch", remote=True)
+    assert await _until(
+        lambda: app.states[-1]["gateway"]["moves"] == {"voice": True, "remote": True}, 2.0)
+    assert stack.gateway.status(time.monotonic()).moves == {"voice": True, "remote": True}
+
+    await app.send(type="moves_switch", voice=False, remote=False)
+    assert await _until(
+        lambda: app.states[-1]["gateway"]["moves"] == {"voice": False, "remote": False}, 2.0)
+    await app.close()
+
+
+async def test_the_app_refuses_an_invalid_moves_switch(brain):
+    app = await App.open(brain.base, brain.token)
+    await app.send(type="moves_switch", voice="yes")
+    assert await _until(lambda: any(e["kind"] == "moves_switch" for e in app.events), 2.0)
+    assert app.events[-1]["detail"] == "voice must be true, false or null"
+    assert app.events[-1]["refusal"] is True
+    await app.close()
+
+
 async def test_talk_needs_a_token_and_a_spoken_stop_reaches_the_robot(brain):
     import io
     import wave
@@ -647,3 +696,168 @@ async def test_talk_needs_a_token_and_a_spoken_stop_reaches_the_robot(brain):
     bad = await brain.http.post("/v1/talk", json={"audio_b64": "@" * 12},
                                 headers=bearer(brain.token))
     assert bad.status_code == 400
+
+
+def _looks(stack):
+    out = []
+    for m in stack.svc.robot.link.published:
+        if m.topic != T.request("remote"):
+            continue
+        data = json.loads(m.payload)
+        if data.get("type") == "look":
+            out.append(data)
+    return out
+
+
+def _requests(stack, kind):
+    return [data for data in (json.loads(m.payload) for m in stack.svc.robot.link.published
+                              if m.topic == T.request("remote")) if data.get("type") == kind]
+
+
+def _drain(session):
+    out = []
+    while not session.queue.empty():
+        out.append(session.queue.get_nowait())
+    return out
+
+
+async def test_a_look_message_sends_one_look_on_the_remote_source(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    brain.svc.mobile.handle(session, {"type": "look", "pan_deg": 30.0, "speed": 0.5})
+    looks = _looks(brain)
+    assert len(looks) == 1 and looks[0]["pan_deg"] == 30.0 and looks[0]["speed"] == 0.5
+
+
+async def test_ten_look_targets_send_one_now_and_the_last_one_later(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    for pan in range(1, 11):
+        brain.svc.mobile.handle(session, {"type": "look", "pan_deg": pan})
+    assert [c["pan_deg"] for c in _looks(brain)] == [1.0]
+    assert await _until(lambda: len(_looks(brain)) == 2, 1.0)
+    assert _looks(brain)[-1]["pan_deg"] == 10.0
+
+
+async def test_bad_look_values_are_refused_without_sending(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    for msg in ({"pan_deg": 100}, {"pan_deg": "30"}, {"pan_deg": 30, "speed": 0},
+                {"pan_deg": 30, "speed": 1.5}, {"pan_deg": float("nan")}):
+        brain.svc.mobile.handle(session, {"type": "look", **msg})
+    assert _looks(brain) == []
+    refusals = [m for m in _drain(session) if m.get("kind") == "look"]
+    assert len(refusals) == 5 and all(m["refusal"] for m in refusals)
+
+
+def _performs(brain):
+    out = []
+    for m in brain.svc.robot.link.published:
+        if m.topic != T.request("remote"):
+            continue
+        data = json.loads(m.payload)
+        if data.get("type") == "perform":
+            out.append(data)
+    return out
+
+
+def _fresh_standing(brain, lidar_age_s=0.2):
+    brain.svc.robot.state = RobotState(robot_id=ROBOT, mode="standing", lidar_age_s=lidar_age_s)
+    brain.svc.robot.state_rx = time.monotonic()
+
+
+async def test_fresh_lidar_is_enough_to_send_one_perform(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    _fresh_standing(brain)
+    brain.svc.mobile.handle(session, {"type": "perform", "name": "dance", "speed": 0.75,
+                                      "leg": None})
+    assert await _until(lambda: _performs(brain), 1.0)
+    assert _performs(brain)[0]["name"] == "dance"
+    assert _performs(brain)[0]["speed"] == 0.75
+
+
+async def test_perform_without_live_view_or_lidar_is_refused(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    _fresh_standing(brain, lidar_age_s=None)
+    brain.svc.mobile.handle(session, {"type": "perform", "name": "dance"})
+    assert await _until(lambda: not session.queue.empty(), 1.0)
+    assert _performs(brain) == []
+    refusals = [m for m in _drain(session) if m.get("kind") == "perform_rejected"]
+    assert len(refusals) == 1 and "live view" in refusals[0]["detail"]
+
+
+async def test_bad_perform_values_are_refused_without_sending(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    _fresh_standing(brain)
+    for msg in ({"name": "nope"}, {"name": "wave", "leg": "RR"},
+                {"name": "wave", "speed": 0}, {"name": "wave", "speed": 1.5}):
+        brain.svc.mobile.handle(session, {"type": "perform", **msg})
+    assert await _until(lambda: session.queue.qsize() >= 4, 1.0)
+    assert _performs(brain) == []
+    refusals = [m for m in _drain(session) if m.get("kind") == "perform_rejected"]
+    assert len(refusals) == 4 and all(m["refusal"] for m in refusals)
+
+
+async def test_hello_advertises_every_move(brain):
+    session = brain.svc.mobile.connect("phone")
+    hello = _drain(session)[0]
+    assert hello["caps"]["moves"] == list(MOVE_NAMES)
+
+
+async def test_a_speed_limit_message_sends_one_speed_limit_on_the_remote_source(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    brain.svc.mobile.handle(session, {"type": "speed_limit", "max_speed_mps": 0.08,
+                                      "max_wz_rps": 0.4})
+    out = _requests(brain, "speed_limit")
+    assert len(out) == 1 and (out[0]["max_speed_mps"], out[0]["max_wz_rps"]) == (0.08, 0.4)
+    for bad in ({"max_speed_mps": 0, "max_wz_rps": 0.4},
+                {"max_speed_mps": "0.1", "max_wz_rps": 0.4},
+                {"max_speed_mps": 0.08},
+                {"max_speed_mps": True, "max_wz_rps": 0.4},
+                {"max_speed_mps": 0.08, "max_wz_rps": float("nan")},
+                {"max_speed_mps": 0.13, "max_wz_rps": 0.4},
+                {"max_speed_mps": 0.08, "max_wz_rps": 0.7}):
+        brain.svc.mobile.handle(session, {"type": "speed_limit", **bad})
+    assert len(_requests(brain, "speed_limit")) == 1
+    refusals = [m for m in _drain(session) if m.get("kind") == "speed_limit"]
+    assert len(refusals) == 7 and all(m["refusal"] for m in refusals)
+    assert refusals[-1]["detail"] == "above the brain's caps of 0.12 m/s and 0.6 rad/s"
+
+
+async def test_caps_are_the_lower_of_the_brain_and_the_gateway(brain):
+    hub = brain.svc.mobile
+    view = hub.caps_view()
+    assert (view["max_speed_mps"], view["max_wz_rps"]) == (0.05, 0.3)  # no gateway heard yet
+    status = {"remote_limits": {"max_speed_mps": 0.09, "max_wz_rps": 0.45,
+                                "ceiling_speed_mps": 0.12, "ceiling_wz_rps": 0.6}}
+    hub._on_bus({"kind": "gateway_status", "status": status})
+    assert (hub.caps_view()["max_speed_mps"], hub.drive.caps.max_wz_rps) == (0.09, 0.45)
+    assert hub.state_view()["gateway"]["remote_limits"]["ceiling_speed_mps"] == 0.12
+    hub._on_bus({"kind": "gateway_status", "status": {"online": True}})  # an older gateway
+    assert hub.caps_view()["max_speed_mps"] == 0.05
+    assert hub.state_view()["gateway"]["remote_limits"] is None
+    hub.brain_caps = Caps(0.07, 0.6, 1.0)  # as if SB_MOBILE_MAX_SPEED_MPS=0.07
+    hub._on_bus({"kind": "gateway_status", "status": status})
+    assert hub.caps_view()["max_speed_mps"] == 0.07
+
+
+async def test_the_app_sets_its_top_speed_and_drives_at_a_fraction_of_it(stack):
+    await stand(stack)
+    app = await live_view(stack)
+    assert app.states[-1]["gateway"]["remote_limits"]["max_speed_mps"] == 0.05
+    await app.send(type="speed_limit", max_speed_mps=0.08, max_wz_rps=0.4)
+    assert await _until(lambda: app.states[-1]["caps"]["max_speed_mps"] == 0.08, 3.0)
+    limits = app.states[-1]["gateway"]["remote_limits"]
+    assert (limits["max_wz_rps"], limits["ceiling_speed_mps"]) == (0.4, 0.12)
+    await app.send(type="drive", x=1, y=0, turn=0, hold_id="h", speed=0.5)
+    assert await _until(lambda: stack.body.move is not None, 2.0)
+    assert stack.body.move.vx == pytest.approx(0.04)
+    assert "capped" not in stack.gateway.counters  # the brain kept to the new limit
+    await app.send(type="stop")
+    await app.send(type="drive", x=1, y=0, turn=0, hold_id="h2", speed=0)
+    assert await _until(lambda: refused(app, "speed must be a number"), 2.0)
+    await app.close()

@@ -12,8 +12,10 @@ from spider_common.protocol import (
     GatewayStatus,
     HealthReport,
     Move,
+    MovesSwitch,
     Snapshot,
     SourceStatus,
+    SpeedLimit,
     Topics,
     VoiceTurn,
     parse_command,
@@ -76,9 +78,32 @@ def test_v3_fields_roundtrip():
     assert (release.challenge, release.frame_sha256, release.trace) == ("c1", "ab", "t1")
 
 
+def test_moves_switch_roundtrip():
+    cmd = parse_command(MovesSwitch(voice=True, trace="t1").model_dump_json())
+    assert isinstance(cmd, MovesSwitch)
+    assert (cmd.voice, cmd.remote, cmd.trace) == (True, None, "t1")
+
+
+def test_speed_limit_roundtrip_and_bounds():
+    cmd = parse_command(SpeedLimit(max_speed_mps=0.08, max_wz_rps=0.4).model_dump_json())
+    assert isinstance(cmd, SpeedLimit) and (cmd.max_speed_mps, cmd.max_wz_rps) == (0.08, 0.4)
+    for bad in ('{"type":"speed_limit","max_speed_mps":0,"max_wz_rps":0.4}',
+                '{"type":"speed_limit","max_speed_mps":0.08}',
+                '{"type":"speed_limit","max_speed_mps":0.6,"max_wz_rps":0.4}'):
+        with pytest.raises(ValidationError):
+            parse_command(bad)
+
+
 def test_status_models_serialise():
-    s = GatewayStatus(robot_id="r", sources={"voice": SourceStatus(alive=True)})
-    assert GatewayStatus.model_validate_json(s.model_dump_json()).sources["voice"].alive
+    limits = {"max_speed_mps": 0.05, "max_wz_rps": 0.3, "ceiling_speed_mps": 0.12,
+              "ceiling_wz_rps": 0.6}
+    s = GatewayStatus(robot_id="r", sources={"voice": SourceStatus(alive=True)},
+                      moves={"voice": True, "remote": False}, remote_limits=limits)
+    restored = GatewayStatus.model_validate_json(s.model_dump_json())
+    assert restored.sources["voice"].alive
+    assert restored.moves == {"voice": True, "remote": False}
+    assert restored.remote_limits == limits
+    assert GatewayStatus(robot_id="r").remote_limits == {}  # an older gateway sends none
     assert VoiceTurn(trace="t", route="stop").route == "stop"
     assert HealthReport(robot_id="r", service="voice").level == "ok"
 

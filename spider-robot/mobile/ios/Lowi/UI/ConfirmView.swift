@@ -51,24 +51,49 @@ struct ConfirmView: View {
                 Text("Photo taken \(Int(age)) s ago")
             }
         }
-        return Group {
-            if let image = prompt.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(alignment: .bottomLeading) {
-                        caption
-                            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                            .padding(8)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(Text("Photo the robot took just now"))
-            } else {
-                caption
+        return VStack(alignment: .leading, spacing: 8) {
+            direction
+            Group {
+                if let image = prompt.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(alignment: .bottomLeading) {
+                            caption
+                                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                                .padding(8)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(Text("Photo the robot took just now"))
+                } else {
+                    caption
+                }
             }
+            .frame(maxWidth: 720, maxHeight: .infinity, alignment: .top)
         }
-        .frame(maxWidth: 720, maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var direction: some View {
+        if let pan = prompt.cameraPanDeg {
+            if abs(pan) > 10 {
+                Text("The camera is turned \(PanControl.describe(pan)): this photo does not show straight ahead.")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.amber)
+                    .accessibilityIdentifier("cameraDirection")
+            } else {
+                Text(PanControl.describe(pan))
+                    .font(.footnote)
+                    .foregroundStyle(Theme.muted)
+                    .accessibilityIdentifier("cameraDirection")
+            }
+        } else {
+            Text("Camera direction unknown")
+                .font(.footnote)
+                .foregroundStyle(Theme.muted)
+                .accessibilityIdentifier("cameraDirection")
+        }
     }
 
     private func details(left: TimeInterval) -> some View {

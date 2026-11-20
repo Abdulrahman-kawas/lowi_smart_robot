@@ -452,12 +452,13 @@ def test_legs_wake_one_at_a_time_and_height_holds_until_all_are_on(cfg):
     sit_pose = robot.solve(robot.gait.step(0.0))
     assert reference is not None and sit_pose is not None
     for joint, deg in first_command.items():
-        assert deg == pytest.approx(sit_pose[joint], abs=0.01)
+        if joint != "camera_pan":  # the camera is not a leg: it comes last, centred
+            assert deg == pytest.approx(sit_pose[joint], abs=0.01)
     for _ in range(40):
         clock.t += 0.02
         robot.handle(Heartbeat(ts=WALL))
         robot.tick(0.02)
-    assert robot._wake_tick is None and len(servos.last) == 18
+    assert robot._wake_tick is None and len(servos.last) == 19  # the camera comes last
     assert robot.gait.height > sit
 
 

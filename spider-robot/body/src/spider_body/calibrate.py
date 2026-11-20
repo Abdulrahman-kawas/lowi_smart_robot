@@ -11,24 +11,29 @@
                                + moves every joint the same way (coxa counter-clockwise seen
                                from above, femur up, tibia down/in) on every leg
      trim and direction take --leg too (one leg at a time, saved after each leg)
+  spider-calibrate center|direction|trim --camera
+                               the front camera's pan servo (camera_pan in robot.yaml) alone:
+                               centre = straight ahead, + = turn the camera left
   spider-calibrate show        every servo: channel, range, direction, trim and its real
                                centre pulse, to compare how far each one is off
   spider-calibrate pose sit|stand   check the result with real IK
   spider-calibrate relax       cut all servo pulses
 
 Results go to config/calibration.yaml (loaded automatically next to robot.yaml).
+Ctrl+C relaxes the servos and exits 130, so `a && b` stops instead of going on to b.
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
 
 from spider_common.link import InMemoryHub
 
-from .config import JOINTS, BodyConfig, load_config, save_calibration
+from .config import CAMERA_PAN, JOINTS, BodyConfig, load_config, save_calibration
 from .hw.camera import NoCamera
 from .hw.lidar import NoLidar
 from .hw.servos import make_servo_bank
@@ -37,16 +42,25 @@ from .robot import Robot
 # How far a trim may go, by joint. Joint limits move with the trim (BodyConfig.limits_of), so a
 # trim only uses up the servo's own travel: the femur's +-90 plus 30 is 120 of the RDS3218's 135.
 # The coxa swings about +-20 deg when walking or turning, so it keeps room even 60 deg off centre.
-TRIM_LIMIT_DEG = {"coxa": 60.0, "femur": 30.0, "tibia": 30.0}
+TRIM_LIMIT_DEG = {"coxa": 60.0, "femur": 30.0, "tibia": 30.0, CAMERA_PAN: 30.0}
 
 _POSITIVE = {
     "coxa": "rotate COUNTER-CLOCKWISE seen from above",
     "femur": "lift UP",
     "tibia": "bend the foot further DOWN / IN toward the body",
+    CAMERA_PAN: "turn the camera LEFT (counter-clockwise seen from above)",
 }
 
 
-def _joint_ids(cfg: BodyConfig, legs: list[str] | None = None) -> list[str]:
+def _kind(jid: str) -> str:
+    """'LF.femur' -> 'femur'; 'camera_pan' -> 'camera_pan'."""
+    return jid.split(".")[1] if "." in jid else jid
+
+
+def _joint_ids(cfg: BodyConfig, legs: list[str] | None = None, camera: bool = False
+               ) -> list[str]:
+    if camera:
+        return [CAMERA_PAN]
     names = legs or [leg.name for leg in cfg.legs]
     return [f"{name}.{j}" for name in names for j in JOINTS]
 
@@ -65,10 +79,21 @@ FIRST_MOVE = ("Legs in the air. The first move after the servo board powers up c
 
 def cmd_center(cfg: BodyConfig, bank, legs: list[str] | None = None, seconds: float = 2.0,
                ask: Callable[[str], str] = input,
-               wait: Callable[[float], None] = time.sleep) -> None:
+               wait: Callable[[float], None] = time.sleep, camera: bool = False) -> None:
     """Raw 90 deg (the pulse centre) on every joint, or one leg at a time: coxa, femur, tibia,
-    each after Enter and gliding over `seconds`, then that leg relaxes."""
+    each after Enter and gliding over `seconds`, then that leg relaxes. camera=True: the
+    camera pan servo alone."""
     t_ms = int(round(seconds * 1000)) or None
+    if camera:
+        ch = cfg.servo(CAMERA_PAN).channel
+        print(FIRST_MOVE.replace("each joint", "the camera"))
+        ask(f"{CAMERA_PAN} (channel {ch}): Enter to move it to the middle over {seconds:g} s ")
+        bank.write_raw(CAMERA_PAN, 90.0, t_ms)
+        wait(seconds)
+        ask("Camera pan at raw 90 deg. Seat the horn so the camera looks straight ahead. "
+            "Enter to relax it ")
+        bank.relax_joints([CAMERA_PAN])
+        return
     if not legs:
         for jid in _joint_ids(cfg):
             bank.write_raw(jid, 90.0, t_ms)
@@ -96,24 +121,24 @@ def cmd_center(cfg: BodyConfig, bank, legs: list[str] | None = None, seconds: fl
 
 
 def cmd_trim(cfg: BodyConfig, bank, out: Path, legs: list[str] | None = None,
-             ask: Callable[[str], str] = input) -> None:
+             ask: Callable[[str], str] = input, camera: bool = False) -> None:
     """Each joint until it sits exactly at its reference; saved after every leg, so stopping
     halfway keeps the legs already done (the other legs keep their saved trims).
 
     The trim is kept in raw servo degrees, but a key step goes through the servo's direction:
     once `direction` has run, + turns every joint the same way on every leg, mirrored or not."""
     print("Commands: + / - (1 deg), ++ / -- (5 deg), . / , (0.25 deg), n = next, q = save+quit")
-    for leg_jids in _by_leg(_joint_ids(cfg, legs)):
+    for leg_jids in _by_leg(_joint_ids(cfg, legs, camera)):
         for jid in leg_jids:
             servo = cfg.servo(jid)
-            print(f"{jid}: + = {_POSITIVE[jid.split('.')[1]]}")
+            print(f"{jid}: + = {_POSITIVE[_kind(jid)]}")
             while True:
                 bank.write_raw(jid, 90.0 + servo.trim_deg)
                 ans = ask(f"{jid} (channel {servo.channel}) trim={servo.trim_deg:+.2f} > ").strip()
                 step = {"+": 1, "-": -1, "++": 5, "--": -5, ".": 0.25, ",": -0.25}.get(ans)
                 if step is not None:
                     trim = servo.trim_deg + step * servo.direction
-                    limit = TRIM_LIMIT_DEG[jid.split(".")[1]]
+                    limit = TRIM_LIMIT_DEG[_kind(jid)]
                     servo.trim_deg = max(-limit, min(limit, trim))
                     if abs(trim) > limit:
                         print(f"{jid}: trim stops at {limit:+.0f} deg; past it this joint would "
@@ -134,13 +159,14 @@ def cmd_show(cfg: BodyConfig) -> list[str]:
     """One line per servo, and how far apart the trims are, to compare the calibration."""
     lines = [f"{'joint':10s} {'ch':>3s} {'range':>5s} {'dir':>4s} {'trim':>7s} {'centre':>7s}"]
     trims: dict[str, list[float]] = {}
-    for jid in _joint_ids(cfg):
+    for jid in cfg.servo_ids():
         s = cfg.servo(jid)
         pulse = cfg.pulse_of(s)
         centre = pulse.pulse_us(90.0 + s.trim_deg)
         lines.append(f"{jid:10s} {s.channel:3d} {pulse.range_deg:4.0f}° {s.direction:+4d} "
                      f"{s.trim_deg:+6.2f}° {centre:5.0f} us")
-        trims.setdefault(jid.split(".")[1], []).append(s.trim_deg)
+        if jid != CAMERA_PAN:
+            trims.setdefault(_kind(jid), []).append(s.trim_deg)
     for joint, values in trims.items():
         lines.append(f"{joint}: trims from {min(values):+.2f}° to {max(values):+.2f}° "
                      f"(spread {max(values) - min(values):.2f}°)")
@@ -148,11 +174,11 @@ def cmd_show(cfg: BodyConfig) -> list[str]:
 
 
 def cmd_direction(cfg: BodyConfig, bank, out: Path, legs: list[str] | None = None,
-                  ask: Callable[[str], str] = input) -> None:
-    for leg_jids in _by_leg(_joint_ids(cfg, legs)):
+                  ask: Callable[[str], str] = input, camera: bool = False) -> None:
+    for leg_jids in _by_leg(_joint_ids(cfg, legs, camera)):
         for jid in leg_jids:
             servo = cfg.servo(jid)
-            joint = jid.split(".")[1]
+            joint = _kind(jid)
             bank.write_raw(jid, 90.0 + servo.trim_deg)
             ask(f"{jid} (channel {servo.channel}): watch the joint, press Enter")
             bank.write_raw(jid, 90.0 + servo.trim_deg + 15.0)
@@ -188,10 +214,18 @@ def main(argv: list[str] | None = None) -> int:
                    help="center, trim, direction: only this leg (repeat for more, in order)")
     p.add_argument("--seconds", type=float, default=2.0,
                    help="center: time each joint takes to glide to the middle (SSC-32U)")
+    p.add_argument("--camera", action="store_true",
+                   help="center, trim, direction: the camera pan servo only (not with --leg)")
     args = p.parse_args(argv)
     if not 0.0 <= args.seconds <= 10.0:
         p.error("--seconds must be between 0 and 10")
+    if args.camera and args.leg:
+        p.error("--camera and --leg do not go together")
+    if args.camera and args.action not in ("center", "trim", "direction"):
+        p.error("--camera works with center, trim and direction")
     cfg = load_config(args.config)
+    if args.camera and cfg.camera_pan is None:
+        p.error(f"no camera_pan block in {args.config}")
     out = Path(args.config).with_name("calibration.yaml")
     if args.action == "show":  # reads the files only: no servo board needed, nothing moves
         print("\n".join(cmd_show(cfg)))
@@ -204,17 +238,22 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("PCA9685 boards initialised on I2C")
         elif args.action == "center":
-            cmd_center(cfg, bank, args.leg, args.seconds)
+            if args.camera:
+                cmd_center(cfg, bank, None, args.seconds, camera=True)
+            else:
+                cmd_center(cfg, bank, args.leg, args.seconds)
         elif args.action == "trim":
-            cmd_trim(cfg, bank, out, args.leg)
+            cmd_trim(cfg, bank, out, args.leg, camera=args.camera)
         elif args.action == "direction":
-            cmd_direction(cfg, bank, out, args.leg)
+            cmd_direction(cfg, bank, out, args.leg, camera=args.camera)
         elif args.action == "pose":
             cmd_pose(cfg, bank, args.pose)
         else:
             bank.relax()
     except KeyboardInterrupt:
         bank.relax()
+        print("\ninterrupted: servos relaxed", file=sys.stderr)
+        return 130  # not 0: `spider-calibrate a && spider-calibrate b` must not go on to b
     return 0
 
 

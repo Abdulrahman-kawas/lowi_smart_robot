@@ -21,6 +21,10 @@ MOVE_ACTS = frozenset({
     "dance", "wave", "bow", "reach", "attack_stance", "defense_stance", "alert", "sleep",
     "celebrate", "hi", "offer_hand",
 })
+LOOK_ACTS = frozenset({"look_left", "look_right", "look_center"})
+SWITCH_ACTS = frozenset({
+    "moves_on", "moves_off", "voice_moves_on", "voice_moves_off", "app_moves_on", "app_moves_off",
+})
 ROUTER_ACTS = ("forward", "back", "left", "right", "stop", "look", "none")
 
 LEXICON: dict[str, tuple[str, ...]] = {
@@ -31,6 +35,11 @@ LEXICON: dict[str, tuple[str, ...]] = {
     "stand": ("قوم", "انهض", "stand"),
     "sit": ("اقعد", "اجلس", "sit"),
     "look": ("شوف", "انظر", "بص", "look", "see"),
+    "look_left": ("شوف يسار", "شوف شمال", "شوف لليسار", "شوف عاليسار", "انظر يسار",
+                  "بص يسار", "look left"),
+    "look_right": ("شوف يمين", "شوف لليمين", "شوف عاليمين", "انظر يمين", "بص يمين",
+                   "look right"),
+    "look_center": ("شوف قدام", "شوف لقدام", "انظر قدام", "بص قدام", "look ahead"),
     "dance": ("ارقص", "dance"),
     "wave": ("سلّم", "باي"),
     "bow": ("انحني",),
@@ -42,6 +51,12 @@ LEXICON: dict[str, tuple[str, ...]] = {
     "celebrate": ("احتفل",),
     "hi": ("مرحبا", "هاي", "اهلا"),
     "offer_hand": ("سلم علي", "صافحني", "مد ايدك"),
+    "moves_on": ("شغل الحركات",),
+    "moves_off": ("طفي الحركات", "سكر الحركات"),
+    "voice_moves_on": ("شغل حركات الصوت",),
+    "voice_moves_off": ("طفي حركات الصوت",),
+    "app_moves_on": ("شغل حركات التطبيق",),
+    "app_moves_off": ("طفي حركات التطبيق",),
 }
 NEGATIONS = frozenset(tokens("لا ما مش مو بلاش dont not"))
 CANNED_SAY = {
@@ -52,6 +67,9 @@ CANNED_SAY = {
     "stand": "حاضر",
     "sit": "حاضر",
     "look": "لحظة أشوف",
+    "look_left": "أكيد",
+    "look_right": "أكيد",
+    "look_center": "أكيد",
     # never a word of the lexicon or a stop word: the robot must not command itself
     "dance": "يلا",
     "wave": "مع السلامة",
@@ -64,6 +82,12 @@ CANNED_SAY = {
     "celebrate": "هيييه",
     "hi": "أهلين",
     "offer_hand": "تشرفنا",
+    "moves_on": "صارت الحركات مفتوحة",
+    "moves_off": "صارت الحركات مسكّرة",
+    "voice_moves_on": "صارت حركات الصوت مفتوحة",
+    "voice_moves_off": "صارت حركات الصوت مسكّرة",
+    "app_moves_on": "صارت حركات التطبيق مفتوحة",
+    "app_moves_off": "صارت حركات التطبيق مسكّرة",
 }
 
 

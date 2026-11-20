@@ -18,9 +18,13 @@ gateway, which:
     a remote wake from limp
   * accepts one more release path that needs no network: a physical hold-to-release button
   * returns each source its events with its own seq numbers
-  * lets voice and bench start expressive moves (Perform, Reach), remote only with allow_moves,
-    and the planner never; offer_hand is for a person at the robot, so voice and bench only. A
-    move owns the motion like a Move until the body reports it done
+  * lets voice, remote and bench turn the camera (Look) with a rate cap; the planner may not
+  * lets voice, bench and remote start expressive moves when the policy allows it, with remote
+    moves requiring fresh standing telemetry and the app's speed below the policy cap; Reach stays
+    local, and the planner never starts a move. A move owns the motion like a Move until the body
+    reports it done
+  * keeps the app's (remote) speed and turn-rate limit, which the owner sets from the app or by
+    voice (SpeedLimit) up to the remote policy's ceiling, and remembers it across restarts
 
 It adds to the body's limits and replaces none of them. If the gateway dies, its heartbeat stops
 and the body's own watchdog stops the robot.
@@ -31,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import itertools
+import json
 import logging
 import math
 import time
@@ -38,6 +43,8 @@ import uuid
 from collections import OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 from spider_common.link import Link, topic_matches
@@ -54,7 +61,9 @@ from spider_common.protocol import (
     EventKind,
     GatewayStatus,
     Heartbeat,
+    Look,
     Move,
+    MovesSwitch,
     Perform,
     Posture,
     Reach,
@@ -62,6 +71,7 @@ from spider_common.protocol import (
     RobotState,
     Snapshot,
     SourceStatus,
+    SpeedLimit,
     Stop,
     Topics,
     parse_command,
@@ -86,9 +96,11 @@ _SOURCE_ONLY: frozenset[str] = frozenset({
 })
 PERFORM_HOLD_S = 21.0  # the longest move (20 s), unless the body reports it done sooner
 _PERFORM_END = frozenset({"perform_done", "perform_rejected"})
-_LOCAL_ONLY_MOVES = frozenset({"offer_hand"})  # someone must be at the robot
 _LOCAL_SOURCES = frozenset({"voice", BENCH_SOURCE})
 _NEEDS_CONFIRM_TO_WAKE = frozenset({"remote", "planner"})
+DEFAULT_MOVES_ON = {"voice": True, "remote": False}
+REMOTE_START_LIMITS = (0.05, 0.3)  # m/s, rad/s: the app's top speed until the owner changes it
+_SPEED_LIMIT_SOURCES = frozenset({"voice", "remote"})
 
 
 @dataclass(frozen=True)
@@ -97,6 +109,7 @@ class GatewayConfig:
     stop_holdoff_s: float = 2.0  # longer than one renewal (0.5 s), so the renewal is refused
     challenge_ttl_s: float = 30.0
     bench_enabled: bool = False  # SG_BENCH=1, only while a person is at the robot
+    state_dir: Path = Path("/var/lib/spider-gateway")
 
 
 class SourceClock:
@@ -207,15 +220,19 @@ class Gateway:
         self._holdoff: dict[str, tuple[float, str]] = {}  # source -> (until, who stopped)
         self._clocks = {source: SourceClock() for source in self.priority}
         self._last_snapshot: dict[str, float] = {}
+        self._last_look: dict[str, float] = {}
         self._last_clamp_notice: dict[str, float] = {}
         self._last_beat = -math.inf
         self._last_status = -math.inf
         self._trace = ""  # of the command being handled, for the replies it causes
         self._mode: str | None = None
         self._estop: bool | None = None
+        self._state_rx = -math.inf
         self._pending: dict[str, _PendingFrame] = {}
         self._challenges: dict[str, _Challenge] = {}
         self.counters: dict[str, int] = {}
+        self._moves_on = self._load_moves_state()
+        self._remote_limits = self._load_remote_limits()
 
     @staticmethod
     def subscriptions(robot_id: str) -> list[str]:
@@ -224,6 +241,57 @@ class Gateway:
 
     def _count(self, name: str) -> None:
         self.counters[name] = self.counters.get(name, 0) + 1
+
+    # ------------------------------------------------------------------ runtime settings
+    def _read_state(self, name: str) -> dict[str, Any] | None:
+        """A setting the owner changed at run time, from SG_STATE_DIR; None: use the default."""
+        path = self.config.state_dir / name
+        try:
+            saved = json.loads(path.read_text("utf-8"))
+            if not isinstance(saved, dict):
+                raise ValueError(f"{name} must hold an object")
+        except FileNotFoundError:
+            return None  # never changed yet
+        except (OSError, ValueError, TypeError):
+            log.warning("could not read %s; using the default", path)
+            return None
+        return saved
+
+    def _write_state(self, name: str, data: dict[str, Any]) -> bool:
+        """Written whole to a temporary file and renamed. False: kept in memory only."""
+        path = self.config.state_dir / name
+        try:
+            self.config.state_dir.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex[:8]}.tmp")
+            tmp.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            log.warning("could not save %s; keeping it in memory until the gateway restarts", path)
+            return False
+        return True
+
+    def _load_moves_state(self) -> dict[str, bool]:
+        saved = self._read_state("moves.json") or {}
+        state = dict(DEFAULT_MOVES_ON)
+        for source in DEFAULT_MOVES_ON:
+            value = saved.get(source)
+            if isinstance(value, bool):
+                state[source] = value
+        return state
+
+    def _load_remote_limits(self) -> tuple[float, float]:
+        """The app's top speed and turn rate: as saved, else the first-start value, and never
+        above the remote policy's ceiling (the owner may have lowered it since)."""
+        speed, turn = REMOTE_START_LIMITS
+        saved = self._read_state("remote_limits.json")
+        if saved is not None:
+            s, t = saved.get("max_speed_mps"), saved.get("max_wz_rps")
+            if _positive(s) and _positive(t):
+                speed, turn = float(s), float(t)
+            else:
+                log.warning("ignoring remote_limits.json without two positive numbers: %s", saved)
+        ceiling = self.policies["remote"]
+        return min(speed, ceiling.max_speed_mps), min(turn, ceiling.max_wz_rps)
 
     # ------------------------------------------------------------------ requests
     def on_request(self, source: str, payload: bytes | str) -> None:
@@ -286,6 +354,12 @@ class Gateway:
         elif isinstance(cmd, Snapshot):
             if self._snapshot_allowed(source, cmd.seq, now):
                 self._forward(cmd, source)
+        elif isinstance(cmd, Look):
+            self._on_look(cmd, source, now)
+        elif isinstance(cmd, MovesSwitch):
+            self._on_moves_switch(cmd, source)
+        elif isinstance(cmd, SpeedLimit):
+            self._on_speed_limit(cmd, source)
         else:
             self._forward(cmd, source)
 
@@ -337,18 +411,49 @@ class Gateway:
             return
         self._forward(limited, source)
 
+    def _on_look(self, cmd: Look, source: str, now: float) -> None:
+        """Camera pan. It moves no leg, so it takes no motion ownership, but a Stop still
+        holds it off and the planner may never send one."""
+        if source == "planner" or not self.policies[source].allow_look:
+            self._reply(source, cmd.seq, "rejected", f"{source} may not turn the camera")
+            return
+        if cmd.seq <= self._fence.get((source, cmd.session), -1):
+            return  # sent before this source's own Stop
+        held = self._holdoff.get(source)
+        if held is not None and now < held[0]:
+            self._count("held_off")
+            self._reply(source, cmd.seq, "rejected", f"held off after a stop from {held[1]}")
+            return
+        if now - self._last_look.get(source, -math.inf) < self.policies[source].min_look_period_s:
+            self._count("look_limited")
+            self._reply(source, cmd.seq, "rejected", "look rate limit")
+            return
+        self._last_look[source] = now
+        self._forward(cmd, source)
+
     def _on_perform(self, cmd: Perform | Reach, source: str, now: float) -> None:
         name = cmd.name if isinstance(cmd, Perform) else "reach"
+        policy = self.policies[source]
         if source == "planner":
             self._reply(source, cmd.seq, "rejected", "the planner may never start moves")
             return
-        if not self.policies[source].allow_moves:
+        if not policy.allow_moves:
             self._reply(source, cmd.seq, "rejected", f"{source} may not start moves "
                         "(allow_moves is off)")
             return
-        if name in _LOCAL_ONLY_MOVES and source not in _LOCAL_SOURCES:
-            self._reply(source, cmd.seq, "rejected",
-                        f"{name} needs someone at the robot: voice or bench only")
+        if source in self._moves_on and not self._moves_on[source]:
+            self._reply(source, cmd.seq, "rejected", f"moves from {source} are switched off")
+            return
+        if isinstance(cmd, Reach) and source not in _LOCAL_SOURCES:
+            self._reply(source, cmd.seq, "rejected", "reach needs someone at the robot")
+            return
+        if source == "remote" and (
+            self._mode != "standing" or self._estop or now - self._state_rx > 1.0
+        ):
+            self._reply(source, cmd.seq, "rejected", "moves from remote need the robot standing")
+            return
+        if source not in _LOCAL_SOURCES and name in policy.local_only_moves:
+            self._reply(source, cmd.seq, "rejected", f"{name} is closed to {source} in the policy")
             return
         if cmd.seq <= self._fence.get((source, cmd.session), -1):
             return  # sent before this source's own Stop: drop silently, as for a Move
@@ -357,6 +462,11 @@ class Gateway:
             self._count("held_off")
             self._reply(source, cmd.seq, "rejected", f"held off after a stop from {held[1]}")
             return
+        if cmd.speed > policy.max_move_speed:
+            self._count("capped")
+            self._reply(source, cmd.seq, "clamped",
+                        f"move speed limited to {policy.max_move_speed:g}")
+            cmd = cmd.model_copy(update={"speed": policy.max_move_speed})
         if not self._claim(source, cmd, now):
             self._busy(source, cmd.seq)
             return
@@ -365,9 +475,11 @@ class Gateway:
 
     def _cap(self, cmd: Move, source: str, now: float) -> Move:
         policy = self.policies[source]
+        max_speed, max_wz = (self._remote_limits if source == "remote"
+                             else (policy.max_speed_mps, policy.max_wz_rps))
         speed = math.hypot(cmd.vx, cmd.vy)
-        scale = min(1.0, policy.max_speed_mps / speed) if speed > 0.0 else 1.0
-        wz = max(-policy.max_wz_rps, min(policy.max_wz_rps, cmd.wz))
+        scale = min(1.0, max_speed / speed) if speed > 0.0 else 1.0
+        wz = max(-max_wz, min(max_wz, cmd.wz))
         duration = min(cmd.duration_s, policy.max_duration_s)
         if scale == 1.0 and wz == cmd.wz and duration == cmd.duration_s:
             return cmd
@@ -375,7 +487,7 @@ class Gateway:
         if now - self._last_clamp_notice.get(source, -math.inf) >= CLAMP_NOTICE_PERIOD_S:
             self._last_clamp_notice[source] = now
             self._reply(source, cmd.seq, "clamped",
-                        f"limited to {policy.max_speed_mps} m/s for {duration} s")
+                        f"limited to {max_speed} m/s for {duration} s")
         return cmd.model_copy(update={"vx": cmd.vx * scale, "vy": cmd.vy * scale, "wz": wz,
                                       "duration_s": duration})
 
@@ -492,10 +604,54 @@ class Gateway:
             return
         self._forward(cmd, source)
 
+    def _on_moves_switch(self, cmd: MovesSwitch, source: str) -> None:
+        if source == "planner":
+            self._reply(source, cmd.seq, "rejected", "the planner may not change the moves switch")
+            return
+        wanted = {target: value for target, value in (("voice", cmd.voice), ("remote", cmd.remote))
+                  if value is not None}
+        for target, value in wanted.items():  # all or nothing: check every source first
+            policy = self.policies.get(target)
+            if value and policy is not None and not policy.allow_moves:
+                self._reply(source, cmd.seq, "rejected",
+                            f"{target} may not start moves (allow_moves is off)")
+                return
+        changed = any(self._moves_on[target] != value for target, value in wanted.items())
+        self._moves_on.update(wanted)
+        if changed:
+            self._write_state("moves.json", self._moves_on)
+        detail = "moves: " + ", ".join(
+            f"{target} {'on' if self._moves_on[target] else 'off'}" for target in DEFAULT_MOVES_ON
+        )
+        self._reply(source, cmd.seq, "ack", detail)
+        self.publish_status(self.clock())
+
+    def _on_speed_limit(self, cmd: SpeedLimit, source: str) -> None:
+        """The app's top speed, set from the app or by voice; never above the remote ceiling."""
+        if source not in _SPEED_LIMIT_SOURCES:
+            self._reply(source, cmd.seq, "rejected",
+                        f"{source} may not change the app's speed limit")
+            return
+        ceiling = self.policies["remote"]
+        if cmd.max_speed_mps > ceiling.max_speed_mps or cmd.max_wz_rps > ceiling.max_wz_rps:
+            self._reply(source, cmd.seq, "rejected",
+                        f"above the ceiling of {ceiling.max_speed_mps:g} m/s and "
+                        f"{ceiling.max_wz_rps:g} rad/s (remote in the gateway policy)")
+            return
+        self._remote_limits = (cmd.max_speed_mps, cmd.max_wz_rps)
+        saved = self._write_state("remote_limits.json", {"max_speed_mps": cmd.max_speed_mps,
+                                                         "max_wz_rps": cmd.max_wz_rps})
+        detail = f"app speed limit {cmd.max_speed_mps:g} m/s, {cmd.max_wz_rps:g} rad/s"
+        if not saved:
+            detail += " (not saved: kept until the gateway restarts)"
+        self._reply(source, cmd.seq, "ack", detail)
+        self.publish_status(self.clock())
+
     # ------------------------------------------------------------------ events
     def on_state(self, payload: bytes | str) -> None:
         st = RobotState.model_validate_json(payload)
         self._mode, self._estop = st.mode, st.estop
+        self._state_rx = self.clock()
 
     def on_event(self, payload: bytes | str) -> None:
         ev = RobotEvent.model_validate_json(payload)
@@ -580,9 +736,16 @@ class Gateway:
         return GatewayStatus(
             robot_id=self.robot_id, session=self.session, owner=self._owner,
             owner_remaining_s=round(remaining, 2), mode=self._mode, estop=self._estop,
-            sources=sources, holdoff_s=holdoff, pending_challenges=len(self._challenges),
-            counters=dict(self.counters),
+            sources=sources, holdoff_s=holdoff, moves=dict(self._moves_on),
+            remote_limits=self._remote_limits_view(),
+            pending_challenges=len(self._challenges), counters=dict(self.counters),
         )
+
+    def _remote_limits_view(self) -> dict[str, float]:
+        ceiling = self.policies["remote"]
+        speed, turn = self._remote_limits
+        return {"max_speed_mps": speed, "max_wz_rps": turn,
+                "ceiling_speed_mps": ceiling.max_speed_mps, "ceiling_wz_rps": ceiling.max_wz_rps}
 
     def publish_status(self, now: float) -> None:
         self.link.publish(self.topics.gateway_status, self.status(now).model_dump_json(), qos=1,
@@ -610,3 +773,8 @@ class Gateway:
 
     async def run(self, tick_hz: float = 10.0) -> None:
         await asyncio.gather(self._pump(), self._ticker(1.0 / tick_hz))
+
+
+def _positive(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) \
+        and math.isfinite(value) and value > 0.0
