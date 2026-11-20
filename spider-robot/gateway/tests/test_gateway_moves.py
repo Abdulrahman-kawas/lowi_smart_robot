@@ -4,7 +4,16 @@ import json
 
 import pytest
 from spider_common.link import InMemoryHub
-from spider_common.protocol import EStop, Move, Perform, Reach, RobotEvent, Stop, Topics
+from spider_common.protocol import (
+    EStop,
+    Move,
+    Perform,
+    Reach,
+    RobotEvent,
+    RobotState,
+    Stop,
+    Topics,
+)
 
 from spider_gateway.gateway import Gateway, GatewayConfig
 from spider_gateway.policy import DEFAULT_POLICIES, load_policies
@@ -43,6 +52,10 @@ def perform(clock, name="dance", seq=1, session="s", **kw):
                    **kw).model_dump_json()
 
 
+def body_state(gw, mode="standing", estop=False):
+    gw.on_state(RobotState(robot_id=ROBOT, mode=mode, estop=estop).model_dump_json())
+
+
 def body_event(gw, kind, seq):
     gw.on_event(RobotEvent(robot_id=ROBOT, kind=kind, seq=seq).model_dump_json())
 
@@ -52,7 +65,7 @@ async def test_voice_and_bench_may_start_moves():
     gw.on_request("voice", perform(clock))
     assert sent(link)[-1]["type"] == "perform" and sent(link)[-1]["name"] == "dance"
     gw.on_request("voice", Stop(seq=2, session="s", ts=1000.0 + clock.now).model_dump_json())
-    clock.now += 3.0  # past the stop hold-off
+    clock.now += 3.0
     gw.on_request("bench", Reach(target=(0.3, 0.1, -0.03), seq=1, session="b",
                                  ts=1000.0 + clock.now).model_dump_json())
     assert sent(link)[-1]["type"] == "reach"
@@ -74,42 +87,87 @@ async def test_the_planner_cannot_be_configured_to_start_moves(tmp_path):
         load_policies(path)
 
 
-async def test_remote_moves_are_off_by_default_and_can_be_allowed(tmp_path):
+async def test_remote_moves_need_fresh_standing_telemetry():
     gw, link, clock = await rig_for()
     gw.on_request("remote", perform(clock, session="r"))
     assert sent(link) == []
-    assert "allow_moves is off" in replies(link, "remote")[-1]["detail"]
+    assert replies(link, "remote")[-1]["detail"] == "moves from remote need the robot standing"
 
-    path = tmp_path / "policy.yaml"
-    path.write_text("remote: {allow_moves: true}\n")
-    gw, link, clock = await rig_for(policies=load_policies(path))
+    body_state(gw)
     gw.on_request("remote", perform(clock, session="r"))
     assert sent(link)[-1]["name"] == "dance"
 
+    gw.on_request("planner", Stop(seq=1, session="p", ts=1000.0 + clock.now).model_dump_json())
+    clock.now += 2.0
+    gw.on_request("remote", perform(clock, seq=2, session="r"))
+    assert sent(link)[-1]["type"] == "stop"
+    assert replies(link, "remote")[-1]["detail"] == "moves from remote need the robot standing"
 
-async def test_offer_hand_only_with_someone_at_the_robot(tmp_path):
+    body_state(gw, mode="sitting")
+    gw.on_request("remote", perform(clock, seq=3, session="r"))
+    assert replies(link, "remote")[-1]["detail"] == "moves from remote need the robot standing"
+
+    body_state(gw, estop=True)
+    gw.on_request("remote", perform(clock, seq=4, session="r"))
+    assert replies(link, "remote")[-1]["detail"] == "moves from remote need the robot standing"
+
+
+async def test_a_policy_speed_cap_clamps_a_move(tmp_path):
     path = tmp_path / "policy.yaml"
-    path.write_text("remote: {allow_moves: true}\n")
+    path.write_text("remote: {max_move_speed: 0.4}\n")
+    gw, link, clock = await rig_for(policies=load_policies(path))
+    body_state(gw)
+    gw.on_request("remote", perform(clock, session="r", speed=0.8))
+    assert sent(link)[-1]["speed"] == 0.4
+    assert replies(link, "remote")[-1]["kind"] == "clamped"
+    assert "0.4" in replies(link, "remote")[-1]["detail"]
+
+
+@pytest.mark.parametrize("name", ["hi", "double_hi", "offer_hand"])
+async def test_every_greeting_move_is_open_to_the_app(name):
+    gw, link, clock = await rig_for()
+    body_state(gw)
+    gw.on_request("remote", perform(clock, name=name, session="r"))
+    assert sent(link)[-1]["name"] == name
+
+
+async def test_a_move_closed_in_the_policy_is_only_local(tmp_path):
+    path = tmp_path / "policy.yaml"
+    path.write_text("remote: {local_only_moves: [offer_hand]}\n")
     gw, link, clock = await rig_for(policies=load_policies(path), bench=True)
+    body_state(gw)
     gw.on_request("remote", perform(clock, name="offer_hand", session="r"))
-    gw.on_request("planner", perform(clock, name="offer_hand", session="p"))
     assert sent(link) == []
-    assert "voice or bench only" in replies(link, "remote")[-1]["detail"]
+    assert "is closed to remote" in replies(link, "remote")[-1]["detail"]
+
     gw.on_request("voice", perform(clock, name="offer_hand", session="v"))
     assert sent(link)[-1]["name"] == "offer_hand"
+    gw.on_request("planner", Stop(seq=2, session="p", ts=1000.0 + clock.now).model_dump_json())
+    clock.now += 3.0
+    gw.on_request("bench", perform(clock, name="offer_hand", seq=1, session="b"))
+    assert sent(link)[-1]["name"] == "offer_hand"
+
+
+async def test_reach_stays_local():
+    gw, link, clock = await rig_for()
+    body_state(gw)
+    gw.on_request("remote", Reach(target=(0.3, 0.1, -0.03), seq=1, session="r",
+                                  ts=1000.0 + clock.now).model_dump_json())
+    assert sent(link) == []
+    assert "reach needs someone at the robot" in replies(link, "remote")[-1]["detail"]
 
 
 async def test_a_move_owns_the_motion_until_the_body_says_done():
     gw, link, clock = await rig_for(policies={**DEFAULT_POLICIES})
     gw.on_request("voice", perform(clock, session="v"))
     out_seq = sent(link)[-1]["seq"]
-    clock.now += 5.0  # long after a Move would have expired
+    clock.now += 5.0
     gw.on_request("voice", '{"type":"heartbeat","ts":%f}' % (1000.0 + clock.now))
     gw.on_request("planner", Move(vx=0.05, seq=1, session="p",
                                   ts=1000.0 + clock.now).model_dump_json())
     assert "busy: voice is in control" in replies(link, "planner")[-1]["detail"]
     body_event(gw, "perform_done", out_seq)
-    assert replies(link, "voice")[-1]["kind"] == "perform_done"  # the source hears it
+    assert replies(link, "voice")[-1]["kind"] == "perform_done"
     gw.on_request("planner", Move(vx=0.05, seq=2, session="p",
                                   ts=1000.0 + clock.now).model_dump_json())
     assert sent(link)[-1]["type"] == "move"
@@ -150,7 +208,7 @@ async def test_a_move_sent_before_its_own_stop_is_dropped():
 async def test_a_lost_voice_ends_its_move():
     gw, link, clock = await rig_for()
     gw.on_request("voice", perform(clock, session="v"))
-    clock.now += 2.0  # no heartbeat from voice
+    clock.now += 2.0
     gw.tick()
     assert sent(link)[-1]["type"] == "stop"
     assert replies(link, "voice")[-1]["kind"] == "link_lost"

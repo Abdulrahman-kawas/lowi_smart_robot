@@ -7,26 +7,29 @@ struct PadDriveLayout: View {
     var now: TimeInterval
     var block: DriveBlock?
     @Binding var showSettings: Bool
+    @Binding var showMoves: Bool
     @State private var landscape = true
 
     var body: some View {
         Group {
             if landscape {
                 HStack(spacing: 0) {
-                    CameraStage(now: now, block: block, showSettings: $showSettings, compact: false)
+                    CameraStage(now: now, block: block, showSettings: $showSettings,
+                                showMoves: $showMoves, compact: false)
                     ScrollView {
-                        Sidebar(columns: 1).padding(14)
+                        Sidebar(columns: 1, showMoves: $showMoves).padding(14)
                     }
                     .frame(width: 360)
                     .background(Theme.background)
                 }
             } else {
                 VStack(spacing: 0) {
-                    CameraStage(now: now, block: block, showSettings: $showSettings, compact: false)
+                    CameraStage(now: now, block: block, showSettings: $showSettings,
+                                showMoves: $showMoves, compact: false)
                         .frame(maxHeight: .infinity)
                         .layoutPriority(1)
                     ScrollView {
-                        Sidebar(columns: 2).padding(14)
+                        Sidebar(columns: 2, showMoves: $showMoves).padding(14)
                     }
                     .frame(height: 380)
                     .background(Theme.background)
@@ -42,6 +45,7 @@ struct PadDriveLayout: View {
 struct Sidebar: View {
     @Environment(AppModel.self) private var model
     var columns: Int
+    @Binding var showMoves: Bool
 
     // Plain stacks, not a lazy grid: the sidebar is short, and a lazy grid holding a growing text
     // field hung the layout while scrolling.
@@ -50,6 +54,7 @@ struct Sidebar: View {
             VStack(spacing: 14) {
                 surroundings
                 robot
+                moves
                 photo
                 talk
                 events
@@ -60,6 +65,7 @@ struct Sidebar: View {
                 VStack(spacing: 14) {
                     surroundings
                     robot
+                    moves
                 }
                 VStack(spacing: 14) {
                     photo
@@ -84,6 +90,12 @@ struct Sidebar: View {
 
     private var robot: some View {
         SideCard(title: "Robot", systemImage: "info.circle") { RobotStatePanel() }
+    }
+
+    private var moves: some View {
+        SideCard(title: "Moves", systemImage: "figure.dance") {
+            MovesSideCard(showMoves: $showMoves)
+        }
     }
 
     private var photo: some View {

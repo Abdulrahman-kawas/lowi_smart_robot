@@ -41,6 +41,17 @@ struct SettingsView: View {
                         .accessibilityIdentifier("speakToggle")
                 }
                 Section {
+                    Picker("Speed", selection: $model.moveSpeed) {
+                        Text("Normal").tag(0.5)
+                        Text("Lively").tag(0.75)
+                        Text("Fast").tag(1.0)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("moveSpeed")
+                } header: {
+                    Text("Moves").foregroundStyle(Theme.muted)
+                }
+                Section {
                     Button(role: .destructive) {
                         confirmUnpair = true
                     } label: {

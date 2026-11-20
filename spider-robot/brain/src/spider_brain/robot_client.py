@@ -33,6 +33,7 @@ from spider_common.protocol import (
     LidarSummary,
     Look,
     Move,
+    Perform,
     Posture,
     RobotEvent,
     RobotState,
@@ -244,6 +245,11 @@ class RobotClient:
     def look(self, pan_deg: float, speed: float = 0.5, human: bool = False) -> int:
         """Camera pan (deg, + left). Fire and forget: the ack or refusal comes as an event."""
         return self._send(Look(pan_deg=pan_deg, speed=speed), human=human)
+
+    def perform(self, name: str, speed: float = 0.5, leg: str | None = None,
+                human: bool = False) -> int:
+        """One built-in expressive move. The body's own checks still apply."""
+        return self._send(Perform(name=name, speed=speed, leg=leg), human=human)
 
     def estop(self) -> int:
         return self._send(EStop(), human=True)

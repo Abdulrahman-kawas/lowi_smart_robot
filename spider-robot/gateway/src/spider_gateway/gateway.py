@@ -19,9 +19,10 @@ gateway, which:
   * accepts one more release path that needs no network: a physical hold-to-release button
   * returns each source its events with its own seq numbers
   * lets voice, remote and bench turn the camera (Look) with a rate cap; the planner may not
-  * lets voice and bench start expressive moves (Perform, Reach), remote only with allow_moves,
-    and the planner never; offer_hand is for a person at the robot, so voice and bench only. A
-    move owns the motion like a Move until the body reports it done
+  * lets voice, bench and remote start expressive moves when the policy allows it, with remote
+    moves requiring fresh standing telemetry and the app's speed below the policy cap; Reach stays
+    local, and the planner never starts a move. A move owns the motion like a Move until the body
+    reports it done
 
 It adds to the body's limits and replaces none of them. If the gateway dies, its heartbeat stops
 and the body's own watchdog stops the robot.
@@ -88,7 +89,6 @@ _SOURCE_ONLY: frozenset[str] = frozenset({
 })
 PERFORM_HOLD_S = 21.0  # the longest move (20 s), unless the body reports it done sooner
 _PERFORM_END = frozenset({"perform_done", "perform_rejected"})
-_LOCAL_ONLY_MOVES = frozenset({"offer_hand"})  # someone must be at the robot
 _LOCAL_SOURCES = frozenset({"voice", BENCH_SOURCE})
 _NEEDS_CONFIRM_TO_WAKE = frozenset({"remote", "planner"})
 
@@ -216,6 +216,7 @@ class Gateway:
         self._trace = ""  # of the command being handled, for the replies it causes
         self._mode: str | None = None
         self._estop: bool | None = None
+        self._state_rx = -math.inf
         self._pending: dict[str, _PendingFrame] = {}
         self._challenges: dict[str, _Challenge] = {}
         self.counters: dict[str, int] = {}
@@ -364,16 +365,24 @@ class Gateway:
 
     def _on_perform(self, cmd: Perform | Reach, source: str, now: float) -> None:
         name = cmd.name if isinstance(cmd, Perform) else "reach"
+        policy = self.policies[source]
         if source == "planner":
             self._reply(source, cmd.seq, "rejected", "the planner may never start moves")
             return
-        if not self.policies[source].allow_moves:
+        if not policy.allow_moves:
             self._reply(source, cmd.seq, "rejected", f"{source} may not start moves "
                         "(allow_moves is off)")
             return
-        if name in _LOCAL_ONLY_MOVES and source not in _LOCAL_SOURCES:
-            self._reply(source, cmd.seq, "rejected",
-                        f"{name} needs someone at the robot: voice or bench only")
+        if isinstance(cmd, Reach) and source not in _LOCAL_SOURCES:
+            self._reply(source, cmd.seq, "rejected", "reach needs someone at the robot")
+            return
+        if source == "remote" and (
+            self._mode != "standing" or self._estop or now - self._state_rx > 1.0
+        ):
+            self._reply(source, cmd.seq, "rejected", "moves from remote need the robot standing")
+            return
+        if source not in _LOCAL_SOURCES and name in policy.local_only_moves:
+            self._reply(source, cmd.seq, "rejected", f"{name} is closed to {source} in the policy")
             return
         if cmd.seq <= self._fence.get((source, cmd.session), -1):
             return  # sent before this source's own Stop: drop silently, as for a Move
@@ -382,6 +391,11 @@ class Gateway:
             self._count("held_off")
             self._reply(source, cmd.seq, "rejected", f"held off after a stop from {held[1]}")
             return
+        if cmd.speed > policy.max_move_speed:
+            self._count("capped")
+            self._reply(source, cmd.seq, "clamped",
+                        f"move speed limited to {policy.max_move_speed:g}")
+            cmd = cmd.model_copy(update={"speed": policy.max_move_speed})
         if not self._claim(source, cmd, now):
             self._busy(source, cmd.seq)
             return
@@ -521,6 +535,7 @@ class Gateway:
     def on_state(self, payload: bytes | str) -> None:
         st = RobotState.model_validate_json(payload)
         self._mode, self._estop = st.mode, st.estop
+        self._state_rx = self.clock()
 
     def on_event(self, payload: bytes | str) -> None:
         ev = RobotEvent.model_validate_json(payload)

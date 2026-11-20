@@ -24,9 +24,24 @@ enum UITestFakes {
         }
         FakeBrainProtocol.jpegBase64 = jpeg.base64EncodedString()
         URLProtocol.registerClass(FakeBrainProtocol.self)
+        if ProcessInfo.processInfo.arguments.contains("-uiTestMoves") {
+            let moves = ["wave", "bow", "body_wave", "shimmy", "leg_ripple", "stomp", "dance",
+                         "attack_stance", "defense_stance", "alert", "crab_sway", "stretch",
+                         "sleep", "celebrate", "double_hi", "offer_hand"]
+            state = BrainState(
+                robot: RobotStatus(mode: "standing", estop: false, vx: 0, vy: 0, wz: 0,
+                                   limiter: nil, linkOk: true, rollDeg: 0.2, pitchDeg: -0.3,
+                                   cameraPanDeg: 0, perform: nil),
+                robotAgeMs: 40, online: true,
+                gateway: GatewayView(online: true, owner: nil, estop: false, remoteAlive: true),
+                drive: DriveView(holder: nil),
+                latency: LatencyView(robotCmdRttMs: 4.5, frameRttMs: 6.0),
+                frameAgeMs: 120,
+                caps: Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0, moves: moves))
+        }
     }
 
-    static let state = BrainState(
+    @MainActor static var state = BrainState(
         robot: RobotStatus(mode: "estop", estop: true, vx: 0, vy: 0, wz: 0,
                            limiter: "slowing: obstacle 0.40 m from the legs", linkOk: true,
                            rollDeg: 0.4, pitchDeg: -1.2, cameraPanDeg: 0),

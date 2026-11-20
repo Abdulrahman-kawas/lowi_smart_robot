@@ -38,6 +38,7 @@ final class AppModel {
     var deviceName: String { didSet { defaults.set(deviceName, forKey: Keys.device) } }
     var hapticsOn: Bool { didSet { defaults.set(hapticsOn, forKey: Keys.haptics) } }
     var speakAnswers: Bool { didSet { defaults.set(speakAnswers, forKey: Keys.speak) } }
+    var moveSpeed: Double { didSet { defaults.set(moveSpeed, forKey: Keys.moveSpeed) } }
     private(set) var token: String?
 
     // MARK: live state
@@ -99,6 +100,7 @@ final class AppModel {
         static let device = "deviceName"
         static let haptics = "haptics"
         static let speak = "speakAnswers"
+        static let moveSpeed = "moveSpeed"
         static let token = "deviceToken"
     }
 
@@ -114,6 +116,7 @@ final class AppModel {
         deviceName = defaults.string(forKey: Keys.device) ?? UIDevice.current.name
         hapticsOn = defaults.object(forKey: Keys.haptics) as? Bool ?? true
         speakAnswers = defaults.object(forKey: Keys.speak) as? Bool ?? true
+        moveSpeed = defaults.object(forKey: Keys.moveSpeed) as? Double ?? 0.5
         token = Keychain.read(Keys.token)
         socket.onStatus = { [weak self] status in self?.linkChanged(status) }
         socket.onMessage = { [weak self] message in self?.handle(message) }
@@ -139,6 +142,20 @@ final class AppModel {
     var address: BrainAddress? { BrainAddress(addressText) }
     var api: APIClient? { address.map { APIClient(address: $0, token: token) } }
     var isLive: Bool { link == .live }
+    var moveSpeedLabel: LocalizedStringKey {
+        switch moveSpeed {
+        case 0.75: "Lively"
+        case 1.0: "Fast"
+        default: "Normal"
+        }
+    }
+    var moveSpeedText: LocalizedStringKey {
+        switch moveSpeed {
+        case 0.75: "Speed: Lively"
+        case 1.0: "Speed: Fast"
+        default: "Speed: Normal"
+        }
+    }
 
     // MARK: derived
 
@@ -241,6 +258,12 @@ final class AppModel {
 
     func posture(_ posture: String) {
         if !socket.send(.posture(posture)) {
+            notice = String(localized: "Not connected to the brain.")
+        }
+    }
+
+    func startMove(_ name: String, leg: String?) {
+        if !socket.send(.perform(name: name, speed: moveSpeed, leg: leg)) {
             notice = String(localized: "Not connected to the brain.")
         }
     }
@@ -520,6 +543,10 @@ extension BrainEvent {
         case "preempted": String(localized: "Taken over")
         case "drive_refused": String(localized: "Drive refused")
         case "drive_ended": String(localized: "Drive ended")
+        case "perform_started": String(localized: "Move started")
+        case "perform_done": String(localized: "Move done")
+        case "perform_rejected": String(localized: "Move refused")
+        case "clamped": String(localized: "Limited")
         case "video_slowed", "video_failed", "video_ok": String(localized: "Live view")
         default: nil
         }

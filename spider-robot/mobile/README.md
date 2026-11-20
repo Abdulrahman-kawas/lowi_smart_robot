@@ -76,11 +76,14 @@ brew install mosquitto xcodegen
   the turn control and STOP under the right; Stand and Sit. The top bar shows the link state,
   latency, frame age, mode, E-stop and the limiter reason.
 - **Drive, iPad:** the same camera stage, with a sidebar holding the LiDAR radar (36 sectors,
-  nearest obstacle marked), robot state, photo with a question, and the event log. In portrait
-  the sidebar moves under the camera.
+  nearest obstacle marked), robot state, moves, photo with a question, and the event log. In
+  portrait the sidebar moves under the camera.
 - **Keyboard:** W/S forward and back, A/D sideways, Q/E turn, Space STOP, Esc E-stop: the keys of
   the simulator page. Keys are ignored while a text field has the keyboard.
 - **Game controller:** the left stick drives, the right stick turns, B is STOP, Y is E-stop.
+- **Moves:** one button for every built-in move, with the leading leg where it applies. The speed
+  is Normal, Lively or Fast in Settings; the sheet shows the body's or gateway's own status text.
+  The body still refuses any move it cannot do safely.
 - **Photo:** an iPhone screen of its own, a sidebar panel on iPad. The vision answer is shown
   only; it never moves the robot.
 - **E-stop release, and standing a limp robot:** a fresh photo, what will happen, and a long

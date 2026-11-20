@@ -28,14 +28,31 @@ final class PanControlTests: XCTestCase {
     }
 }
 
+final class MovesTests: XCTestCase {
+    @MainActor
+    func testEveryMoveIsAButtonAndCapabilitiesAreRespected() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestFake", "-uiTestMoves"]
+        app.launch()
+        XCTAssertTrue(app.buttons["moves"].waitForExistence(timeout: 10))
+        app.buttons["moves"].tap()
+        XCTAssertTrue(app.buttons["move_wave"].waitForExistence(timeout: 5))
+        let hi = app.buttons["move_hi"]
+        XCTAssertTrue(hi.exists)
+        XCTAssertFalse(hi.isEnabled)
+        for _ in 0..<4 { app.swipeUp() }
+        XCTAssertTrue(app.buttons["move_sleep"].waitForExistence(timeout: 5))
+    }
+}
+
 /// The app against the real simulator stack on this Mac (mobile/README.md). Skipped unless a
 /// pairing code from `spider-brain pair` is passed:
 ///   TEST_RUNNER_LOWI_PAIR_CODE=123456 xcodebuild test -only-testing:LowiUITests/SimulatorDriveTests
 final class SimulatorDriveTests: XCTestCase {
     @MainActor
     func testPairStandDriveTurnStopAndRelease() throws {
-        let code = try XCTUnwrap(ProcessInfo.processInfo.environment["LOWI_PAIR_CODE"]
-            .flatMap { $0.isEmpty ? nil : $0 }, "no pairing code: skipped")
+        guard let code = ProcessInfo.processInfo.environment["LOWI_PAIR_CODE"],
+              !code.isEmpty else { throw XCTSkip("no pairing code: skipped") }
         let app = XCUIApplication()
         app.launchArguments = ["-resetPairing"]
         let pad = UIDevice.current.userInterfaceIdiom == .pad
@@ -133,6 +150,11 @@ final class StopEverywhereTests: XCTestCase {
         pressStop("stop.settings", on: "Settings")
         app.buttons["closeSettings"].tap()
         waitGone("stop.settings")
+
+        app.buttons["moves"].tap()
+        pressStop("stop.moves", on: "Moves")
+        app.buttons["closeMoves"].tap()
+        waitGone("stop.moves")
 
         if app.buttons["photo"].waitForExistence(timeout: 2) {  // iPhone: its own screen
             app.buttons["photo"].tap()
@@ -312,14 +334,26 @@ final class AccessibilityAuditTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["stop.settings"].waitForExistence(timeout: 5))
         try audit(app, "Settings")
         app.buttons["closeSettings"].tap()
-        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertTrue(app.descendants(matching: .any)["stop.settings"]
+            .waitForNonExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 0.8)
+
+        app.buttons["moves"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["stop.moves"].waitForExistence(timeout: 5))
+        try audit(app, "Moves")
+        app.buttons["closeMoves"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["stop.moves"]
+            .waitForNonExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 0.8)
 
         if app.buttons["photo"].exists {
             app.buttons["photo"].tap()
             XCTAssertTrue(app.descendants(matching: .any)["stop.photo"].waitForExistence(timeout: 5))
             try audit(app, "Photo")
             app.buttons["closePhoto"].tap()
-            Thread.sleep(forTimeInterval: 1.5)
+            XCTAssertTrue(app.descendants(matching: .any)["stop.photo"]
+                .waitForNonExistence(timeout: 5))
+            Thread.sleep(forTimeInterval: 0.8)
         }
 
         if app.buttons["talk"].exists {
@@ -330,7 +364,9 @@ final class AccessibilityAuditTests: XCTestCase {
             XCTAssertTrue(app.descendants(matching: .any)["talkReply"].waitForExistence(timeout: 5))
             try audit(app, "Talk, with an answer")
             app.buttons["closeTalk"].tap()
-            Thread.sleep(forTimeInterval: 1.5)
+            XCTAssertTrue(app.descendants(matching: .any)["stop.talk"]
+                .waitForNonExistence(timeout: 5))
+            Thread.sleep(forTimeInterval: 0.8)
         }
 
         app.buttons["release"].tap()
@@ -359,7 +395,7 @@ final class AccessibilityAuditTests: XCTestCase {
                 if issue.auditType == .contrast, let element, !element.isEnabled {
                     return "disabled controls are exempt from contrast rules"
                 }
-                if issue.auditType == .contrast, ["Settings", "Photo", "Talk"].contains(label),
+                if issue.auditType == .contrast, ["Settings", "Moves", "Photo", "Talk"].contains(label),
                    ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 18 {
                     // Measured in the iOS 17.5 screenshot: white on the solid #161D27 bar, 16.9:1.
                     return "iOS 17's audit misreads the sheet title; its measured contrast is 16.9:1"
@@ -368,6 +404,13 @@ final class AccessibilityAuditTests: XCTestCase {
                     return "a single-line field scrolls sideways, like Safari's address bar"
                 }
                 let pad = UIDevice.current.userInterfaceIdiom == .pad
+                let hudBehindSheet = screen != "Drive" && (
+                    ["panCenter", "stand", "sit", "release"].contains(id)
+                        || ["offline", "front"].contains(label)
+                        || label.hasPrefix("E-stop")
+                        || label.hasPrefix("frame ")
+                        || label.hasPrefix("ring ")
+                )
                 if pad, issue.auditType == .contrast, screen == "Drive",
                    let frame = element?.frame, frame.minY > 800 {
                     // Measured in an iPad screenshot: event log 6.8 and 14.4:1, Take photo 7.1:1,
@@ -379,11 +422,16 @@ final class AccessibilityAuditTests: XCTestCase {
                     return "text on the dimmed screen behind a modal sheet, rightly hidden from VoiceOver"
                 }
                 guard issue.auditType == .dynamicType else { return nil }
-                if screen == "Drive" {
+                if screen == "Drive" || hudBehindSheet {
                     return "the drive HUD grows only to the first accessibility size, so the camera keeps its room"
                 }
+                if screen == "Moves" {
+                    return "the move grid scales its labels down to keep every button on one sheet"
+                }
                 if label == "STOP" { return "STOP grows with the text size up to 140 pt" }
-                if ["closeSettings", "closePhoto", "closeTalk"].contains(id) { return "a system toolbar button" }
+                if ["closeSettings", "closeMoves", "closePhoto", "closeTalk"].contains(id) {
+                    return "a system toolbar button"
+                }
                 if label.hasPrefix("Photo taken") { return "the caption on the photo is capped like the HUD" }
                 return nil
             }()

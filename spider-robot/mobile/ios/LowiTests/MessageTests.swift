@@ -16,7 +16,9 @@ struct MessageTests {
          "gateway":{"online":true,"owner":"remote","owner_remaining_s":0.8,"estop":false,
                     "remote_alive":true},
          "drive":{"holder":"iPhone"},"latency":{"robot_cmd_rtt_ms":4.5,"frame_rtt_ms":null},
-         "frame_age_ms":310,"caps":{"max_speed_mps":0.05,"max_wz_rps":0.3,"move_s":1.0}}
+          "frame_age_ms":310,"caps":{"max_speed_mps":0.05,"max_wz_rps":0.3,"move_s":1.0,
+          "moves":["wave","dance","hi"]}}
+
         """
         guard case .state(let state) = try ServerMessage.decode(text: text) else {
             Issue.record("not a state message")
@@ -27,7 +29,8 @@ struct MessageTests {
         #expect(state.robot?.limiter == "slowing: obstacle 0.40 m from the legs")
         #expect(state.gateway.owner == "remote" && state.drive.holder == "iPhone")
         #expect(state.latency.robotCmdRttMs == 4.5 && state.latency.frameRttMs == nil)
-        #expect(state.caps == Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0))
+        #expect(state.caps == Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0,
+                                   moves: ["wave", "dance", "hi"]))
     }
 
     @Test func eventsCarryTheHoldTheyEnd() throws {
@@ -62,6 +65,15 @@ struct MessageTests {
         #expect(lookObject["type"] as? String == "look")
         #expect(lookObject["pan_deg"] as? Double == -40)
         #expect(lookObject["speed"] as? Double == 0.5)
+        let perform = ClientMessage.perform(name: "wave", speed: 0.75, leg: "RF").json
+        let performObject = try #require(try JSONSerialization.jsonObject(with: Data(perform.utf8)) as? [String: Any])
+        #expect(performObject["type"] as? String == "perform")
+        #expect(performObject["name"] as? String == "wave")
+        #expect(performObject["speed"] as? Double == 0.75)
+        #expect(performObject["leg"] as? String == "RF")
+        let noLeg = ClientMessage.perform(name: "dance", speed: 0.5, leg: nil).json
+        let noLegObject = try #require(try JSONSerialization.jsonObject(with: Data(noLeg.utf8)) as? [String: Any])
+        #expect(noLegObject["leg"] == nil)
         #expect(ClientMessage.stop.json == #"{"type":"stop"}"#)
         #expect(ClientMessage.auth(token: "t").json == #"{"token":"t","type":"auth"}"#)
     }

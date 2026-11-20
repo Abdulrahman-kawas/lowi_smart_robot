@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from spider_common.protocol import MOVE_NAMES
+
 from ..robot_client import TELEMETRY_STALE_S, RobotOffline
 from .camera import Frame, FrameFeed
 from .devices import DeviceStore, PairingCodes
@@ -41,8 +43,8 @@ CLOSE_REVOKED = 4401
 CLOSE_TOO_SLOW = 1013
 GATEWAY_STALE_S = 3.0  # it publishes status at 1 Hz
 ALERTS = frozenset({"obstacle_stop", "tilt", "fallen", "link_lost", "estop", "offline", "health"})
-REFUSALS = frozenset({"rejected", "preempted"})
-QUIET = frozenset({"ack", "move_done", "challenge", "perform_started", "perform_done"})
+REFUSALS = frozenset({"rejected", "preempted", "perform_rejected"})
+QUIET = frozenset({"ack", "move_done", "challenge"})
 DRIVE_MODES = frozenset({"standing", "walking"})
 POSTURES = frozenset({"stand", "sit", "relax"})
 
@@ -150,6 +152,8 @@ class MobileHub:
             self._video_changed()
         elif kind == "look":
             self._look(session.device, msg.get("pan_deg"), msg.get("speed", 0.5))
+        elif kind == "perform":
+            self._spawn(self._perform(session, msg))
         elif kind == "posture":
             self._spawn(self._posture(session, msg.get("posture")))
         else:
@@ -208,10 +212,48 @@ class MobileHub:
         self._look_pending = (pan, speed)
         self._flush_look()
 
+    async def _perform(self, session: Session, msg: dict[str, Any]) -> None:
+        name, speed, leg = msg.get("name"), msg.get("speed", 0.5), msg.get("leg")
+        if name not in MOVE_NAMES:
+            self._notify(session.device, "perform_rejected", f"unknown move {name!r}", True)
+            return
+        if leg not in (None, "LF", "RF"):
+            self._notify(session.device, "perform_rejected", "leading leg must be LF or RF", True)
+            return
+        if not self._number(speed) or not 0.0 < speed <= 1.0:
+            self._notify(session.device, "perform_rejected",
+                         "move speed must be greater than 0 and at most 1", True)
+            return
+        why = self._move_preflight(session.device)
+        if why is not None:
+            self._notify(session.device, "perform_rejected", why, True)
+            return
+        self.robot.perform(name, speed, leg, human=True)
+
     @staticmethod
     def _number(value: object) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool) \
             and math.isfinite(value)
+
+    def _move_preflight(self, device: str) -> str | None:
+        """Why this device may not start a move now, or None. The body checks again."""
+        if self.robot.version_error:
+            return self.robot.version_error
+        st, rx = self.robot.state, self.robot.state_rx
+        now = time.monotonic()
+        if st is None or rx is None or now - rx > TELEMETRY_STALE_S:
+            return "no fresh telemetry from the robot"
+        if st.estop:
+            return "the E-stop is latched"
+        if st.mode != "standing":
+            return f"the robot is {st.mode}; stand it up first"
+        mine = [s for s in self.sessions.values() if s.device == device and s.video]
+        sent = [s.last_frame_at for s in mine if s.last_frame_at is not None]
+        if sent and now - max(sent) <= self.max_frame_age_s:
+            return None
+        if st.lidar_age_s is not None and st.lidar_age_s <= 0.5:
+            return None
+        return "turn the live view on, or wait for the LiDAR"
 
     def _flush_look(self) -> None:
         if self._look_pending is None:
@@ -254,9 +296,9 @@ class MobileHub:
                 await socket.send_json(item)
 
     # ------------------------------------------------------------------ views
-    def caps_view(self) -> dict[str, float]:
+    def caps_view(self) -> dict[str, Any]:
         return {"max_speed_mps": self.caps.max_speed_mps, "max_wz_rps": self.caps.max_wz_rps,
-                "move_s": self.caps.move_s}
+                "move_s": self.caps.move_s, "moves": list(MOVE_NAMES)}
 
     def _gateway_view(self, now: float) -> dict[str, Any]:
         g = self.gateway

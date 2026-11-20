@@ -23,6 +23,8 @@ class SourcePolicy(BaseModel):
     needs_frame_proof: bool = False  # release must name a fresh camera frame and be confirmed
     min_snapshot_period_s: float = Field(0.5, ge=0.0)
     allow_moves: bool = False  # Perform and Reach (expressive moves); never for the planner
+    max_move_speed: float = Field(1.0, gt=0.0, le=1.0)  # the app's own setting decides below this
+    local_only_moves: list[str] = Field(default_factory=list)  # closed to the app unless empty
     allow_look: bool = True  # Look (camera pan). Never for the planner: see check_order
     min_look_period_s: float = Field(0.2, ge=0.0)  # at most 5 Looks a second per source
 
@@ -35,8 +37,8 @@ DEFAULT_POLICIES: dict[str, SourcePolicy] = {
     "voice": SourcePolicy(max_speed_mps=0.08, max_wz_rps=0.5, max_duration_s=2.0,
                           max_excess_delay_s=0.5, allow_moves=True),
     "remote": SourcePolicy(max_speed_mps=0.05, max_wz_rps=0.3, max_duration_s=1.0,
-                           max_excess_delay_s=0.75, may_release_estop=True,
-                           needs_frame_proof=True),
+                           max_excess_delay_s=0.75, allow_moves=True,
+                           may_release_estop=True, needs_frame_proof=True),
     "planner": SourcePolicy(max_speed_mps=0.06, max_wz_rps=0.45, max_duration_s=1.0,
                             max_excess_delay_s=0.75, allow_look=False),
 }

@@ -122,6 +122,41 @@ async def test_bench_look_sends_a_look_and_reports_the_ack():
     assert "look -30 deg" in await task
 
 
+def test_bench_perform_accepts_a_move_name_and_leg():
+    args = make_parser().parse_args(
+        ["bench", "perform", "wave", "--speed", "0.4", "--leg", "RF"])
+    assert args.bench_action == "perform" and args.target == "wave"
+    assert args.speed == 0.4 and args.leg == "RF"
+
+
+async def test_bench_perform_sends_one_move_and_reports_the_body():
+    hub = InMemoryHub()
+    link = hub.endpoint(Console.subscriptions(ROBOT, "bench"))
+    await link.start()
+    console = Console(link, ROBOT, source="bench")
+    task = asyncio.create_task(console.bench_perform("dance", 0.75, None, wait_s=0.2))
+    await asyncio.sleep(0.02)
+    out = [json.loads(m.payload) for m in link.published]
+    assert out[0]["type"] == "heartbeat"
+    move = next(c for c in out if c["type"] == "perform")
+    assert move["name"] == "dance" and move["speed"] == 0.75 and move.get("leg") is None
+    link.publish(T.source_event("bench"), RobotEvent(
+        robot_id=ROBOT, kind="perform_done", seq=move["seq"],
+        detail="dance finished").model_dump_json())
+    assert "dance finished" in await task
+    assert not [c for c in out if c["type"] == "stop"]
+
+
+async def test_bench_perform_stops_when_the_body_does_not_answer():
+    hub = InMemoryHub()
+    link = hub.endpoint([])
+    await link.start()
+    console = Console(link, ROBOT, source="bench")
+    assert "no answer" in await console.bench_perform("dance", 0.5, None, wait_s=0.05)
+    out = [json.loads(m.payload) for m in link.published]
+    assert out[-1]["type"] == "stop"
+
+
 async def test_release_warns_when_the_camera_is_turned(tmp_path, capsys):
     console, gateway, gw_link, camera, hub = await rig()
     tasks = [asyncio.create_task(gateway._pump()),

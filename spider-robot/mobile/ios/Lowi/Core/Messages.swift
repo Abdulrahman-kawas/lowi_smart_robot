@@ -7,6 +7,29 @@ struct Caps: Codable, Sendable, Equatable {
     var maxSpeedMps: Double
     var maxWzRps: Double
     var moveS: Double
+    var moves: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case maxSpeedMps
+        case maxWzRps
+        case moveS
+        case moves
+    }
+
+    init(maxSpeedMps: Double, maxWzRps: Double, moveS: Double, moves: [String] = []) {
+        self.maxSpeedMps = maxSpeedMps
+        self.maxWzRps = maxWzRps
+        self.moveS = moveS
+        self.moves = moves
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        maxSpeedMps = try container.decode(Double.self, forKey: .maxSpeedMps)
+        maxWzRps = try container.decode(Double.self, forKey: .maxWzRps)
+        moveS = try container.decode(Double.self, forKey: .moveS)
+        moves = try container.decodeIfPresent([String].self, forKey: .moves) ?? []
+    }
 }
 
 struct RobotStatus: Decodable, Sendable, Equatable {
@@ -136,12 +159,13 @@ enum ClientMessage: Sendable, Equatable {
     case stop
     case estop
     case look(panDeg: Double, speed: Double)
+    case perform(name: String, speed: Double, leg: String?)
     case posture(String)
     case video(Bool)
     case heartbeat(Double)
 
     var json: String {
-        let object: [String: Any]
+        var object: [String: Any]
         switch self {
         case .auth(let token): object = ["type": "auth", "token": token]
         case .drive(let input, let holdId):
@@ -150,6 +174,9 @@ enum ClientMessage: Sendable, Equatable {
         case .stop: object = ["type": "stop"]
         case .estop: object = ["type": "estop"]
         case .look(let pan, let speed): object = ["type": "look", "pan_deg": pan, "speed": speed]
+        case .perform(let name, let speed, let leg):
+            object = ["type": "perform", "name": name, "speed": speed]
+            if let leg { object["leg"] = leg }
         case .posture(let posture): object = ["type": "posture", "posture": posture]
         case .video(let on): object = ["type": "video", "on": on]
         case .heartbeat(let t): object = ["type": "heartbeat", "t": t]

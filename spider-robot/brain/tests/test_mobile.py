@@ -27,7 +27,7 @@ from spider_body.hw.servos import FakeServoBank
 from spider_body.main import command_loop, control_loop, state_loop
 from spider_body.robot import Robot
 from spider_common.link import InMemoryHub
-from spider_common.protocol import Topics
+from spider_common.protocol import MOVE_NAMES, RobotState, Topics
 from spider_gateway.gateway import Gateway
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
@@ -480,7 +480,8 @@ async def test_pairing_over_http_and_revocation_closes_the_socket(brain):
     assert r.status_code == 200, r.text
     token = r.json()["token"]
     assert r.json()["device_name"] == "テスト用 iPad"
-    assert r.json()["caps"] == {"max_speed_mps": 0.05, "max_wz_rps": 0.3, "move_s": 1.0}
+    assert r.json()["caps"] == {"max_speed_mps": 0.05, "max_wz_rps": 0.3, "move_s": 1.0,
+                                "moves": list(MOVE_NAMES)}
     assert (await http.get("/v1/state", headers=bearer(token))).status_code == 200
     r = await http.post("/v1/pair", json={"code": code, "device_name": "again"})
     assert r.status_code == 429  # within a second
@@ -694,3 +695,60 @@ async def test_bad_look_values_are_refused_without_sending(brain):
     assert _looks(brain) == []
     refusals = [m for m in _drain(session) if m.get("kind") == "look"]
     assert len(refusals) == 5 and all(m["refusal"] for m in refusals)
+
+
+def _performs(brain):
+    out = []
+    for m in brain.svc.robot.link.published:
+        if m.topic != T.request("remote"):
+            continue
+        data = json.loads(m.payload)
+        if data.get("type") == "perform":
+            out.append(data)
+    return out
+
+
+def _fresh_standing(brain, lidar_age_s=0.2):
+    brain.svc.robot.state = RobotState(robot_id=ROBOT, mode="standing", lidar_age_s=lidar_age_s)
+    brain.svc.robot.state_rx = time.monotonic()
+
+
+async def test_fresh_lidar_is_enough_to_send_one_perform(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    _fresh_standing(brain)
+    brain.svc.mobile.handle(session, {"type": "perform", "name": "dance", "speed": 0.75,
+                                      "leg": None})
+    assert await _until(lambda: _performs(brain), 1.0)
+    assert _performs(brain)[0]["name"] == "dance"
+    assert _performs(brain)[0]["speed"] == 0.75
+
+
+async def test_perform_without_live_view_or_lidar_is_refused(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    _fresh_standing(brain, lidar_age_s=None)
+    brain.svc.mobile.handle(session, {"type": "perform", "name": "dance"})
+    assert await _until(lambda: not session.queue.empty(), 1.0)
+    assert _performs(brain) == []
+    refusals = [m for m in _drain(session) if m.get("kind") == "perform_rejected"]
+    assert len(refusals) == 1 and "live view" in refusals[0]["detail"]
+
+
+async def test_bad_perform_values_are_refused_without_sending(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    _fresh_standing(brain)
+    for msg in ({"name": "nope"}, {"name": "wave", "leg": "RR"},
+                {"name": "wave", "speed": 0}, {"name": "wave", "speed": 1.5}):
+        brain.svc.mobile.handle(session, {"type": "perform", **msg})
+    assert await _until(lambda: session.queue.qsize() >= 4, 1.0)
+    assert _performs(brain) == []
+    refusals = [m for m in _drain(session) if m.get("kind") == "perform_rejected"]
+    assert len(refusals) == 4 and all(m["refusal"] for m in refusals)
+
+
+async def test_hello_advertises_every_move(brain):
+    session = brain.svc.mobile.connect("phone")
+    hello = _drain(session)[0]
+    assert hello["caps"]["moves"] == list(MOVE_NAMES)
