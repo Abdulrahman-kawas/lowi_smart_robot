@@ -268,6 +268,8 @@ class RobotState(BaseModel):
     rt_ok: bool = False  # SCHED_FIFO and locked memory are really active
     perform: str | None = None  # the move running now (mode stays "standing" while it runs)
     camera_pan_deg: float | None = None  # front camera pan (+ left); None: no pan servo, or limp
+    # A pose the body holds until Stand: "table", or "stopped" (a move stopped halfway); else None
+    held_pose: str | None = None
 
 
 EventKind = Literal[

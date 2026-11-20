@@ -127,3 +127,23 @@ def test_a_stop_while_rising_holds_where_it_is_and_stand_still_works(cfg):
     run_ticks(robot, lidar, world, clock, 15.0)
     assert robot._frame is None
     assert robot.gait.height == pytest.approx(cfg.geometry.body_height_m)
+
+
+def test_the_state_says_which_pose_is_held(cfg):
+    robot, _servos, lidar, world, brain, clock = stood(cfg)
+    assert robot.state().held_pose is None
+    robot.handle(Perform(name="table", speed=1.0, ts=TS, seq=20))
+    run_ticks(robot, lidar, world, clock, 0.5)
+    assert robot.state().held_pose is None  # still moving: perform says so
+    run_ticks(robot, lidar, world, clock, 5.5)
+    assert robot.state().held_pose == "table"
+    robot.handle(Posture(posture="stand", ts=TS, seq=21))
+    run_ticks(robot, lidar, world, clock, 0.5)
+    assert robot.state().held_pose is None and robot.state().perform == "recover"
+    run_ticks(robot, lidar, world, clock, 15.0)
+    assert robot.state().held_pose is None
+    robot.handle(Perform(name="table", speed=0.5, ts=TS, seq=22))
+    run_ticks(robot, lidar, world, clock, 1.0)
+    robot.handle(Stop(ts=TS, seq=23))
+    run_ticks(robot, lidar, world, clock, 0.3)
+    assert robot.state().held_pose == "stopped"
