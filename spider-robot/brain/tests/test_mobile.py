@@ -861,3 +861,64 @@ async def test_the_app_sets_its_top_speed_and_drives_at_a_fraction_of_it(stack):
     await app.send(type="drive", x=1, y=0, turn=0, hold_id="h2", speed=0)
     assert await _until(lambda: refused(app, "speed must be a number"), 2.0)
     await app.close()
+
+
+async def test_app_protection_message_sends_one_remote_command_and_validates(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    brain.svc.mobile.handle(session, {"type": "protection", "enabled": False, "ttl_s": 2.5})
+    out = _requests(brain, "protection")
+    assert len(out) == 1 and (out[0]["enabled"], out[0]["ttl_s"]) == (False, 2.5)
+    assert session.protection_off is True
+
+    bad = ({"enabled": "false"}, {"enabled": False, "ttl_s": 0},
+           {"enabled": False, "ttl_s": 6}, {"enabled": False, "ttl_s": float("nan")},
+           {"enabled": False, "ttl_s": "2"}, {"enabled": True, "ttl_s": True})
+    for msg in bad:
+        brain.svc.mobile.handle(session, {"type": "protection", **msg})
+    assert len(_requests(brain, "protection")) == 1
+    notes = [m for m in _drain(session) if m.get("kind") == "protection"]
+    assert len(notes) == len(bad) and all(n["refusal"] for n in notes)
+
+
+async def test_app_protection_restores_on_disconnect_unless_another_socket_owns_it(brain):
+    hub = brain.svc.mobile
+    first, second = hub.connect("phone"), hub.connect("phone")
+    _drain(first)
+    _drain(second)
+
+    hub.handle(first, {"type": "protection", "enabled": False, "ttl_s": 5.0})
+    assert len(_requests(brain, "protection")) == 1
+    hub.handle(second, {"type": "protection", "enabled": True})
+    assert len(_requests(brain, "protection")) == 2  # the explicit on; no extra restore
+    hub.disconnect(second)
+    assert len(_requests(brain, "protection")) == 2
+    hub.disconnect(first)
+    out = _requests(brain, "protection")
+    assert len(out) == 3 and out[-1]["enabled"] is True
+
+
+async def test_estop_clears_the_app_protection_ownership(brain):
+    session = brain.svc.mobile.connect("phone")
+    session.protection_off = True
+    brain.svc.mobile.estop("phone")
+    assert session.protection_off is False
+
+
+async def test_no_planner_tool_can_change_protection(brain):
+    from spider_brain.tools import TOOL_SPECS
+
+    assert "protection" not in json.dumps(TOOL_SPECS).lower()
+
+
+async def test_app_protection_off_reaches_the_body_and_restores_on_close(stack):
+    app = await App.open(stack.base, stack.token)
+    await app.send(type="protection", enabled=False, ttl_s=5.0)
+    assert await _until(lambda: stack.body.state().protection is False, 2.0)
+    assert await _until(lambda: stack.svc.robot.state is not None
+                        and stack.svc.robot.state.protection is False, 2.0)
+    out = _requests(stack, "protection")
+    assert len(out) == 1 and out[0]["enabled"] is False
+
+    await app.close()
+    assert await _until(lambda: stack.body.state().protection is True, 2.0)
