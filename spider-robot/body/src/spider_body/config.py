@@ -187,6 +187,28 @@ class MovesCfg(_M):
     offer_hand_height_m: float = Field(0.12, ge=0.04, le=0.20)
 
 
+class CameraWindowCfg(_M):
+    """The beams that hit the robot's own front camera (deg; bearing + left of straight ahead,
+    elevation + above the L2's centre, both in the robot's frame). Nothing else is visible along
+    them, so their points are only the camera and ghosts off its edges: dropped up to
+    max_range_m. Beams below and beside the window are untouched, and the window may never
+    reach below the L2's horizon, so whatever stands on the floor is always seen."""
+
+    bearing_min_deg: float = Field(ge=-90.0, le=90.0)
+    bearing_max_deg: float = Field(ge=-90.0, le=90.0)
+    elevation_min_deg: float = Field(gt=0.0, le=90.0)
+    elevation_max_deg: float = Field(gt=0.0, le=90.0)
+    max_range_m: float = Field(0.6, gt=0.0, le=0.8)
+
+    @model_validator(mode="after")
+    def _a_real_window(self) -> CameraWindowCfg:
+        if self.bearing_min_deg >= self.bearing_max_deg:
+            raise ValueError("camera_window: bearing_min_deg must be below bearing_max_deg")
+        if self.elevation_min_deg >= self.elevation_max_deg:
+            raise ValueError("camera_window: elevation_min_deg must be below elevation_max_deg")
+        return self
+
+
 class LidarCfg(_M):
     enabled: bool = True
     endpoint: str = "ipc:///tmp/spider_lidar.ipc"
@@ -199,6 +221,7 @@ class LidarCfg(_M):
     sectors: int = 36
     # One cloud can miss sectors, so each sector reports its nearest return over this many clouds.
     history_clouds: int = Field(3, ge=1, le=10)
+    camera_window: CameraWindowCfg | None = None  # None: the camera is not ignored
 
 
 class CameraCfg(_M):
