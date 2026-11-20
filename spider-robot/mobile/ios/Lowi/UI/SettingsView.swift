@@ -1,10 +1,16 @@
 import SwiftUI
 
 struct SettingsView: View {
+    private enum Confirmation: Equatable {
+        case unpair
+        case protectionOff
+    }
+
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @State private var confirmUnpair = false
+    @State private var confirmation: Confirmation?
+    @State private var showConfirmation = false
     @State private var speedDraft: Double?  // cm/s while a finger is on the slider
     @State private var turnDraft: Double?  // degrees/s
 
@@ -44,6 +50,26 @@ struct SettingsView: View {
                 }
                 speedSection
                 Section {
+                    Toggle("LiDAR protection", isOn: Binding(
+                        get: { model.protectionOn },
+                        set: { enabled in
+                            if enabled {
+                                model.setProtection(true)
+                            } else {
+                                confirmation = .protectionOff
+                                showConfirmation = true
+                            }
+                        }
+                    ))
+                    .disabled(!model.isLive || model.brain?.robot?.estop == true)
+                    .accessibilityIdentifier("protectionToggle")
+                    Text("The robot stops for obstacles while protection is on. Turn it off only for a controlled test.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
+                } header: {
+                    Text("Safety").foregroundStyle(Theme.muted)
+                }
+                Section {
                     Toggle("Voice can start moves", isOn: Binding(
                         get: { model.movesState.voice },
                         set: { model.setMoves(voice: $0) }
@@ -67,7 +93,8 @@ struct SettingsView: View {
                 }
                 Section {
                     Button(role: .destructive) {
-                        confirmUnpair = true
+                        confirmation = .unpair
+                        showConfirmation = true
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Unpair this device")
@@ -93,12 +120,23 @@ struct SettingsView: View {
                         .accessibilityIdentifier("closeSettings")
                 }
             }
-            .confirmationDialog("Unpair this device?", isPresented: $confirmUnpair,
+            .confirmationDialog(confirmation == .unpair ? Text("Unpair this device?") :
+                                    Text("Turn off LiDAR protection?"),
+                                isPresented: $showConfirmation,
                                 titleVisibility: .visible) {
-                Button("Unpair", role: .destructive) {
-                    model.pressStop()
-                    dismiss()
-                    model.unpair()
+                if confirmation == .unpair {
+                    Button("Unpair", role: .destructive) {
+                        model.pressStop()
+                        dismiss()
+                        model.unpair()
+                    }
+                } else {
+                    Button("Turn off", role: .destructive) { model.setProtection(false) }
+                    Button("Cancel", role: .cancel) {}
+                }
+            } message: {
+                if confirmation == .protectionOff {
+                    Text("The robot will not stop for obstacles. Protection comes back when the app closes.")
                 }
             }
         }

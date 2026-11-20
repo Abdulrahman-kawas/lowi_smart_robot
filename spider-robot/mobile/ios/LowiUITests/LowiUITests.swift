@@ -57,6 +57,44 @@ final class MovesTests: XCTestCase {
     }
 }
 
+final class ProtectionTests: XCTestCase {
+    @MainActor
+    func testBannerTurnOnAndSettingsConfirmation() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestFake", "-uiTestFakeLive", "-uiTestProtectionOff"]
+        app.launch()
+        let banner = app.descendants(matching: .any)["protectionBanner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 10))
+        app.buttons["turnOnProtection"].tap()
+        XCTAssertTrue(banner.waitForNonExistence(timeout: 5))
+
+        openSheet("settings", marker: "settingsForm", in: app)
+        let toggle = app.switches["protectionToggle"]
+        reveal(toggle, in: app)
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["Turn off"].waitForExistence(timeout: 3))
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(banner.waitForNonExistence(timeout: 2))
+
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        app.buttons["Turn off"].waitForExistence(timeout: 3)
+        app.buttons["Turn off"].tap()
+        XCTAssertTrue(banner.waitForExistence(timeout: 5))
+        app.buttons["closeSettings"].tap()
+        XCTAssertTrue(banner.exists)
+    }
+
+    @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        let form = app.descendants(matching: .any)["settingsForm"]
+        for _ in 0..<12 where !(element.exists && element.isHittable) {
+            form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.1, thenDragTo: form.coordinate(
+                    withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)))
+        }
+    }
+}
+
 final class SpeedSettingsTests: XCTestCase {
     /// The Speed section shows the gateway's real top speed and its ceiling, and stays off while
     /// the app has no live link (the fake has none).

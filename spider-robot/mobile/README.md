@@ -87,6 +87,10 @@ brew install mosquitto xcodegen
   kept by the gateway and shown as it reports them, with its ceiling under them; Walking and
   Turning as Slow, Normal or Fast (40, 70 or 100 % of the top speed, with the real cm/s and °/s);
   and the speed of moves. Off while the app has no live link.
+- **LiDAR protection (Settings):** on by default. Turning it off needs confirmation, shows a red
+  banner on the drive screen and renews a 2 s lease about every 1 s while the app is active. It
+  restores on background, link loss, E-stop, an explicit Turn on, lease expiry or disconnect.
+  The body still obeys known tilt, joint limits, Stop and E-stop.
 - **Moves:** one button for every built-in move, with the leading leg where it applies. The speed
   is Normal, Lively or Fast in Settings; the sheet shows the body's or gateway's own status text.
   Settings can switch moves from the app and from voice on or off for this robot; the sheet greys
@@ -135,7 +139,7 @@ DEST='platform=iOS Simulator,name=iPhone 15 Pro'   # iOS 17.5; iPhone 17 Pro for
 xcodebuild -scheme Lowi -destination "$DEST" -only-testing:LowiTests test
 xcodebuild -scheme Lowi -destination "$DEST" -collect-test-diagnostics never \
   -only-testing:LowiUITests/StopOnConnectTests -only-testing:LowiUITests/StopEverywhereTests \
-  -only-testing:LowiUITests/AccessibilityAuditTests test
+  -only-testing:LowiUITests/ProtectionTests -only-testing:LowiUITests/AccessibilityAuditTests test
 # Every screen as screenshots (the app's built-in fake brain, debug builds only):
 TEST_RUNNER_LOWI_SCREENSHOTS=1 xcodebuild -scheme Lowi -destination "$DEST" \
   -resultBundlePath build/shots.xcresult -only-testing:LowiUITests/ScreenshotTests test
@@ -188,19 +192,26 @@ Every route but `/v1/hello` and `/v1/pair` needs `Authorization: Bearer <device 
 On `/v1/live`:
 
 - **Server to app:** `hello`, `state` (each new robot state, 4 Hz from the body, and at least
-  once a second), `lidar` (36 sectors), `event` (`kind`, `detail`, `level`, `refusal`), `pong`.
+  once a second, including `robot.protection`; missing means on), `lidar` (36 sectors),
+  `event` (`kind`, `detail`, `level`, `refusal`), `pong`.
   Frames are binary: `[u32 big-endian header length][header JSON {type, n, age_ms}][JPEG]`.
 - **App to server:** `drive {x, y, turn, hold_id, speed?, turn_speed?}`, `stop`, `estop`,
   `look {pan_deg, speed}`, `perform {name, speed, leg?}`,
   `moves_switch {voice?, remote?}`, `speed_limit {max_speed_mps, max_wz_rps}`,
-  `posture {stand|sit|relax}`, `video {on}`, and `heartbeat {t}` every second.
-  Drive events (`drive_ended`, `drive_refused`) carry the `hold_id` of the press they end. The server treats
-  3 s of silence as a lost socket.
+  `protection {enabled, ttl_s}`, `posture {stand|sit|relax}`, `video {on}`, and
+  `heartbeat {t}` every second. Drive events (`drive_ended`, `drive_refused`) carry the
+  `hold_id` of the press they end. The server treats 3 s of silence as a lost socket.
 - **Drive inputs:** each from -1 to 1. `x` is forward, `y` is left, and `turn` is positive to the
   left. The brain scales them to the caps. `speed` and `turn_speed` (0 < f <= 1, missing = 1) are
   the Walking and Turning setting, a fraction of the caps; any other value refuses the press.
 - **Speed limit:** `speed_limit` sets the app's top speed in the gateway, which keeps it across
   restarts. The brain refuses it above its own caps; the gateway refuses it above its ceiling.
+- **LiDAR protection:** `protection {enabled, ttl_s}` is app-only and forwarded as the `remote`
+  source; `ttl_s` is 1-5 seconds, default 2. Turning protection off skips LiDAR freshness,
+  obstacle distances and unknown tilt in the body, but never Stop, E-stop, known tilt, joint
+  limits or the link watchdog. The app renews off about every 1 s while active; the body restores
+  on E-stop, relax, expiry or `enabled: true`, and the brain restores on disconnect when no other
+  app owns the off state. Voice, the planner and HTTP cannot send this message.
 
 Frame age is measured on the brain from the moment it asked for the frame, so it is an upper
 bound that needs no clock sync. The app adds the time since the frame arrived.

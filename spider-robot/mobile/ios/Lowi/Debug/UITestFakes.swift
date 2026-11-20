@@ -45,16 +45,25 @@ enum UITestFakes {
         }
     }
 
-    @MainActor static var state = BrainState(
-        robot: RobotStatus(mode: "estop", estop: true, vx: 0, vy: 0, wz: 0,
-                           limiter: "slowing: obstacle 0.40 m from the legs", linkOk: true,
-                           rollDeg: 0.4, pitchDeg: -1.2, cameraPanDeg: 0),
-        robotAgeMs: 40, online: true,
-        gateway: GatewayView(online: true, owner: nil, estop: true, remoteAlive: true,
-                             moves: MovesState(), remoteLimits: remoteLimits),
-        drive: DriveView(holder: nil),
-        latency: LatencyView(robotCmdRttMs: 4.5, frameRttMs: 6.0),
-        frameAgeMs: 120, caps: Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0))
+    @MainActor static var state: BrainState = {
+        var state = BrainState(
+            robot: RobotStatus(mode: "estop", estop: true, vx: 0, vy: 0, wz: 0,
+                               limiter: "slowing: obstacle 0.40 m from the legs", linkOk: true,
+                               rollDeg: 0.4, pitchDeg: -1.2, cameraPanDeg: 0),
+            robotAgeMs: 40, online: true,
+            gateway: GatewayView(online: true, owner: nil, estop: true, remoteAlive: true,
+                                 moves: MovesState(), remoteLimits: remoteLimits),
+            drive: DriveView(holder: nil),
+            latency: LatencyView(robotCmdRttMs: 4.5, frameRttMs: 6.0),
+            frameAgeMs: 120, caps: Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0))
+        if ProcessInfo.processInfo.arguments.contains("-uiTestProtectionOff") {
+            state.robot?.protection = false
+            state.robot?.estop = false
+            state.robot?.mode = "standing"
+            state.gateway.estop = false
+        }
+        return state
+    }()
 
     /// The gateway's first-start top speed under its default ceiling.
     static let remoteLimits = RemoteLimits(maxSpeedMps: 0.05, maxWzRps: 0.3, ceilingSpeedMps: 0.12,
