@@ -44,6 +44,7 @@ NEAR_M = 0.6  # the body refuses a mask past this: nothing that far is the robot
 MAX_RANGE_M = 8.0  # lidar.max_range_m: a sector at this distance saw nothing
 SECTORS = 36
 PAN_MATCH_DEG = 0.5
+MAP_WAIT_S = 20.0  # the L2 can drop out for a few seconds; wait this long for fresh maps
 SAME_M = 0.03  # range noise: a sector this close to its farthest reading has not changed
 
 
@@ -190,22 +191,33 @@ def table_text(maps: dict[float, list[float]], table: dict) -> str:
 
 # --------------------------------------------------------------------------- on the robot
 async def read_maps(console, count: int, after: float, timeout_s: float):
-    """`count` fresh RobotStates sent after `after` (wall clock): their maps and pans."""
+    """`count` fresh RobotStates sent after `after` (wall clock), and the last state seen."""
     from spider_common.protocol import RobotState
 
     got: list = []
+    last: list = []
 
     def collect(msg):
         if msg.topic != console.topics.state:
             return None
         s = RobotState.model_validate_json(msg.payload)
-        if s.ts < after or s.lidar is None or s.lidar_age_s is None or s.lidar_age_s > 0.5:
+        if s.ts < after:
+            return None
+        last[:] = [s]
+        if s.lidar is None or s.lidar_age_s is None or s.lidar_age_s > 0.5:
             return None
         got.append(s)
         return got if len(got) >= count else None
 
     await console.wait_for(collect, timeout_s)
-    return got
+    return got, (last[0] if last else None)
+
+
+def describe(state) -> str:
+    if state is None:
+        return "no telemetry from the robot at all"
+    age = "none" if state.lidar_age_s is None else f"{state.lidar_age_s:.1f} s"
+    return f"mode {state.mode}, lidar age {age}, limiter {state.limiter}"
 
 
 async def sweep(console, pans: list[float], settle_s: float, samples: int):
@@ -216,9 +228,10 @@ async def sweep(console, pans: list[float], settle_s: float, samples: int):
             if not answer.startswith("ack"):
                 raise RuntimeError(f"look {want:+.0f}: {answer}")
             await asyncio.sleep(settle_s)
-            states = await read_maps(console, samples, time.time(), 4.0 + samples)
+            states, last = await read_maps(console, samples, time.time(), MAP_WAIT_S)
             if len(states) < samples:
-                raise RuntimeError(f"pan {want:+.0f}: no fresh LiDAR map from the robot")
+                raise RuntimeError(f"pan {want:+.0f}: {len(states)} of {samples} fresh LiDAR "
+                                   f"maps in {MAP_WAIT_S:.0f} s; last state: {describe(last)}")
             seen = [s.camera_pan_deg for s in states]
             if any(p is None for p in seen) or max(seen) - min(seen) > PAN_MATCH_DEG:
                 raise RuntimeError(f"pan {want:+.0f}: the camera did not hold still ({seen})")
@@ -227,7 +240,10 @@ async def sweep(console, pans: list[float], settle_s: float, samples: int):
                 continue
             maps[pan] = merge([s.lidar.sectors_m for s in states])
             print(f"  pan {pan:+5.1f}: nearest " + " ".join(
-                f"{bearing(i):+d}:{d:.2f}" for i, d in enumerate(maps[pan]) if d < 1.2), flush=True)
+                f"{bearing(i):+d}:{d:.2f}" for i, d in enumerate(maps[pan]) if d < 1.2)
+                + "  nothing at " + (" ".join(
+                    f"{bearing(i):+d}" for i, d in enumerate(maps[pan]) if empty(d)) or "-"),
+                flush=True)
     finally:
         print("camera back to 0:", await console.bench_look(0.0, 1.0))
     return maps

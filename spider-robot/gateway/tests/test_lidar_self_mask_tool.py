@@ -114,9 +114,10 @@ def test_checks_for_a_fixed_return_and_a_blind_sector():
 class FakeRobot:
     """The console as the tool uses it: bench_look, wait_for and the state topic."""
 
-    def __init__(self, limit: float = 50.0) -> None:
+    def __init__(self, limit: float = 50.0, lidar_age_s: float = 0.1) -> None:
         self.topics = Topics("spider-01")
         self.limit = limit
+        self.lidar_age_s = lidar_age_s
         self.pan: float | None = None
         self.looks: list[float] = []
 
@@ -129,7 +130,7 @@ class FakeRobot:
         for _ in range(20):
             state = RobotState(
                 robot_id="spider-01", ts=time.time() + 1, mode="standing",
-                camera_pan_deg=self.pan, lidar_age_s=0.1,
+                camera_pan_deg=self.pan, lidar_age_s=self.lidar_age_s,
                 lidar=LidarSummary(ts=0, sector_deg=10, sectors_m=OWNER.get(self.pan, room()),
                                    nearest_m=0.24, nearest_bearing_deg=0, points=100))
             msg = SimpleNamespace(topic=self.topics.state, payload=state.model_dump_json())
@@ -165,3 +166,10 @@ async def test_a_refused_look_stops_the_sweep_and_still_centres_the_camera():
 def test_bad_arguments_are_refused(argv):
     with pytest.raises(SystemExit):
         tool.main(argv)
+
+
+async def test_a_stale_lidar_stops_the_sweep_with_what_the_robot_said():
+    robot = FakeRobot(lidar_age_s=2.4)
+    with pytest.raises(RuntimeError, match=r"0 of 3 fresh LiDAR maps .* lidar age 2.4 s"):
+        await tool.sweep(robot, [10.0], 0.0, 3)
+    assert robot.looks == [10.0, 0.0]
