@@ -4,8 +4,8 @@
 Run it on the Pi with the gateway's venv and settings, like spider-robotctl. The gateway needs
 SG_BENCH=1 and the robot sits or stands (on the tripod is fine). A furnished room is fine: only
 what CHANGES as the camera turns is taken for the camera, so things that stay put are never
-masked, however near. Nothing may move during the sweep: people stay still, at least 1 m away.
-Walls all around help: a sector that sees nothing at all is taken as hidden.
+masked, however near. Nothing may move during the sweep: people stay still, at least 1 m away
+and not in front. Walls all around help: a sector that sees nothing at all is taken as hidden.
 
   sudo -u spider bash -c 'set -a; . /etc/spider/gateway.env; set +a; exec \
     /opt/spider/spider-robot/gateway/.venv/bin/python \
@@ -13,8 +13,10 @@ Walls all around help: a sector that sees nothing at all is taken as hidden.
 
 It turns the camera from -60 to +60 deg in 10-deg steps (a bench Look, nothing else moves),
 reads the LiDAR sector map at each pan and writes, per pan:
-  mask:   front-half sectors nearer than 0.6 m AND nearer than that sector reads at another pan
-          (the room behind the camera): the camera, ignored up to that distance
+  mask:   the camera, ignored up to that distance: a front-half sector nearer than 0.6 m, at
+          least 10 cm nearer than the same sector reads at another pan (the room behind the
+          camera), over 3 or more pans in a row (a rigid camera turns smoothly; a return that
+          comes and goes is noise, a cable or a person, and stays an obstacle)
   shadow: sectors with no return at all: the camera hides them
 It writes /tmp/lidar_self_mask.yaml only after you type yes, and prints how to install it.
 
@@ -45,7 +47,8 @@ MAX_RANGE_M = 8.0  # lidar.max_range_m: a sector at this distance saw nothing
 SECTORS = 36
 PAN_MATCH_DEG = 0.5
 MAP_WAIT_S = 20.0  # the L2 can drop out for a few seconds; wait this long for fresh maps
-SAME_M = 0.03  # range noise: a sector this close to its farthest reading has not changed
+CAMERA_DROP_M = 0.10  # the camera is this much nearer than the room behind it; less is noise
+MIN_RUN = 3  # pans in a row: a part 10 cm from the pan axis stays ~2.5 steps in one sector
 
 
 def bearing(sector: int) -> int:
@@ -84,41 +87,56 @@ def room_of(maps: dict[float, list[float]], old_pans: dict | None = None) -> lis
     return room
 
 
-def entry_for(sectors_m: list[float], old: dict | None = None,
-              room: list[float] | None = None) -> tuple[dict, list[str]]:
-    """One pan's mask entry from its measured map, added to the old entry (--extend).
+def camera_pans(maps: dict[float, list[float]], old_pans: dict | None = None
+                ) -> tuple[dict[int, set[float]], list[str], list[str]]:
+    """Per sector, the pans at which it shows the camera; the problems that make the
+    measurement unusable; and notes on near returns kept as obstacles."""
+    old_pans = old_pans or {}
+    room = room_of(maps, old_pans)
+    order = sorted(maps)
+    camera: dict[int, set[float]] = {}
+    problems: list[str] = []
+    notes: list[str] = []
+    for i in range(SECTORS):
+        hits = [k for k, pan in enumerate(order)
+                if not empty(d := maps[pan][i]) and d < NEAR_M
+                and d <= room[i] - CAMERA_DROP_M and i not in old_shadows(old_pans, pan)]
+        if not hits:
+            continue
+        where = " ".join(f"{order[k]:+.0f}" for k in hits)
+        if not front_half(i):
+            problems.append(f"something moved at {bearing(i):+d} deg, behind the robot "
+                            f"(pans {where}): that is not the camera; keep still and run again")
+        elif hits != list(range(hits[0], hits[0] + len(hits))) or len(hits) < MIN_RUN:
+            notes.append(f"{bearing(i):+d} deg comes and goes (pans {where}): not a camera "
+                         "turning, kept as an obstacle")
+        else:
+            camera[i] = {order[k] for k in hits}
+    return camera, problems, notes
 
-    Only a return nearer than the same sector's room (room_of) is the camera; something that
-    reads the same at every pan stays an obstacle. Returns the entry and the problems that
-    make the measurement unusable.
-    """
+
+def entry_for(sectors_m: list[float], old: dict | None = None,
+              camera: set[int] | frozenset[int] = frozenset()) -> dict:
+    """One pan's mask entry: its camera sectors (camera_pans) and empty sectors, added to the
+    old entry (--extend)."""
     old = old or {}
-    room = room or [MAX_RANGE_M] * SECTORS
     mask = {int(k): float(v) for k, v in (old.get("mask") or {}).items()}
-    old_shadow = {int(i) for i in old.get("shadow") or []}
-    shadow = set(old_shadow)
-    problems = []
+    shadow = {int(i) for i in old.get("shadow") or []}
     for i, d in enumerate(sectors_m):
         if empty(d):
             shadow.add(i)  # in a room with walls only the camera leaves a sector empty
-        elif d < NEAR_M and d < room[i] - SAME_M and i not in old_shadow:
-            # an old shadow reads its neighbour's value, not its own
-            if not front_half(i):
-                problems.append(f"something moved {d:.2f} m away at {bearing(i):+d} deg, "
-                                "behind the robot: that is not the camera; keep still and "
-                                "run again")
-                continue
+        elif i in camera:
             mask[i] = max(mask.get(i, 0.0), math.ceil(d * 1000) / 1000)
-    return {"mask": dict(sorted(mask.items())), "shadow": sorted(shadow)}, problems
+    return {"mask": dict(sorted(mask.items())), "shadow": sorted(shadow)}
 
 
 def same_everywhere(maps: dict[float, list[float]]) -> list[int]:
-    """Sectors near at every pan and unchanged: the room (or a fixed part of the camera mount),
-    kept as an obstacle."""
+    """Sectors near at every pan and unchanged: the room, or the robot itself, kept as an
+    obstacle."""
     out = []
     for i in range(SECTORS):
         ds = [m[i] for m in maps.values()]
-        if len(ds) > 2 and max(ds) < NEAR_M and max(ds) - min(ds) <= SAME_M:
+        if len(ds) > 2 and max(ds) < NEAR_M and max(ds) - min(ds) < CAMERA_DROP_M:
             out.append(i)
     return out
 
@@ -136,19 +154,19 @@ def find_old(old_pans: dict, pan: float) -> dict | None:
 
 
 def build(maps: dict[float, list[float]], margin_m: float, old: dict | None = None
-          ) -> tuple[dict, list[str]]:
+          ) -> tuple[dict, list[str], list[str]]:
+    """The mask file's content, the problems that make it unusable, and notes."""
     old_pans = (old or {}).get("pans") or {}
-    room = room_of(maps, old_pans)
-    pans, problems = {}, []
+    camera, problems, notes = camera_pans(maps, old_pans)
+    pans = {}
     for pan in sorted(maps):
-        entry, issues = entry_for(maps[pan], find_old(old_pans, pan), room)
-        pans[pan] = entry
-        problems += [f"pan {pan:+.0f}: {p}" for p in issues]
+        here = {i for i, at in camera.items() if pan in at}
+        pans[pan] = entry_for(maps[pan], find_old(old_pans, pan), here)
     for key, value in old_pans.items():  # an old pan this sweep did not reach stays as it was
         if all(abs(float(key) - p) > PAN_MATCH_DEG for p in pans):
             pans[float(key)] = value
     margin = float((old or {}).get("margin_m", margin_m))
-    return {"margin_m": margin, "pans": dict(sorted(pans.items()))}, problems
+    return {"margin_m": margin, "pans": dict(sorted(pans.items()))}, problems, notes
 
 
 def to_yaml(table: dict, note: str) -> str:
@@ -273,7 +291,7 @@ async def run(args: argparse.Namespace) -> int:
     finally:
         await link.stop()
 
-    table, problems = build(maps, args.margin, old)
+    table, problems, notes = build(maps, args.margin, old)
     print("\nwhat the L2 sees of the camera (deg: + left, 0 = straight ahead):")
     print(table_text(maps, table))
     if problems:
@@ -283,6 +301,8 @@ async def run(args: argparse.Namespace) -> int:
     if fixed:
         print("\nkept as obstacles (nearer than 0.6 m but the same at every pan, so not the "
               "moving camera): " + ", ".join(f"{bearing(i):+d} deg" for i in fixed))
+    if notes:
+        print("\n" + "\n".join(notes))
     blind = blind_everywhere(maps)
     if blind:
         print("\nCHECK: no return at any pan, written as hidden (an open door?): "

@@ -195,13 +195,15 @@ def test_the_file_the_measuring_tool_writes_loads_in_the_body(tmp_path):
     spec = importlib.util.spec_from_file_location("lidar_self_mask", path)
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
-    front = [1.5] * 36
-    front[0], front[34], front[33], front[32] = 0.240, 0.253, 0.291, 0.396
-    left = [1.5] * 36
-    left[0], left[34], left[33], left[32] = 0.260, 8.0, 0.289, 0.305
-    right = [1.5] * 36
-    right[35], right[34] = 0.259, 8.0
-    table, problems = tool.build({0.0: front, 40.0: left, -40.0: right}, 0.05)
+    maps = {}
+    for pan in (-20.0, -10.0, 0.0, 10.0, 20.0, 30.0, 40.0):
+        sectors = [1.5] * 36
+        if -10.0 <= pan <= 10.0:
+            sectors[0] = 0.24  # the camera straight ahead, three pans in a row
+        if pan >= 30.0:
+            sectors[34] = 8.0  # turned left, it hides -20 deg
+        maps[pan] = sectors
+    table, problems, _ = tool.build(maps, 0.05)
     assert problems == []
     f = tmp_path / "lidar_self_mask.yaml"
     f.write_text(tool.to_yaml(table, "test"))
