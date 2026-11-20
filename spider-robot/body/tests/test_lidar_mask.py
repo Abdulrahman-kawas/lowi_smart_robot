@@ -199,7 +199,9 @@ def test_the_file_the_measuring_tool_writes_loads_in_the_body(tmp_path):
     front[0], front[34], front[33], front[32] = 0.240, 0.253, 0.291, 0.396
     left = [1.5] * 36
     left[0], left[34], left[33], left[32] = 0.260, 8.0, 0.289, 0.305
-    table, problems = tool.build({0.0: front, 40.0: left}, 0.05)
+    right = [1.5] * 36
+    right[35], right[34] = 0.259, 8.0
+    table, problems = tool.build({0.0: front, 40.0: left, -40.0: right}, 0.05)
     assert problems == []
     f = tmp_path / "lidar_self_mask.yaml"
     f.write_text(tool.to_yaml(table, "test"))

@@ -2,8 +2,10 @@
 """Measure where the L2 sees the robot's own front camera, for lidar.self_mask_file.
 
 Run it on the Pi with the gateway's venv and settings, like spider-robotctl. The gateway needs
-SG_BENCH=1; the robot sits or stands (on the tripod is fine) and NOTHING may be within 1.2 m of
-it, in a room with walls all around (a sector that sees nothing at all is taken as hidden):
+SG_BENCH=1 and the robot sits or stands (on the tripod is fine). A furnished room is fine: only
+what CHANGES as the camera turns is taken for the camera, so things that stay put are never
+masked, however near. Nothing may move during the sweep: people stay still, at least 1 m away.
+Walls all around help: a sector that sees nothing at all is taken as hidden.
 
   sudo -u spider bash -c 'set -a; . /etc/spider/gateway.env; set +a; exec \
     /opt/spider/spider-robot/gateway/.venv/bin/python \
@@ -11,7 +13,8 @@ it, in a room with walls all around (a sector that sees nothing at all is taken 
 
 It turns the camera from -60 to +60 deg in 10-deg steps (a bench Look, nothing else moves),
 reads the LiDAR sector map at each pan and writes, per pan:
-  mask:   sectors nearer than 0.6 m in the front half: the camera, ignored up to that distance
+  mask:   front-half sectors nearer than 0.6 m AND nearer than that sector reads at another pan
+          (the room behind the camera): the camera, ignored up to that distance
   shadow: sectors with no return at all: the camera hides them
 It writes /tmp/lidar_self_mask.yaml only after you type yes, and prints how to install it.
 
@@ -41,6 +44,7 @@ NEAR_M = 0.6  # the body refuses a mask past this: nothing that far is the robot
 MAX_RANGE_M = 8.0  # lidar.max_range_m: a sector at this distance saw nothing
 SECTORS = 36
 PAN_MATCH_DEG = 0.5
+SAME_M = 0.03  # range noise: a sector this close to its farthest reading has not changed
 
 
 def bearing(sector: int) -> int:
@@ -59,34 +63,61 @@ def merge(samples: list[list[float]]) -> list[float]:
     return [min(column) for column in zip(*samples, strict=True)]
 
 
-def entry_for(sectors_m: list[float], old: dict | None = None) -> tuple[dict, list[str]]:
+def empty(d: float) -> bool:
+    return d >= MAX_RANGE_M - 1e-3
+
+
+def old_shadows(old_pans: dict, pan: float) -> set[int]:
+    return {int(i) for i in (find_old(old_pans, pan) or {}).get("shadow") or []}
+
+
+def room_of(maps: dict[float, list[float]], old_pans: dict | None = None) -> list[float]:
+    """Per sector, its farthest reading over all pans: the room, where the camera was away.
+    Empty readings and old shadows (they read their neighbour's value) do not count."""
+    room = [0.0] * SECTORS
+    for pan, sectors_m in maps.items():
+        hidden = old_shadows(old_pans or {}, pan)
+        for i, d in enumerate(sectors_m):
+            if not empty(d) and i not in hidden:
+                room[i] = max(room[i], d)
+    return room
+
+
+def entry_for(sectors_m: list[float], old: dict | None = None,
+              room: list[float] | None = None) -> tuple[dict, list[str]]:
     """One pan's mask entry from its measured map, added to the old entry (--extend).
 
-    Returns the entry and the problems that make the measurement unusable.
+    Only a return nearer than the same sector's room (room_of) is the camera; something that
+    reads the same at every pan stays an obstacle. Returns the entry and the problems that
+    make the measurement unusable.
     """
     old = old or {}
+    room = room or [MAX_RANGE_M] * SECTORS
     mask = {int(k): float(v) for k, v in (old.get("mask") or {}).items()}
     old_shadow = {int(i) for i in old.get("shadow") or []}
     shadow = set(old_shadow)
     problems = []
     for i, d in enumerate(sectors_m):
-        if d >= MAX_RANGE_M - 1e-3:
-            shadow.add(i)  # in a closed room only the camera leaves a sector empty
-        elif d < NEAR_M and i not in old_shadow:  # an old shadow reads its neighbour's value
+        if empty(d):
+            shadow.add(i)  # in a room with walls only the camera leaves a sector empty
+        elif d < NEAR_M and d < room[i] - SAME_M and i not in old_shadow:
+            # an old shadow reads its neighbour's value, not its own
             if not front_half(i):
-                problems.append(f"something {d:.2f} m away at {bearing(i):+d} deg, behind the "
-                                "robot: that is not the camera; clear it and run again")
+                problems.append(f"something moved {d:.2f} m away at {bearing(i):+d} deg, "
+                                "behind the robot: that is not the camera; keep still and "
+                                "run again")
                 continue
             mask[i] = max(mask.get(i, 0.0), math.ceil(d * 1000) / 1000)
     return {"mask": dict(sorted(mask.items())), "shadow": sorted(shadow)}, problems
 
 
 def same_everywhere(maps: dict[float, list[float]]) -> list[int]:
-    """Front sectors near at every pan and within 2 cm: maybe not the camera (the tripod?)."""
+    """Sectors near at every pan and unchanged: the room (or a fixed part of the camera mount),
+    kept as an obstacle."""
     out = []
     for i in range(SECTORS):
         ds = [m[i] for m in maps.values()]
-        if len(ds) > 2 and max(ds) < NEAR_M and max(ds) - min(ds) <= 0.02:
+        if len(ds) > 2 and max(ds) < NEAR_M and max(ds) - min(ds) <= SAME_M:
             out.append(i)
     return out
 
@@ -106,9 +137,10 @@ def find_old(old_pans: dict, pan: float) -> dict | None:
 def build(maps: dict[float, list[float]], margin_m: float, old: dict | None = None
           ) -> tuple[dict, list[str]]:
     old_pans = (old or {}).get("pans") or {}
+    room = room_of(maps, old_pans)
     pans, problems = {}, []
     for pan in sorted(maps):
-        entry, issues = entry_for(maps[pan], find_old(old_pans, pan))
+        entry, issues = entry_for(maps[pan], find_old(old_pans, pan), room)
         pans[pan] = entry
         problems += [f"pan {pan:+.0f}: {p}" for p in issues]
     for key, value in old_pans.items():  # an old pan this sweep did not reach stays as it was
@@ -233,8 +265,8 @@ async def run(args: argparse.Namespace) -> int:
         return 1
     fixed = same_everywhere(maps)
     if fixed:
-        print("\nCHECK: near and unchanged at every pan, so maybe not the camera (the tripod?): "
-              + ", ".join(f"{bearing(i):+d} deg" for i in fixed))
+        print("\nkept as obstacles (nearer than 0.6 m but the same at every pan, so not the "
+              "moving camera): " + ", ".join(f"{bearing(i):+d} deg" for i in fixed))
     blind = blind_everywhere(maps)
     if blind:
         print("\nCHECK: no return at any pan, written as hidden (an open door?): "
