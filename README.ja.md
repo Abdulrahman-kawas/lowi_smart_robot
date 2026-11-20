@@ -37,8 +37,12 @@ Lowi は、話しかけて操作する6本脚のスパイダーロボットで�
 - **待てる処理は賢く。** 画像認識や難しい質問はホームサーバーへ。クラウドはネット接続時だけ手伝います。
 - **どこからでも操作。** Telegram、WhatsApp、Tailscale 経由のライブダッシュボード、そして iPhone と iPad のアプリ。
 
-<!-- 写真スロット：docs/images/photos/robot-hero.jpg（正面・斜め前から）に差し替え -->
-<p align="center"><img src="docs/images/photos/robot-hero.svg" alt="ロボットの写真（近日公開）" width="100%"></p>
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/images/photos/robot-front.jpg" alt="6本の脚で立つ Lowi。上にパンサーボ付きのカメラ"><br><sub>自分の脚で立つ</sub></td>
+    <td width="50%" align="center"><img src="docs/images/photos/robot-tripod.jpg" alt="脚を広げて三脚に載った Lowi（台上テスト用）"><br><sub>台上テスト用の三脚の上</sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -108,10 +112,10 @@ flowchart LR
 
 </details>
 
-<!-- 写真スロット：docs/images/photos/robot-top.jpg、robot-lidar.jpg、robot-legs.jpg に差し替え -->
+<!-- 写真スロット：docs/images/photos/robot-lidar.jpg、robot-legs.jpg に差し替え -->
 <table>
   <tr>
-    <td width="33%"><img src="docs/images/photos/robot-top.svg" alt="上から見た電子部品（近日公開）"></td>
+    <td width="33%"><img src="docs/images/photos/robot-top.jpg" alt="上から見た Lowi：6本の脚、中央に LiDAR、前にカメラ"></td>
     <td width="33%"><img src="docs/images/photos/robot-lidar.svg" alt="LiDAR のアップ（近日公開）"></td>
     <td width="33%"><img src="docs/images/photos/robot-legs.svg" alt="脚と3つのサーボ（近日公開）"></td>
   </tr>
