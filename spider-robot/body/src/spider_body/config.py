@@ -187,6 +187,28 @@ class MovesCfg(_M):
     offer_hand_height_m: float = Field(0.12, ge=0.04, le=0.20)
 
 
+class CameraWindowCfg(_M):
+    """The beams that hit the robot's own front camera (deg; bearing + left of straight ahead,
+    elevation + above the L2's centre, both in the robot's frame). Nothing else is visible along
+    them, so their points are only the camera and ghosts off its edges: dropped up to
+    max_range_m. Beams below and beside the window are untouched, and the window may never
+    reach below the L2's horizon, so whatever stands on the floor is always seen."""
+
+    bearing_min_deg: float = Field(ge=-90.0, le=90.0)
+    bearing_max_deg: float = Field(ge=-90.0, le=90.0)
+    elevation_min_deg: float = Field(gt=0.0, le=90.0)
+    elevation_max_deg: float = Field(gt=0.0, le=90.0)
+    max_range_m: float = Field(0.6, gt=0.0, le=0.8)
+
+    @model_validator(mode="after")
+    def _a_real_window(self) -> CameraWindowCfg:
+        if self.bearing_min_deg >= self.bearing_max_deg:
+            raise ValueError("camera_window: bearing_min_deg must be below bearing_max_deg")
+        if self.elevation_min_deg >= self.elevation_max_deg:
+            raise ValueError("camera_window: elevation_min_deg must be below elevation_max_deg")
+        return self
+
+
 class LidarCfg(_M):
     enabled: bool = True
     endpoint: str = "ipc:///tmp/spider_lidar.ipc"
@@ -199,58 +221,7 @@ class LidarCfg(_M):
     sectors: int = 36
     # One cloud can miss sectors, so each sector reports its nearest return over this many clouds.
     history_clouds: int = Field(3, ge=1, le=10)
-    # The front camera and its pan servo as the L2 sees them, measured on the robot by
-    # infra/pi/lidar_self_mask.py. None, or a file that does not exist: nothing is ignored.
-    self_mask_file: str | None = None
-
-
-SELF_MASK_MAX_M = 0.6  # nothing farther than this from the L2 is part of the robot
-
-
-class SelfMaskPan(_M):
-    """The camera at one pan angle: sector -> its points up to r_m are the camera; shadow =
-    sectors it hides completely (the L2 sees nothing there)."""
-
-    mask: dict[int, float] = Field(default_factory=dict)
-    shadow: list[int] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _only_the_robot(self) -> SelfMaskPan:
-        for sector, r_m in self.mask.items():
-            if not 0.0 < r_m <= SELF_MASK_MAX_M:
-                raise ValueError(f"sector {sector}: {r_m} m is not the robot "
-                                 f"(a mask reaches at most {SELF_MASK_MAX_M} m)")
-        return self
-
-
-class SelfMask(_M):
-    """lidar_self_mask.yaml: camera pan (deg, + left) -> what the camera puts in the sector map."""
-
-    margin_m: float = Field(0.05, ge=0.0, le=0.1)  # also drop points this far past r_m
-    pans: dict[float, SelfMaskPan] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def _pans_in_range(self) -> SelfMask:
-        for pan in self.pans:
-            if not -90.0 <= pan <= 90.0:
-                raise ValueError(f"pan {pan} is outside -90..90")
-        return self
-
-
-def load_self_mask(cfg: LidarCfg) -> SelfMask | None:
-    """The measured self-mask, or None when robot.yaml names none or the file is missing.
-    A file that exists but is wrong raises: spider-body must not start on a bad mask."""
-    if cfg.self_mask_file is None:
-        return None
-    path = Path(cfg.self_mask_file)
-    if not path.exists():
-        return None
-    mask = SelfMask.model_validate(yaml.safe_load(path.read_text("utf-8")) or {})
-    used = {i for entry in mask.pans.values() for i in (*entry.mask, *entry.shadow)}
-    bad = sorted(i for i in used if not 0 <= i < cfg.sectors)
-    if bad:
-        raise ValueError(f"{path}: sectors {bad} are outside 0..{cfg.sectors - 1}")
-    return mask
+    camera_window: CameraWindowCfg | None = None  # None: the camera is not ignored
 
 
 class CameraCfg(_M):

@@ -55,10 +55,10 @@ lidar:
   max_range_m: 8.0
   sectors: 36
   history_clouds: 3        # nearest return per sector over this many clouds; one cloud can miss
-  # The front camera, measured on the robot by infra/pi/lidar_self_mask.py: the L2 then ignores it
-  # at its own sectors and distance, following the pan. Without it the camera reads as an
-  # obstacle 24-40 cm ahead. A missing file ignores nothing; a wrong one stops spider-body.
-  # self_mask_file: /etc/spider/lidar_self_mask.yaml
+  # The beams that hit the front camera (deg, robot frame), measured on the robot with
+  # infra/pi/lidar_near_points.py. Without it the camera reads as an obstacle right in front.
+  # camera_window: {bearing_min_deg: -30, bearing_max_deg: 30, elevation_min_deg: 6,
+  #                 elevation_max_deg: 42, max_range_m: 0.6}
 
 camera:
   external: true           # answered by spider-camera on cores 1-3, never by the control loop
