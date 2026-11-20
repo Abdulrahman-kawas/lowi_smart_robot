@@ -156,6 +156,7 @@ final class AppModel {
         default: "Speed: Normal"
         }
     }
+    var movesState: MovesState { brain?.gateway.moves ?? MovesState() }
 
     // MARK: derived
 
@@ -264,6 +265,12 @@ final class AppModel {
 
     func startMove(_ name: String, leg: String?) {
         if !socket.send(.perform(name: name, speed: moveSpeed, leg: leg)) {
+            notice = String(localized: "Not connected to the brain.")
+        }
+    }
+
+    func setMoves(voice: Bool? = nil, remote: Bool? = nil) {
+        if !socket.send(.movesSwitch(voice: voice, remote: remote)) {
             notice = String(localized: "Not connected to the brain.")
         }
     }

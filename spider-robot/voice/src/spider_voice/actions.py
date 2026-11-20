@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from spider_common.protocol import Command, Look, Move, Perform, Posture, Reach
+from spider_common.protocol import Command, Look, Move, MovesSwitch, Perform, Posture, Reach
 
 from .config import MotionCfg
-from .grammar import MOVE_ACTS
+from .grammar import MOVE_ACTS, SWITCH_ACTS
 
 
 def to_command(act: str, m: MotionCfg) -> Command | None:
@@ -30,6 +30,13 @@ def to_command(act: str, m: MotionCfg) -> Command | None:
         return Look(pan_deg=-m.look_deg, speed=m.look_speed)
     if act == "look_center":
         return Look(pan_deg=0.0, speed=m.look_speed)
+    if act in SWITCH_ACTS:
+        return MovesSwitch(
+            voice=True if act in ("moves_on", "voice_moves_on")
+            else False if act in ("moves_off", "voice_moves_off") else None,
+            remote=True if act in ("moves_on", "app_moves_on")
+            else False if act in ("moves_off", "app_moves_off") else None,
+        )
     if act in MOVE_ACTS:  # the act names are the body's move names
         return Perform(name=act, speed=m.move_speed)
     return None

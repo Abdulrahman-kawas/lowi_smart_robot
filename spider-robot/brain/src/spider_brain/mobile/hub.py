@@ -154,6 +154,8 @@ class MobileHub:
             self._look(session.device, msg.get("pan_deg"), msg.get("speed", 0.5))
         elif kind == "perform":
             self._spawn(self._perform(session, msg))
+        elif kind == "moves_switch":
+            self._moves_switch(session, msg)
         elif kind == "posture":
             self._spawn(self._posture(session, msg.get("posture")))
         else:
@@ -230,6 +232,17 @@ class MobileHub:
             return
         self.robot.perform(name, speed, leg, human=True)
 
+    def _moves_switch(self, session: Session, msg: dict[str, Any]) -> None:
+        values: dict[str, bool | None] = {}
+        for name in ("voice", "remote"):
+            value = msg.get(name)
+            if value is not None and not isinstance(value, bool):
+                self._notify(session.device, "moves_switch",
+                             f"{name} must be true, false or null", True)
+                return
+            values[name] = value
+        self.robot.moves_switch(values["voice"], values["remote"])
+
     @staticmethod
     def _number(value: object) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool) \
@@ -304,10 +317,11 @@ class MobileHub:
         g = self.gateway
         if g is None or self._gateway_rx is None or now - self._gateway_rx > GATEWAY_STALE_S:
             return {"online": False, "owner": None, "owner_remaining_s": 0.0, "estop": None,
-                    "remote_alive": False}
+                    "remote_alive": False, "moves": {}}
         return {"online": bool(g.get("online", True)), "owner": g.get("owner"),
                 "owner_remaining_s": g.get("owner_remaining_s", 0.0), "estop": g.get("estop"),
-                "remote_alive": bool(g.get("sources", {}).get(self.source, {}).get("alive"))}
+                "remote_alive": bool(g.get("sources", {}).get(self.source, {}).get("alive")),
+                "moves": g.get("moves", {})}
 
     def state_view(self) -> dict[str, Any]:
         now = time.monotonic()

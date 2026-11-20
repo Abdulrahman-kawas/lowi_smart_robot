@@ -49,11 +49,33 @@ struct RobotStatus: Decodable, Sendable, Equatable {
     var canWalk: Bool { mode == "standing" || mode == "walking" }
 }
 
+struct MovesState: Decodable, Sendable, Equatable {
+    var voice: Bool
+    var remote: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case voice
+        case remote
+    }
+
+    init(voice: Bool = true, remote: Bool = false) {
+        self.voice = voice
+        self.remote = remote
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        voice = try container.decodeIfPresent(Bool.self, forKey: .voice) ?? true
+        remote = try container.decodeIfPresent(Bool.self, forKey: .remote) ?? false
+    }
+}
+
 struct GatewayView: Decodable, Sendable, Equatable {
     var online: Bool
     var owner: String?
     var estop: Bool?
     var remoteAlive: Bool
+    var moves: MovesState? = nil
 }
 
 struct DriveView: Decodable, Sendable, Equatable {
@@ -160,6 +182,7 @@ enum ClientMessage: Sendable, Equatable {
     case estop
     case look(panDeg: Double, speed: Double)
     case perform(name: String, speed: Double, leg: String?)
+    case movesSwitch(voice: Bool?, remote: Bool?)
     case posture(String)
     case video(Bool)
     case heartbeat(Double)
@@ -177,6 +200,10 @@ enum ClientMessage: Sendable, Equatable {
         case .perform(let name, let speed, let leg):
             object = ["type": "perform", "name": name, "speed": speed]
             if let leg { object["leg"] = leg }
+        case .movesSwitch(let voice, let remote):
+            object = ["type": "moves_switch"]
+            if let voice { object["voice"] = voice }
+            if let remote { object["remote"] = remote }
         case .posture(let posture): object = ["type": "posture", "posture": posture]
         case .video(let on): object = ["type": "video", "on": on]
         case .heartbeat(let t): object = ["type": "heartbeat", "t": t]

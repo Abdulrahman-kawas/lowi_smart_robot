@@ -198,9 +198,18 @@ class Reach(_Cmd):
     speed: float = Field(0.5, gt=0.0, le=1.0)
 
 
+class MovesSwitch(_Cmd):
+    """Gateway only: who may start expressive moves now. None leaves that source as it is.
+    Turning a source on never goes past its policy (allow_moves in SG_POLICY_FILE)."""
+
+    type: Literal["moves_switch"] = "moves_switch"
+    voice: bool | None = None
+    remote: bool | None = None
+
+
 Command = Annotated[
     Move | Stop | Posture | BodyPose | Snapshot | Heartbeat | EStop | EStopRelease | ConfirmRequest
-    | Perform | Reach | Look,
+    | Perform | Reach | Look | MovesSwitch,
     Field(discriminator="type"),
 ]
 _COMMAND: TypeAdapter[Command] = TypeAdapter(Command)
@@ -300,6 +309,7 @@ class GatewayStatus(BaseModel):
     estop: bool | None = None
     sources: dict[str, SourceStatus] = Field(default_factory=dict)
     holdoff_s: dict[str, float] = Field(default_factory=dict)
+    moves: dict[str, bool] = Field(default_factory=dict)
     pending_challenges: int = 0
     counters: dict[str, int] = Field(default_factory=dict)
 

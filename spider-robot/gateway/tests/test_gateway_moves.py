@@ -1,12 +1,15 @@
 """Expressive moves (Perform, Reach) at the gateway: who may start them, and how they end."""
 
 import json
+import tempfile
+from pathlib import Path
 
 import pytest
 from spider_common.link import InMemoryHub
 from spider_common.protocol import (
     EStop,
     Move,
+    MovesSwitch,
     Perform,
     Reach,
     RobotEvent,
@@ -30,12 +33,17 @@ class Clock:
         return self.now
 
 
-async def rig_for(policies=None, bench=False):
+async def rig_for(policies=None, bench=False, state_dir=None, enable_remote=True):
     link = InMemoryHub().endpoint([])
     await link.start()
     clock = Clock()
+    config = GatewayConfig(bench_enabled=bench,
+                           state_dir=state_dir or Path(tempfile.mkdtemp(prefix="spider-moves-")))
     gw = Gateway(link, ROBOT, clock=clock, wall=lambda: 1000.0 + clock.now,
-                 config=GatewayConfig(bench_enabled=bench), policies=policies)
+                 config=config, policies=policies)
+    if enable_remote:
+        gw.on_request("remote", MovesSwitch(remote=True, ts=1000.0 + clock.now).model_dump_json())
+        link.published.clear()
     return gw, link, clock
 
 
@@ -212,3 +220,85 @@ async def test_a_lost_voice_ends_its_move():
     gw.tick()
     assert sent(link)[-1]["type"] == "stop"
     assert replies(link, "voice")[-1]["kind"] == "link_lost"
+
+
+async def test_the_switch_controls_both_sources(tmp_path):
+    gw, link, clock = await rig_for(state_dir=tmp_path, enable_remote=False)
+    assert gw.status(clock.now).moves == {"voice": True, "remote": False}
+    body_state(gw)
+    gw.on_request("remote", perform(clock, session="r"))
+    assert sent(link) == []
+    assert replies(link, "remote")[-1]["detail"] == "moves from remote are switched off"
+
+    gw.on_request("remote", MovesSwitch(voice=False, remote=True,
+                                        ts=1000.0 + clock.now).model_dump_json())
+    assert gw.status(clock.now).moves == {"voice": False, "remote": True}
+    assert replies(link, "remote")[-1]["detail"] == "moves: voice off, remote on"
+    gw.on_request("remote", perform(clock, seq=2, session="r"))
+    assert sent(link)[-1]["name"] == "dance"
+    gw.on_request("voice", perform(clock, seq=2, session="v"))
+    assert replies(link, "voice")[-1]["detail"] == "moves from voice are switched off"
+
+
+async def test_the_switch_survives_a_gateway_restart(tmp_path):
+    gw, link, clock = await rig_for(state_dir=tmp_path, enable_remote=False)
+    gw.on_request("remote", MovesSwitch(remote=True, ts=1000.0 + clock.now).model_dump_json())
+    assert json.loads((tmp_path / "moves.json").read_text("utf-8")) == {
+        "remote": True, "voice": True,
+    }
+    restarted = Gateway(link, ROBOT, clock=clock, wall=lambda: 1000.0 + clock.now,
+                        config=GatewayConfig(state_dir=tmp_path))
+    assert restarted.status(clock.now).moves == {"voice": True, "remote": True}
+
+
+async def test_the_planner_may_not_change_the_moves_switch(tmp_path):
+    gw, link, clock = await rig_for(state_dir=tmp_path, enable_remote=False)
+    gw.on_request("planner", MovesSwitch(remote=True,
+                                         ts=1000.0 + clock.now).model_dump_json())
+    assert sent(link) == []
+    assert replies(link, "planner")[-1]["detail"] == "the planner may not change the moves switch"
+    assert gw.status(clock.now).moves["remote"] is False
+
+
+async def test_a_policy_that_forbids_moves_cannot_be_switched_on(tmp_path):
+    path = tmp_path / "policy.yaml"
+    path.write_text("remote: {allow_moves: false}\n")
+    gw, link, clock = await rig_for(policies=load_policies(path), state_dir=tmp_path,
+                                    enable_remote=False)
+    gw.on_request("remote", MovesSwitch(remote=True, ts=1000.0 + clock.now).model_dump_json())
+    assert "allow_moves is off" in replies(link, "remote")[-1]["detail"]
+    assert gw.status(clock.now).moves["remote"] is False
+    gw.on_request("remote", MovesSwitch(voice=False, remote=True,
+                                        ts=1000.0 + clock.now).model_dump_json())
+    assert "allow_moves is off" in replies(link, "remote")[-1]["detail"]
+    assert gw.status(clock.now).moves == {"voice": True, "remote": False}  # all or nothing
+
+    gw.on_request("remote", MovesSwitch(remote=False, ts=1000.0 + clock.now).model_dump_json())
+    assert replies(link, "remote")[-1]["kind"] == "ack"
+
+
+async def test_an_unwritable_state_dir_keeps_the_switch_in_memory(tmp_path):
+    blocked = tmp_path / "not-a-dir"
+    blocked.write_text("x")
+    gw, link, clock = await rig_for(state_dir=blocked, enable_remote=False)
+    gw.on_request("remote", MovesSwitch(remote=True, ts=1000.0 + clock.now).model_dump_json())
+    assert gw.status(clock.now).moves["remote"] is True
+    assert replies(link, "remote")[-1]["kind"] == "ack"
+
+
+async def test_a_late_moves_switch_is_refused(tmp_path):
+    gw, link, clock = await rig_for(state_dir=tmp_path, enable_remote=False)
+    gw.on_request("remote", MovesSwitch(remote=False, ts=1000.0 + clock.now).model_dump_json())
+    link.published.clear()
+    clock.now += 1.0
+    gw.on_request("remote", MovesSwitch(remote=True,
+                                        ts=996.0 + clock.now).model_dump_json())
+    assert "late" in replies(link, "remote")[-1]["detail"]
+    assert gw.status(clock.now).moves["remote"] is False
+
+
+async def test_bench_can_change_the_moves_switch(tmp_path):
+    gw, link, clock = await rig_for(bench=True, state_dir=tmp_path, enable_remote=False)
+    gw.on_request("bench", MovesSwitch(remote=True, ts=1000.0 + clock.now).model_dump_json())
+    assert replies(link, "bench")[-1]["kind"] == "ack"
+    assert gw.status(clock.now).moves["remote"] is True

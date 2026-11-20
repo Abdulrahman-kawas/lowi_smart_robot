@@ -28,7 +28,7 @@ from spider_body.main import command_loop, control_loop, state_loop
 from spider_body.robot import Robot
 from spider_common.link import InMemoryHub
 from spider_common.protocol import MOVE_NAMES, RobotState, Topics
-from spider_gateway.gateway import Gateway
+from spider_gateway.gateway import Gateway, GatewayConfig
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
 
@@ -391,7 +391,8 @@ async def stack(tmp_path):
     body = Robot(cfg, FakeServoBank(), SimLidar(cfg.lidar, world), FakeCamera(cfg.camera),
                  body_link)
     gw_link = hub.endpoint(Gateway.subscriptions(ROBOT))
-    gateway = Gateway(gw_link, ROBOT)
+    gateway = Gateway(gw_link, ROBOT,
+                      config=GatewayConfig(state_dir=tmp_path / "gateway-state"))
     for link in (body_link, gw_link):
         await link.start()
     tasks = [asyncio.create_task(c) for c in (
@@ -619,6 +620,30 @@ async def test_state_lidar_events_and_photo(stack):
     assert r.json()["answer"] == "an orange box (what is ahead?)"
     assert base64.b64decode(r.json()["frame_jpeg"])[:2] == b"\xff\xd8"
     assert stack.gateway.counters.get("snapshot_limited", 0) == 0
+    await app.close()
+
+
+async def test_the_app_switches_moves_and_sees_the_gateway_state(stack):
+    app = await live_view(stack)
+    assert app.states[-1]["gateway"]["moves"] == {"voice": True, "remote": False}
+
+    await app.send(type="moves_switch", remote=True)
+    assert await _until(
+        lambda: app.states[-1]["gateway"]["moves"] == {"voice": True, "remote": True}, 2.0)
+    assert stack.gateway.status(time.monotonic()).moves == {"voice": True, "remote": True}
+
+    await app.send(type="moves_switch", voice=False, remote=False)
+    assert await _until(
+        lambda: app.states[-1]["gateway"]["moves"] == {"voice": False, "remote": False}, 2.0)
+    await app.close()
+
+
+async def test_the_app_refuses_an_invalid_moves_switch(brain):
+    app = await App.open(brain.base, brain.token)
+    await app.send(type="moves_switch", voice="yes")
+    assert await _until(lambda: any(e["kind"] == "moves_switch" for e in app.events), 2.0)
+    assert app.events[-1]["detail"] == "voice must be true, false or null"
+    assert app.events[-1]["refusal"] is True
     await app.close()
 
 

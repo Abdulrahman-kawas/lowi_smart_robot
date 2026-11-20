@@ -33,6 +33,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import itertools
+import json
 import logging
 import math
 import time
@@ -40,6 +41,7 @@ import uuid
 from collections import OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from pydantic import ValidationError
 from spider_common.link import Link, topic_matches
@@ -58,6 +60,7 @@ from spider_common.protocol import (
     Heartbeat,
     Look,
     Move,
+    MovesSwitch,
     Perform,
     Posture,
     Reach,
@@ -91,6 +94,7 @@ PERFORM_HOLD_S = 21.0  # the longest move (20 s), unless the body reports it don
 _PERFORM_END = frozenset({"perform_done", "perform_rejected"})
 _LOCAL_SOURCES = frozenset({"voice", BENCH_SOURCE})
 _NEEDS_CONFIRM_TO_WAKE = frozenset({"remote", "planner"})
+DEFAULT_MOVES_ON = {"voice": True, "remote": False}
 
 
 @dataclass(frozen=True)
@@ -99,6 +103,7 @@ class GatewayConfig:
     stop_holdoff_s: float = 2.0  # longer than one renewal (0.5 s), so the renewal is refused
     challenge_ttl_s: float = 30.0
     bench_enabled: bool = False  # SG_BENCH=1, only while a person is at the robot
+    state_dir: Path = Path("/var/lib/spider-gateway")
 
 
 class SourceClock:
@@ -220,6 +225,7 @@ class Gateway:
         self._pending: dict[str, _PendingFrame] = {}
         self._challenges: dict[str, _Challenge] = {}
         self.counters: dict[str, int] = {}
+        self._moves_on = self._load_moves_state()
 
     @staticmethod
     def subscriptions(robot_id: str) -> list[str]:
@@ -228,6 +234,35 @@ class Gateway:
 
     def _count(self, name: str) -> None:
         self.counters[name] = self.counters.get(name, 0) + 1
+
+    def _moves_path(self) -> Path:
+        return self.config.state_dir / "moves.json"
+
+    def _load_moves_state(self) -> dict[str, bool]:
+        path = self._moves_path()
+        try:
+            saved = json.loads(path.read_text("utf-8"))
+            if not isinstance(saved, dict):
+                raise ValueError("moves.json must hold an object")
+        except (OSError, ValueError, TypeError):
+            log.warning("could not read moves switch state from %s; using defaults", path)
+            return dict(DEFAULT_MOVES_ON)
+        state = dict(DEFAULT_MOVES_ON)
+        for source in DEFAULT_MOVES_ON:
+            value = saved.get(source)
+            if isinstance(value, bool):
+                state[source] = value
+        return state
+
+    def _save_moves_state(self) -> None:
+        path = self._moves_path()
+        try:
+            self.config.state_dir.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex[:8]}.tmp")
+            tmp.write_text(json.dumps(self._moves_on, sort_keys=True), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            log.warning("could not save moves switch state to %s; keeping it in memory", path)
 
     # ------------------------------------------------------------------ requests
     def on_request(self, source: str, payload: bytes | str) -> None:
@@ -292,6 +327,8 @@ class Gateway:
                 self._forward(cmd, source)
         elif isinstance(cmd, Look):
             self._on_look(cmd, source, now)
+        elif isinstance(cmd, MovesSwitch):
+            self._on_moves_switch(cmd, source)
         else:
             self._forward(cmd, source)
 
@@ -372,6 +409,9 @@ class Gateway:
         if not policy.allow_moves:
             self._reply(source, cmd.seq, "rejected", f"{source} may not start moves "
                         "(allow_moves is off)")
+            return
+        if source in self._moves_on and not self._moves_on[source]:
+            self._reply(source, cmd.seq, "rejected", f"moves from {source} are switched off")
             return
         if isinstance(cmd, Reach) and source not in _LOCAL_SOURCES:
             self._reply(source, cmd.seq, "rejected", "reach needs someone at the robot")
@@ -531,6 +571,28 @@ class Gateway:
             return
         self._forward(cmd, source)
 
+    def _on_moves_switch(self, cmd: MovesSwitch, source: str) -> None:
+        if source == "planner":
+            self._reply(source, cmd.seq, "rejected", "the planner may not change the moves switch")
+            return
+        wanted = {target: value for target, value in (("voice", cmd.voice), ("remote", cmd.remote))
+                  if value is not None}
+        for target, value in wanted.items():  # all or nothing: check every source first
+            policy = self.policies.get(target)
+            if value and policy is not None and not policy.allow_moves:
+                self._reply(source, cmd.seq, "rejected",
+                            f"{target} may not start moves (allow_moves is off)")
+                return
+        changed = any(self._moves_on[target] != value for target, value in wanted.items())
+        self._moves_on.update(wanted)
+        if changed:
+            self._save_moves_state()
+        detail = "moves: " + ", ".join(
+            f"{target} {'on' if self._moves_on[target] else 'off'}" for target in DEFAULT_MOVES_ON
+        )
+        self._reply(source, cmd.seq, "ack", detail)
+        self.publish_status(self.clock())
+
     # ------------------------------------------------------------------ events
     def on_state(self, payload: bytes | str) -> None:
         st = RobotState.model_validate_json(payload)
@@ -620,8 +682,8 @@ class Gateway:
         return GatewayStatus(
             robot_id=self.robot_id, session=self.session, owner=self._owner,
             owner_remaining_s=round(remaining, 2), mode=self._mode, estop=self._estop,
-            sources=sources, holdoff_s=holdoff, pending_challenges=len(self._challenges),
-            counters=dict(self.counters),
+            sources=sources, holdoff_s=holdoff, moves=dict(self._moves_on),
+            pending_challenges=len(self._challenges), counters=dict(self.counters),
         )
 
     def publish_status(self, now: float) -> None:

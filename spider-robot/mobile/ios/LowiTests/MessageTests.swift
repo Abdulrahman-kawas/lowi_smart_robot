@@ -14,7 +14,7 @@ struct MessageTests {
          "rt_ok":false,"perform":null},
          "robot_age_ms":40,"online":true,
          "gateway":{"online":true,"owner":"remote","owner_remaining_s":0.8,"estop":false,
-                    "remote_alive":true},
+                    "remote_alive":true,"moves":{"voice":true,"remote":false}},
          "drive":{"holder":"iPhone"},"latency":{"robot_cmd_rtt_ms":4.5,"frame_rtt_ms":null},
           "frame_age_ms":310,"caps":{"max_speed_mps":0.05,"max_wz_rps":0.3,"move_s":1.0,
           "moves":["wave","dance","hi"]}}
@@ -28,9 +28,23 @@ struct MessageTests {
         #expect(state.robot?.cameraPanDeg == 12.5)
         #expect(state.robot?.limiter == "slowing: obstacle 0.40 m from the legs")
         #expect(state.gateway.owner == "remote" && state.drive.holder == "iPhone")
+        #expect(state.gateway.moves == MovesState(voice: true, remote: false))
         #expect(state.latency.robotCmdRttMs == 4.5 && state.latency.frameRttMs == nil)
         #expect(state.caps == Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0,
                                    moves: ["wave", "dance", "hi"]))
+    }
+
+    @Test func olderStateWithoutMovesStillDecodes() throws {
+        let text = """
+        {"type":"state","online":true,"gateway":{"online":true,"remote_alive":true},
+         "drive":{},"latency":{},
+         "caps":{"max_speed_mps":0.05,"max_wz_rps":0.3,"move_s":1.0}}
+        """
+        guard case .state(let state) = try ServerMessage.decode(text: text) else {
+            Issue.record("not a state message")
+            return
+        }
+        #expect(state.gateway.moves == nil)
     }
 
     @Test func eventsCarryTheHoldTheyEnd() throws {
@@ -74,6 +88,14 @@ struct MessageTests {
         let noLeg = ClientMessage.perform(name: "dance", speed: 0.5, leg: nil).json
         let noLegObject = try #require(try JSONSerialization.jsonObject(with: Data(noLeg.utf8)) as? [String: Any])
         #expect(noLegObject["leg"] == nil)
+        let moves = ClientMessage.movesSwitch(voice: true, remote: false).json
+        let movesObject = try #require(try JSONSerialization.jsonObject(with: Data(moves.utf8)) as? [String: Any])
+        #expect(movesObject["type"] as? String == "moves_switch")
+        #expect(movesObject["voice"] as? Bool == true)
+        #expect(movesObject["remote"] as? Bool == false)
+        let voiceOnly = ClientMessage.movesSwitch(voice: true, remote: nil).json
+        let voiceOnlyObject = try #require(try JSONSerialization.jsonObject(with: Data(voiceOnly.utf8)) as? [String: Any])
+        #expect(voiceOnlyObject["remote"] == nil)
         #expect(ClientMessage.stop.json == #"{"type":"stop"}"#)
         #expect(ClientMessage.auth(token: "t").json == #"{"token":"t","type":"auth"}"#)
     }

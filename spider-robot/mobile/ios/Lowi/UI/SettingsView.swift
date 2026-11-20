@@ -48,6 +48,24 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("moveSpeed")
+                    Toggle("Voice can start moves", isOn: Binding(
+                        get: { model.movesState.voice },
+                        set: { model.setMoves(voice: $0) }
+                    ))
+                    .disabled(!model.isLive)
+                    .accessibilityIdentifier("voiceMovesToggle")
+                    Toggle("This app can start moves", isOn: Binding(
+                        get: { model.movesState.remote },
+                        set: { model.setMoves(remote: $0) }
+                    ))
+                    .disabled(!model.isLive)
+                    .accessibilityIdentifier("appMovesToggle")
+                    Button("Allow both") { model.setMoves(voice: true, remote: true) }
+                        .disabled(!model.isLive)
+                        .accessibilityIdentifier("allowBothMoves")
+                    Button("Block both") { model.setMoves(voice: false, remote: false) }
+                        .disabled(!model.isLive)
+                        .accessibilityIdentifier("blockBothMoves")
                 } header: {
                     Text("Moves").foregroundStyle(Theme.muted)
                 }

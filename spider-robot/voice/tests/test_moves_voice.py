@@ -1,10 +1,19 @@
 """Expressive moves by voice: grammar only, never from the router, refused when negated."""
 
 import pytest
+from spider_common.protocol import MovesSwitch
 from test_pipeline import FakeRouter, FakeSTT, rig, run_turn, sent
 
 from spider_voice.actions import to_command
-from spider_voice.grammar import CANNED_SAY, LOOK_ACTS, MOVE_ACTS, ROUTER_ACTS, acts_in, match
+from spider_voice.grammar import (
+    CANNED_SAY,
+    LOOK_ACTS,
+    MOVE_ACTS,
+    ROUTER_ACTS,
+    SWITCH_ACTS,
+    acts_in,
+    match,
+)
 from spider_voice.interfaces import RouterDecision
 from spider_voice.routing import cross_check, parse_decision
 from spider_voice.stopwords import StopWords
@@ -146,3 +155,50 @@ async def test_handshake_and_stop(cfg):
     stt.result = type(stt.result)("خلص", -0.2, 0.1)
     await run_turn(pipe)
     assert [c["type"] for c in sent(obs)] == ["stop"]
+
+
+@pytest.mark.parametrize(
+    ("text", "act"),
+    [("شغل الحركات", "moves_on"), ("شغّل الحركات", "moves_on"),
+     ("طفي الحركات", "moves_off"), ("سكر الحركات", "moves_off"),
+     ("شغل حركات الصوت", "voice_moves_on"), ("طفي حركات الصوت", "voice_moves_off"),
+     ("شغل حركات التطبيق", "app_moves_on"), ("طفي حركات التطبيق", "app_moves_off")],
+)
+def test_grammar_maps_each_switch_phrase(text, act):
+    hit = match(text)
+    assert hit is not None and hit.act == act
+
+
+@pytest.mark.parametrize(
+    ("act", "voice", "remote"),
+    [("moves_on", True, True), ("moves_off", False, False),
+     ("voice_moves_on", True, None), ("voice_moves_off", False, None),
+     ("app_moves_on", None, True), ("app_moves_off", None, False)],
+)
+def test_each_switch_act_becomes_one_command(act, voice, remote, cfg):
+    cmd = to_command(act, cfg.motion)
+    assert isinstance(cmd, MovesSwitch)
+    assert (cmd.voice, cmd.remote) == (voice, remote)
+
+
+def test_switches_are_not_router_acts():
+    assert not SWITCH_ACTS & set(ROUTER_ACTS)
+    assert parse_decision('{"act": "moves_on", "say": "ok"}').act == "none"
+
+
+def test_switch_replies_never_command_the_robot():
+    for act in SWITCH_ACTS:
+        say = CANNED_SAY[act]
+        assert acts_in(say) == set(), (act, say)
+        assert StopWords().match(say) is None, (act, say)
+
+
+async def test_a_spoken_switch_sends_the_gateway_command(cfg):
+    router = FakeRouter()
+    pipe, _, _, obs, turns = await rig(cfg, FakeSTT("يا لوي شغل حركات التطبيق"), router)
+    await run_turn(pipe)
+    out = sent(obs)
+    assert len(out) == 1 and out[0]["type"] == "moves_switch"
+    assert out[0]["remote"] is True and out[0]["voice"] is None
+    assert router.calls == 0 and turns[0].route == "grammar"
+    assert turns[0].act == "app_moves_on"

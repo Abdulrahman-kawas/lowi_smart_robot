@@ -71,6 +71,19 @@ struct MovesPanel: View {
                     .font(.footnote)
                     .foregroundStyle(Theme.amber)
             }
+            if appMovesOff {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Moves from the app are switched off", systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.amber)
+                        .accessibilityIdentifier("movesSwitchOff")
+                    if let onOpenSettings {
+                        Button("Open moves settings", action: onOpenSettings)
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("movesOpenSettings")
+                    }
+                }
+            }
             if legMoves.contains(selected) {
                 Picker("Leading leg", selection: $leg) {
                     Text("Left").tag("LF")
@@ -105,6 +118,7 @@ struct MovesPanel: View {
                             .accessibilityHint(Text(hint(move)))
                             .accessibilityIdentifier("move_\(move.name)")
                         }
+                        .opacity(appMovesOff ? 0.4 : 1)
                     }
                 }
             }
@@ -146,6 +160,8 @@ struct MovesPanel: View {
         }
     }
 
+    private var appMovesOff: Bool { !model.movesState.remote }
+
     private var blockReason: String? {
         guard model.isPaired else { return String(localized: "Not paired") }
         guard model.isLive else { return String(localized: "No link to the brain") }
@@ -165,6 +181,7 @@ struct MovesPanel: View {
     }
 
     private func isDisabled(_ move: MoveOption) -> Bool {
+        if appMovesOff { return true }
         if blockReason != nil { return true }
         guard let moves = model.brain?.caps.moves else { return true }
         return !moves.contains(move.name)
@@ -172,6 +189,7 @@ struct MovesPanel: View {
 
     private func hint(_ move: MoveOption) -> String {
         var parts: [String] = []
+        if appMovesOff { parts.append(String(localized: "Moves from the app are switched off")) }
         if let reason = blockReason { parts.append(reason) }
         if !(model.brain?.caps.moves ?? []).contains(move.name) {
             parts.append(String(localized: "Move not available"))

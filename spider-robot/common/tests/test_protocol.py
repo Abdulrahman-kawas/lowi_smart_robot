@@ -12,6 +12,7 @@ from spider_common.protocol import (
     GatewayStatus,
     HealthReport,
     Move,
+    MovesSwitch,
     Snapshot,
     SourceStatus,
     Topics,
@@ -76,9 +77,18 @@ def test_v3_fields_roundtrip():
     assert (release.challenge, release.frame_sha256, release.trace) == ("c1", "ab", "t1")
 
 
+def test_moves_switch_roundtrip():
+    cmd = parse_command(MovesSwitch(voice=True, trace="t1").model_dump_json())
+    assert isinstance(cmd, MovesSwitch)
+    assert (cmd.voice, cmd.remote, cmd.trace) == (True, None, "t1")
+
+
 def test_status_models_serialise():
-    s = GatewayStatus(robot_id="r", sources={"voice": SourceStatus(alive=True)})
-    assert GatewayStatus.model_validate_json(s.model_dump_json()).sources["voice"].alive
+    s = GatewayStatus(robot_id="r", sources={"voice": SourceStatus(alive=True)},
+                      moves={"voice": True, "remote": False})
+    restored = GatewayStatus.model_validate_json(s.model_dump_json())
+    assert restored.sources["voice"].alive
+    assert restored.moves == {"voice": True, "remote": False}
     assert VoiceTurn(trace="t", route="stop").route == "stop"
     assert HealthReport(robot_id="r", service="voice").level == "ok"
 

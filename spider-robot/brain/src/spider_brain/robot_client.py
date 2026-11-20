@@ -33,6 +33,7 @@ from spider_common.protocol import (
     LidarSummary,
     Look,
     Move,
+    MovesSwitch,
     Perform,
     Posture,
     RobotEvent,
@@ -250,6 +251,9 @@ class RobotClient:
                 human: bool = False) -> int:
         """One built-in expressive move. The body's own checks still apply."""
         return self._send(Perform(name=name, speed=speed, leg=leg), human=human)
+
+    def moves_switch(self, voice: bool | None, remote: bool | None) -> int:
+        return self._send(MovesSwitch(voice=voice, remote=remote), human=True)
 
     def estop(self) -> int:
         return self._send(EStop(), human=True)

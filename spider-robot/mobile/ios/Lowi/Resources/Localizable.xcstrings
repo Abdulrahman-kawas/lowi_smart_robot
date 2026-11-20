@@ -117,6 +117,13 @@
         }
       }
     },
+    "Allow both": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "両方を許可" }
+        }
+      }
+    },
     "Allow the microphone, then hold the button again.": {
       "localizations": {
         "ja": {
@@ -1097,6 +1104,13 @@
         }
       }
     },
+    "Block both": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "両方をブロック" }
+        }
+      }
+    },
     "Body wave": {
       "localizations": {
         "ja": {
@@ -1241,6 +1255,13 @@
       "localizations": {
         "ja": {
           "stringUnit": { "state": "translated", "value": "動き" }
+        }
+      }
+    },
+    "Moves from the app are switched off": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "アプリからの動きはオフです" }
         }
       }
     },
@@ -1724,6 +1745,13 @@
         }
       }
     },
+    "This app can start moves": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "このアプリで動きを開始できる" }
+        }
+      }
+    },
     "This device": {
       "localizations": {
         "ja": {
@@ -2127,6 +2155,13 @@
             "state": "translated",
             "value": "不明"
           }
+        }
+      }
+    },
+    "Voice can start moves": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "音声で動きを開始できる" }
         }
       }
     },

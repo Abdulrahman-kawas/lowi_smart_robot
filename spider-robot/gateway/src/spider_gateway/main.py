@@ -44,6 +44,7 @@ async def _run() -> None:
         source_timeout_s=float(os.environ.get("SG_SOURCE_TIMEOUT_S", "1.5")),
         stop_holdoff_s=float(os.environ.get("SG_STOP_HOLDOFF_S", "2.0")),
         bench_enabled=os.environ.get("SG_BENCH", "0") == "1",
+        state_dir=Path(os.environ.get("SG_STATE_DIR", "/var/lib/spider-gateway")),
     )
     policies = load_policies(os.environ.get("SG_POLICY_FILE"))
     gateway = Gateway(link, robot_id, config=config, policies=policies)

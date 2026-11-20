@@ -83,7 +83,9 @@ brew install mosquitto xcodegen
 - **Game controller:** the left stick drives, the right stick turns, B is STOP, Y is E-stop.
 - **Moves:** one button for every built-in move, with the leading leg where it applies. The speed
   is Normal, Lively or Fast in Settings; the sheet shows the body's or gateway's own status text.
-  The body still refuses any move it cannot do safely.
+  Settings can switch moves from the app and from voice on or off for this robot; the sheet greys
+  out and points to Settings when app moves are off. The body still refuses any move it cannot do
+  safely.
 - **Photo:** an iPhone screen of its own, a sidebar panel on iPad. The vision answer is shown
   only; it never moves the robot.
 - **E-stop release, and standing a limp robot:** a fresh photo, what will happen, and a long
@@ -169,7 +171,7 @@ Every route but `/v1/hello` and `/v1/pair` needs `Authorization: Bearer <device 
 |---|---|
 | `GET /v1/hello` | `{service, api}`: connection test before pairing |
 | `POST /v1/pair {code, device_name}` | `{token, device_name, robot_id, caps}`. One attempt per second; a code dies after 5 wrong tries |
-| `GET /v1/state` | robot state (no LiDAR), gateway owner and E-stop, drive holder, latency, frame age, caps |
+| `GET /v1/state` | robot state (no LiDAR), gateway owner, E-stop and moves switches, drive holder, latency, frame age, caps |
 | `POST /v1/stop`, `POST /v1/estop` | HTTP fallback when the socket is down |
 | `POST /v1/estop/release` | starts a confirmation: `{challenge_id, action, frame_jpeg, frame_age_ms, ttl_s}` |
 | `POST /v1/wake {posture}` | the same, to stand or sit a limp robot (`wake_from_limp`) |
@@ -183,7 +185,9 @@ On `/v1/live`:
   once a second), `lidar` (36 sectors), `event` (`kind`, `detail`, `level`, `refusal`), `pong`.
   Frames are binary: `[u32 big-endian header length][header JSON {type, n, age_ms}][JPEG]`.
 - **App to server:** `drive {x, y, turn, hold_id}`, `stop`, `estop`,
-  `posture {stand|sit|relax}`, `video {on}`, and `heartbeat {t}` every second.
+  `look {pan_deg, speed}`, `perform {name, speed, leg?}`,
+  `moves_switch {voice?, remote?}`, `posture {stand|sit|relax}`, `video {on}`, and
+  `heartbeat {t}` every second.
   Drive events (`drive_ended`, `drive_refused`) carry the `hold_id` of the press they end. The server treats
   3 s of silence as a lost socket.
 - **Drive inputs:** each from -1 to 1. `x` is forward, `y` is left, and `turn` is positive to the

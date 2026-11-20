@@ -20,6 +20,7 @@ MemoryMax=150M
 OOMScoreAdjust=-700
 ProtectHome=yes
 ProtectSystem=strict
+StateDirectory=spider-gateway
 NoNewPrivileges=yes
 
 [Install]
