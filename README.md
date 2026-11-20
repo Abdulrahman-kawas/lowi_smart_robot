@@ -37,8 +37,12 @@ Say *"look"* and it takes a photo and tells you what it sees. Ask it something h
 - **Smart where it can wait.** Vision and hard questions go to a home server. The cloud helps only when the internet is up.
 - **Yours from anywhere.** Telegram, WhatsApp, a live dashboard over Tailscale, and an iPhone and iPad app.
 
-<!-- PHOTO SLOT: replace with docs/images/photos/robot-hero.jpg (front, three-quarter view) -->
-<p align="center"><img src="docs/images/photos/robot-hero.svg" alt="Photo of the robot (coming soon)" width="100%"></p>
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/images/photos/robot-front.jpg" alt="Lowi standing on its six legs, the camera on its pan servo on top"><br><sub>Standing on its own legs</sub></td>
+    <td width="50%" align="center"><img src="docs/images/photos/robot-tripod.jpg" alt="Lowi on a tripod with its legs spread out, for bench tests"><br><sub>On the tripod for bench tests</sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -108,10 +112,10 @@ they never move the robot, because a camera can read text that tries to give ord
 
 </details>
 
-<!-- PHOTO SLOTS: replace with docs/images/photos/robot-top.jpg, robot-lidar.jpg, robot-legs.jpg -->
+<!-- PHOTO SLOTS: replace with docs/images/photos/robot-lidar.jpg, robot-legs.jpg -->
 <table>
   <tr>
-    <td width="33%"><img src="docs/images/photos/robot-top.svg" alt="Top view of the electronics (coming soon)"></td>
+    <td width="33%"><img src="docs/images/photos/robot-top.jpg" alt="Lowi from above: six legs, the LiDAR in the middle and the camera at the front"></td>
     <td width="33%"><img src="docs/images/photos/robot-lidar.svg" alt="LiDAR close-up (coming soon)"></td>
     <td width="33%"><img src="docs/images/photos/robot-legs.svg" alt="A leg and its three servos (coming soon)"></td>
   </tr>

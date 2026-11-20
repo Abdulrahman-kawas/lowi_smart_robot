@@ -861,8 +861,6 @@ def mobile(lang):
 # ----------------------------------------------------------------------------- photo placeholders
 PLACEHOLDERS = [
     # file, width, height, English, Japanese, the photo to put there
-    ("robot-hero", 1200, 560, "Robot photo", "ロボットの写真", "robot-hero.jpg · front, three-quarter view"),
-    ("robot-top", 600, 450, "Top view", "上から見た写真", "robot-top.jpg · electronics from above"),
     ("robot-lidar", 600, 450, "LiDAR close-up", "LiDARのアップ", "robot-lidar.jpg · Unitree L2 on the robot"),
     ("robot-legs", 600, 450, "Legs and servos", "脚とサーボ", "robot-legs.jpg · one leg, three servos"),
     ("robot-walk", 600, 392, "Real robot walking", "実機の歩行", "robot-walk.gif · short clip, ≤ 10 MB"),
