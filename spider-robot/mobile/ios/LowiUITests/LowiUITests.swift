@@ -17,6 +17,17 @@ final class StopOnConnectTests: XCTestCase {
     }
 }
 
+final class PanControlTests: XCTestCase {
+    @MainActor
+    func testSliderAndCenterAreOnTheDriveScreen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestFake"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["panSlider"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["panCenter"].exists)
+    }
+}
+
 /// The app against the real simulator stack on this Mac (mobile/README.md). Skipped unless a
 /// pairing code from `spider-brain pair` is passed:
 ///   TEST_RUNNER_LOWI_PAIR_CODE=123456 xcodebuild test -only-testing:LowiUITests/SimulatorDriveTests

@@ -19,6 +19,7 @@ struct RobotStatus: Decodable, Sendable, Equatable {
     var linkOk: Bool?
     var rollDeg: Double?
     var pitchDeg: Double?
+    var cameraPanDeg: Double?
     var perform: String?
 
     /// The body accepts moves only while standing or already walking.
@@ -134,6 +135,7 @@ enum ClientMessage: Sendable, Equatable {
     case drive(DriveInput, holdId: String)
     case stop
     case estop
+    case look(panDeg: Double, speed: Double)
     case posture(String)
     case video(Bool)
     case heartbeat(Double)
@@ -147,6 +149,7 @@ enum ClientMessage: Sendable, Equatable {
                       "hold_id": holdId]
         case .stop: object = ["type": "stop"]
         case .estop: object = ["type": "estop"]
+        case .look(let pan, let speed): object = ["type": "look", "pan_deg": pan, "speed": speed]
         case .posture(let posture): object = ["type": "posture", "posture": posture]
         case .video(let on): object = ["type": "video", "on": on]
         case .heartbeat(let t): object = ["type": "heartbeat", "t": t]

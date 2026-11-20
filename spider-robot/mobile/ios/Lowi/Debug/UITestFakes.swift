@@ -29,7 +29,7 @@ enum UITestFakes {
     static let state = BrainState(
         robot: RobotStatus(mode: "estop", estop: true, vx: 0, vy: 0, wz: 0,
                            limiter: "slowing: obstacle 0.40 m from the legs", linkOk: true,
-                           rollDeg: 0.4, pitchDeg: -1.2),
+                           rollDeg: 0.4, pitchDeg: -1.2, cameraPanDeg: 0),
         robotAgeMs: 40, online: true,
         gateway: GatewayView(online: true, owner: nil, estop: true, remoteAlive: true),
         drive: DriveView(holder: nil),

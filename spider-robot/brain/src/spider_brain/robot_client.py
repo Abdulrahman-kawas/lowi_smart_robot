@@ -31,6 +31,7 @@ from spider_common.protocol import (
     EStopRelease,
     Heartbeat,
     LidarSummary,
+    Look,
     Move,
     Posture,
     RobotEvent,
@@ -239,6 +240,10 @@ class RobotClient:
         """Raw velocity command (teleop). The body clamps it and stops after duration_s."""
         return self._send(Move(vx=vx, vy=vy, wz=wz, duration_s=duration_s, gait=gait), qos=0,
                           human=human)
+
+    def look(self, pan_deg: float, speed: float = 0.5, human: bool = False) -> int:
+        """Camera pan (deg, + left). Fire and forget: the ack or refusal comes as an event."""
+        return self._send(Look(pan_deg=pan_deg, speed=speed), human=human)
 
     def estop(self) -> int:
         return self._send(EStop(), human=True)

@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 
 API_VERSION = 1
 TICK_S = 0.05
+LOOK_GAP_S = 0.2  # the app sends targets while dragging; the gateway also caps Looks at 5/s
 STATE_KEEPALIVE_S = 1.0  # send state at least this often, so the app sees "offline" too
 REVOKE_CHECK_S = 1.0
 QUEUE_MAX = 64  # outgoing messages per socket; a link this far behind is closed
@@ -102,6 +103,8 @@ class MobileHub:
         self._state_rx_sent: float | None = None
         self._state_sent_at = -math.inf
         self._photo = asyncio.Lock()
+        self._look_pending: tuple[float, float] | None = None
+        self._last_look_at = -math.inf
         self._tasks: set[asyncio.Task] = set()
         stt = getattr(svc, "stt", None)
         self.talk = TalkService(s, stop=self.stop, estop=self.estop, context=self._talk_context,
@@ -145,6 +148,8 @@ class MobileHub:
         elif kind == "video":
             session.video = bool(msg.get("on"))
             self._video_changed()
+        elif kind == "look":
+            self._look(session.device, msg.get("pan_deg"), msg.get("speed", 0.5))
         elif kind == "posture":
             self._spawn(self._posture(session, msg.get("posture")))
         else:
@@ -192,6 +197,32 @@ class MobileHub:
             return
         self._notify(session.device, "posture", text,
                      text.startswith(("Rejected", "No answer")))
+
+    def _look(self, device: str, pan: object, speed: object) -> None:
+        if not self._number(pan) or not -90.0 <= pan <= 90.0:
+            self._notify(device, "look", "camera direction must be a number from -90 to 90", True)
+            return
+        if not self._number(speed) or not 0.0 < speed <= 1.0:
+            self._notify(device, "look", "camera speed must be greater than 0 and at most 1", True)
+            return
+        self._look_pending = (pan, speed)
+        self._flush_look()
+
+    @staticmethod
+    def _number(value: object) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) \
+            and math.isfinite(value)
+
+    def _flush_look(self) -> None:
+        if self._look_pending is None:
+            return
+        now = time.monotonic()
+        if now - self._last_look_at < LOOK_GAP_S:
+            return
+        pan, speed = self._look_pending
+        self._look_pending = None
+        self._last_look_at = now
+        self.robot.look(pan, speed, human=True)
 
     # ------------------------------------------------------------------ outgoing
     def _notify(self, device: str | None, kind: str, detail: str, refusal: bool,
@@ -310,6 +341,8 @@ class MobileHub:
         while True:
             now = time.monotonic()
             self.drive.tick()
+            if self._look_pending is not None and now - self._last_look_at >= LOOK_GAP_S:
+                self._flush_look()
             rx = self.robot.state_rx
             fresh = rx is not None and rx != self._state_rx_sent
             if fresh or now - self._state_sent_at >= STATE_KEEPALIVE_S:

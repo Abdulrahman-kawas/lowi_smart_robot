@@ -12,6 +12,7 @@ struct ConfirmPrompt: Identifiable, Equatable {
     let id: String  // the challenge id
     let action: String  // estop_release or wake_from_limp
     let image: UIImage?
+    let cameraPanDeg: Double?  // where the camera pointed for this photo
     let frameAgeMs: Double  // when it reached this phone
     let receivedAt: TimeInterval
     let expiresAt: TimeInterval
@@ -30,6 +31,7 @@ enum ConnectionCheck: Equatable {
 @Observable
 final class AppModel {
     static let maxFrameAge: TimeInterval = 2.0
+    static let lookGap: TimeInterval = 0.25
 
     // MARK: settings, kept between launches
     var addressText: String { didSet { defaults.set(addressText, forKey: Keys.address) } }
@@ -82,6 +84,8 @@ final class AppModel {
     @ObservationIgnored private var keyAxes = DriveMapping.KeyAxes.none
     @ObservationIgnored private var padStick: CGVector?
     @ObservationIgnored private var padTurn: CGFloat?
+    @ObservationIgnored private var pendingLook: Double?
+    @ObservationIgnored private var lastLookAt: TimeInterval = 0
     @ObservationIgnored private var hardware: HardwareInput?
     @ObservationIgnored private let socket = LiveSocket()
     @ObservationIgnored private var ticker: Task<Void, Never>?
@@ -195,6 +199,7 @@ final class AppModel {
             : DriveMapping.input(stick: padStick, turn: padTurn)
         perform(deadMan.update(held: touch || keyAxes.isHeld || pad, input: input,
                                block: driveBlock(at: now), now: now))
+        flushLook(force: false)
     }
 
     private func perform(_ commands: [DriveCommand]) {
@@ -240,6 +245,29 @@ final class AppModel {
         }
     }
 
+    /// Dragging the camera slider coalesces into one Look every 0.25 s; release always sends.
+    func look(_ panDeg: Double, final: Bool = false) {
+        pendingLook = panDeg
+        if final {
+            flushLook(force: true)
+        } else {
+            tick()
+        }
+    }
+
+    private func flushLook(force: Bool) {
+        guard let pan = pendingLook else { return }
+        let now = clock()
+        guard force || now - lastLookAt >= Self.lookGap else { return }
+        guard socket.send(.look(panDeg: pan, speed: 0.5)) else {
+            pendingLook = nil
+            notice = String(localized: "Not connected to the brain.")
+            return
+        }
+        pendingLook = nil
+        lastLookAt = now
+    }
+
     func takePhoto(question: String?) async throws -> PhotoResult {
         guard let api, isPaired else { throw APIError.unauthorized(String(localized: "Not paired")) }
         return try await api.photo(question: question)
@@ -281,6 +309,7 @@ final class AppModel {
             prompt = ConfirmPrompt(
                 id: challenge.challengeId, action: challenge.action,
                 image: challenge.jpeg.flatMap(UIImage.init(data:)),
+                cameraPanDeg: brain?.robot?.cameraPanDeg,
                 frameAgeMs: challenge.frameAgeMs, receivedAt: now, expiresAt: now + challenge.ttlS)
         } catch {
             refuse(error.localizedDescription)

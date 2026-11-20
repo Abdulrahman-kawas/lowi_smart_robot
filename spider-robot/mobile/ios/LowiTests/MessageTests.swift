@@ -5,8 +5,10 @@ import Testing
 struct MessageTests {
     @Test func stateFromTheBrainDecodes() throws {
         let text = """
-        {"type":"state","robot":{"v":3,"robot_id":"spider-01","ts":1.0,"mode":"standing",
-         "vx":0.05,"vy":0.0,"wz":-0.3,"move_remaining_s":0.4,"roll_deg":0.1,"pitch_deg":null,
+         {"type":"state","robot":{"v":3,"robot_id":"spider-01","ts":1.0,"mode":"standing",
+          "vx":0.05,"vy":0.0,"wz":-0.3,"move_remaining_s":0.4,"roll_deg":0.1,"pitch_deg":null,
+          "camera_pan_deg":12.5,
+
          "lidar_age_s":0.1,"last_seq":7,"link_ok":true,"estop":false,
          "limiter":"slowing: obstacle 0.40 m from the legs","loop_overruns":0,"loop_max_ms":0.3,
          "rt_ok":false,"perform":null},
@@ -21,6 +23,7 @@ struct MessageTests {
             return
         }
         #expect(state.robot?.mode == "standing" && state.robot?.canWalk == true)
+        #expect(state.robot?.cameraPanDeg == 12.5)
         #expect(state.robot?.limiter == "slowing: obstacle 0.40 m from the legs")
         #expect(state.gateway.owner == "remote" && state.drive.holder == "iPhone")
         #expect(state.latency.robotCmdRttMs == 4.5 && state.latency.frameRttMs == nil)
@@ -54,6 +57,11 @@ struct MessageTests {
         #expect(object["type"] as? String == "drive" && object["hold_id"] as? String == "h-1")
         #expect(object["x"] as? Double == 1 && object["y"] as? Double == -0.5)
         #expect(object["turn"] as? Double == 0.25)
+        let look = ClientMessage.look(panDeg: -40, speed: 0.5).json
+        let lookObject = try #require(try JSONSerialization.jsonObject(with: Data(look.utf8)) as? [String: Any])
+        #expect(lookObject["type"] as? String == "look")
+        #expect(lookObject["pan_deg"] as? Double == -40)
+        #expect(lookObject["speed"] as? Double == 0.5)
         #expect(ClientMessage.stop.json == #"{"type":"stop"}"#)
         #expect(ClientMessage.auth(token: "t").json == #"{"token":"t","type":"auth"}"#)
     }

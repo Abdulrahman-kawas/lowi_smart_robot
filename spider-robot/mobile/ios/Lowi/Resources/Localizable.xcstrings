@@ -57,6 +57,26 @@
         }
       }
     },
+    "%lld degrees left": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左に %lld 度"
+          }
+        }
+      }
+    },
+    "%lld degrees right": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右に %lld 度"
+          }
+        }
+      }
+    },
     "%lld ms": {
       "localizations": {
         "ja": {
@@ -157,6 +177,26 @@
         }
       }
     },
+    "Camera direction": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラの向き"
+          }
+        }
+      }
+    },
+    "Camera direction unknown": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラの向きは不明です"
+          }
+        }
+      }
+    },
     "Camera frame": {
       "localizations": {
         "ja": {
@@ -183,6 +223,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "キャンセル"
+          }
+        }
+      }
+    },
+    "Center": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中央"
           }
         }
       }
@@ -1263,6 +1313,16 @@
         }
       }
     },
+    "The camera is turned %@: this photo does not show straight ahead.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラは%@を向いています。この写真は正面を写していません。"
+          }
+        }
+      }
+    },
     "The microphone could not start.": {
       "localizations": {
         "ja": {
@@ -1745,6 +1805,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "起立"
+          }
+        }
+      }
+    },
+    "straight ahead": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正面"
           }
         }
       }

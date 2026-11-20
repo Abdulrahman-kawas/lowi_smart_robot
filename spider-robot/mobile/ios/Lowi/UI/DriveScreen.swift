@@ -95,6 +95,7 @@ struct CameraStage: View {
                 if let notice = model.notice {
                     NoticeView(text: notice) { model.notice = nil }
                 }
+                PanControl()
                 PostureBar()
             }
             .environment(\.layoutDirection, direction)  // text follows the language
@@ -110,6 +111,42 @@ struct CameraStage: View {
         // The thumbs stay where they are in every language: the joystick under the left thumb,
         // STOP under the right. Only the text in between follows the layout direction.
         .environment(\.layoutDirection, .leftToRight)
+    }
+}
+
+/// The camera's direction: drag right to look right. "+ left" on the wire, so the slider is
+/// the negative of the pan. Center sends 0.
+struct PanControl: View {
+    @Environment(AppModel.self) private var model
+    @State private var value: Double = 0
+    @State private var dragging = false
+    static let limit = 60.0  // the body's default camera_pan limits; it clamps anyway
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "video.fill").foregroundStyle(Theme.muted)
+            Slider(value: $value, in: -Self.limit...Self.limit, step: 1) { editing in
+                dragging = editing
+                if !editing { model.look(-value, final: true) }
+            }
+            .onChange(of: value) { _, v in if dragging { model.look(-v) } }
+            .accessibilityLabel(Text("Camera direction"))
+            .accessibilityValue(Text(PanControl.describe(-value)))
+            .accessibilityIdentifier("panSlider")
+            Button("Center") { value = 0; model.look(0, final: true) }
+                .font(.caption.weight(.semibold))
+                .accessibilityIdentifier("panCenter")
+        }
+        .disabled(!model.isLive || model.brain?.robot?.cameraPanDeg == nil)
+        .onChange(of: model.brain?.robot?.cameraPanDeg) { _, pan in
+            if !dragging, let pan { value = -pan }
+        }
+    }
+
+    static func describe(_ pan: Double) -> String {
+        if abs(pan) < 1 { return String(localized: "straight ahead") }
+        return pan > 0 ? String(localized: "\(Int(pan.rounded())) degrees left")
+            : String(localized: "\(Int((-pan).rounded())) degrees right")
     }
 }
 

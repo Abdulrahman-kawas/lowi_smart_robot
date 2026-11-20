@@ -647,3 +647,50 @@ async def test_talk_needs_a_token_and_a_spoken_stop_reaches_the_robot(brain):
     bad = await brain.http.post("/v1/talk", json={"audio_b64": "@" * 12},
                                 headers=bearer(brain.token))
     assert bad.status_code == 400
+
+
+def _looks(stack):
+    out = []
+    for m in stack.svc.robot.link.published:
+        if m.topic != T.request("remote"):
+            continue
+        data = json.loads(m.payload)
+        if data.get("type") == "look":
+            out.append(data)
+    return out
+
+
+def _drain(session):
+    out = []
+    while not session.queue.empty():
+        out.append(session.queue.get_nowait())
+    return out
+
+
+async def test_a_look_message_sends_one_look_on_the_remote_source(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    brain.svc.mobile.handle(session, {"type": "look", "pan_deg": 30.0, "speed": 0.5})
+    looks = _looks(brain)
+    assert len(looks) == 1 and looks[0]["pan_deg"] == 30.0 and looks[0]["speed"] == 0.5
+
+
+async def test_ten_look_targets_send_one_now_and_the_last_one_later(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    for pan in range(1, 11):
+        brain.svc.mobile.handle(session, {"type": "look", "pan_deg": pan})
+    assert [c["pan_deg"] for c in _looks(brain)] == [1.0]
+    assert await _until(lambda: len(_looks(brain)) == 2, 1.0)
+    assert _looks(brain)[-1]["pan_deg"] == 10.0
+
+
+async def test_bad_look_values_are_refused_without_sending(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    for msg in ({"pan_deg": 100}, {"pan_deg": "30"}, {"pan_deg": 30, "speed": 0},
+                {"pan_deg": 30, "speed": 1.5}, {"pan_deg": float("nan")}):
+        brain.svc.mobile.handle(session, {"type": "look", **msg})
+    assert _looks(brain) == []
+    refusals = [m for m in _drain(session) if m.get("kind") == "look"]
+    assert len(refusals) == 5 and all(m["refusal"] for m in refusals)
