@@ -113,7 +113,7 @@ def test_perform_and_reach_roundtrip():
     for name in MOVE_NAMES:
         cmd = parse_command(Perform(name=name, speed=1.0).model_dump_json())
         assert isinstance(cmd, Perform) and cmd.name == name and cmd.leg is None
-    assert len(MOVE_NAMES) == 17 and "offer_hand" in MOVE_NAMES
+    assert len(MOVE_NAMES) == 18 and "offer_hand" in MOVE_NAMES and "table" in MOVE_NAMES
     reach = parse_command('{"type":"reach","target":[0.3,0.1,-0.03],"leg":"RF"}')
     assert isinstance(reach, Reach) and reach.target == (0.3, 0.1, -0.03)
     assert parse_command('{"type":"reach"}').target == "nearest"

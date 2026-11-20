@@ -173,7 +173,7 @@ class Look(_Cmd):
 MoveName = Literal[
     "wave", "bow", "body_wave", "shimmy", "leg_ripple", "stomp", "dance",
     "attack_stance", "defense_stance", "alert", "crab_sway", "stretch", "sleep", "celebrate",
-    "hi", "double_hi", "offer_hand",
+    "hi", "double_hi", "offer_hand", "table",
 ]
 MOVE_NAMES: tuple[str, ...] = get_args(MoveName)
 FrontLeg = Literal["LF", "RF"]

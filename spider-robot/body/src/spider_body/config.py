@@ -185,6 +185,10 @@ class MovesCfg(_M):
     # offer_hand: the foot goes to a fixed point this far ahead of the footprint edge, this high.
     offer_hand_ahead_m: float = Field(0.10, ge=0.0, le=0.20)
     offer_hand_height_m: float = Field(0.12, ge=0.04, le=0.20)
+    # table: the feet step in toward the body, three at a time, then the body rises to this height
+    # (ground to coxa joints) and holds with the legs nearly upright. Stand brings it back.
+    table_in_m: float = Field(0.03, ge=0.0, le=0.05)
+    table_height_m: float = Field(0.17, ge=0.10, le=0.19)
 
 
 class CameraWindowCfg(_M):

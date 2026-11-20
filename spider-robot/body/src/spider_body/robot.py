@@ -525,6 +525,10 @@ class Robot:
         r = self.perform
         assert r is not None
         self.perform = None
+        if r.spec.hold_at_end:  # table: keep the last frame; Stand plans the way back
+            self.emit("perform_done", r.seq, f"{r.spec.name} held: send stand to come back",
+                      r.trace)
+            return
         self._frame = None
         self.pose = [0.0, 0.0, 0.0]
         self.pose_target = [0.0, 0.0, 0.0]

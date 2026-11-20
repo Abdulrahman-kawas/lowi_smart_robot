@@ -178,3 +178,7 @@ legs:
     coxa:  {channel: 1}
     femur: {channel: 2}
     tibia: {channel: 3}
+
+# moves:                    # expressive moves (moves.py); the defaults are shown
+#   table_height_m: 0.17    # the table pose: body height, ground to coxa joints (0.10-0.19)
+#   table_in_m: 0.03        # how far each foot first steps in toward the body (0-0.05)
