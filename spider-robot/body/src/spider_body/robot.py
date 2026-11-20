@@ -141,6 +141,7 @@ class Robot:
         self.moves = MoveLibrary(cfg)
         self.perform: Runner | None = None
         self._frame = None  # (body, feet) of the move pose being sent, while it runs or holds
+        self._held = "stopped"  # what a held _frame is: a move held at its end (table) or stopped
         self._after_recover: str | None = None  # "sit": sit down once back in the stand pose
         # Front camera pan (Look): deg, + left. None while the servos are limp: nobody knows
         # where the camera hangs, and the first command after limp snaps to pan_target.
@@ -485,6 +486,7 @@ class Robot:
         r = self.perform
         assert r is not None
         self.perform = None
+        self._held = "stopped"
         self.emit("perform_done", r.seq, f"{r.spec.name} interrupted: {reason}", r.trace)
         if reason == "fallen":
             self._frame = None
@@ -525,6 +527,11 @@ class Robot:
         r = self.perform
         assert r is not None
         self.perform = None
+        if r.spec.hold_at_end:  # table: keep the last frame; Stand plans the way back
+            self._held = r.spec.name
+            self.emit("perform_done", r.seq, f"{r.spec.name} held: send stand to come back",
+                      r.trace)
+            return
         self._frame = None
         self.pose = [0.0, 0.0, 0.0]
         self.pose_target = [0.0, 0.0, 0.0]
@@ -738,4 +745,5 @@ class Robot:
             rt_ok=self.rt_ok,
             perform=self.perform.spec.name if self.perform is not None else None,
             camera_pan_deg=None if self.pan_deg is None else round(self.pan_deg, 1),
+            held_pose=self._held if self._frame is not None and self.perform is None else None,
         )

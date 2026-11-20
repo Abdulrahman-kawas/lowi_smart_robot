@@ -17,9 +17,10 @@ validate() samples a move every 10 ms of real time, at the speed it will run, an
   * no foot slides while it is on the floor
   * every leg reachable by IK, every servo inside its limits (BodyConfig.limits_of, no clamping)
   * every servo slower than max_joint_speed_dps
-  * body height between the sit height and the stand height + 4 cm
+  * body height between the sit height and the stand height + 4 cm (table: its own height)
   * body shift within max_shift_m (2 cm for attack_stance) of where the move started
-  * starts and ends in the neutral stand pose, lasts at most max_duration_s
+  * starts and ends in the neutral stand pose (table ends held: Stand brings it back), lasts at
+    most max_duration_s
 A move that fails any check is refused before it starts, never clipped halfway.
 
 Everything is plain numpy on a few thousand samples, a few milliseconds: it runs inside
@@ -86,6 +87,8 @@ class MoveSpec:
     watch: tuple[int, float] | None = None  # reach: (sector, range) that must not come closer
     target: tuple[float, float, float] | None = None  # reach/offer: the foot target, stance frame
     detail: str = ""
+    hold_at_end: bool = False  # ends in a held pose (table): Stand brings it back (recovery)
+    max_rise_m: float | None = None  # None: MAX_RISE_M above the stand height
 
     def times(self, speed: float) -> np.ndarray:
         k = DEFAULT_SPEED / speed
@@ -335,7 +338,7 @@ def validate(geo: Geometry, spec: MoveSpec, speed: float, keep: bool = False) ->
     if spec.from_neutral and (np.abs(body[0]).max() > 1e-9 or np.abs(feet[0]).max() > 1e-9):
         rep.reason = f"{spec.name} does not start in the neutral stand pose"
         return rep
-    if np.abs(body[-1]).max() > 1e-9 or np.abs(feet[-1]).max() > 1e-9:
+    if not spec.hold_at_end and (np.abs(body[-1]).max() > 1e-9 or np.abs(feet[-1]).max() > 1e-9):
         rep.reason = f"{spec.name} does not end in the neutral stand pose"
         return rep
 
@@ -350,7 +353,8 @@ def validate(geo: Geometry, spec: MoveSpec, speed: float, keep: bool = False) ->
         return f"at {t[i]:.2f} s"
 
     h = geo.stand + b[:, 0]
-    bad = np.flatnonzero((h < geo.sit - 1e-6) | (h > geo.stand + MAX_RISE_M + 1e-6))
+    rise = spec.max_rise_m if spec.max_rise_m is not None else MAX_RISE_M
+    bad = np.flatnonzero((h < geo.sit - 1e-6) | (h > geo.stand + rise + 1e-6))
     if bad.size:
         rep.reason = f"body height {h[bad[0]]:.3f} m is outside the safe range {at(bad[0])}"
         return rep
@@ -726,6 +730,23 @@ def _stretch(geo: Geometry) -> MoveSpec:
     return c.spec("stretch")
 
 
+def _table(geo: Geometry) -> MoveSpec:
+    """Feet in toward the body, three at a time, then the body up to moves.table_height_m, held
+    like a table with the legs nearly upright. Narrower feet and a higher body: never walked in
+    (a held pose refuses Move); Stand plans the way back like any held pose."""
+    m = geo.cfg.moves
+    rise = m.table_height_m - geo.stand
+    c = Choreo()
+    for tripod in (TRIPOD_A, TRIPOD_B):
+        c.lift(0.4, tripod, 0.03)
+        c.to(0.5, **{leg: (*_radial(geo, leg, -m.table_in_m), 0.03) for leg in tripod})
+        c.lift(0.4, tripod, 0.0)
+    c.to(2.0, dz=rise)
+    return c.spec("table", hold_at_end=True, max_rise_m=max(rise, MAX_RISE_M), guard="none",
+                  detail=(f"{m.table_height_m * 100:.0f} cm high, feet {m.table_in_m * 100:.0f} "
+                          "cm in; send stand to come back"))
+
+
 def _sleep_at(geo: Geometry, low: float) -> MoveSpec:
     c = Choreo()
     c.to(2.0, dz=low + 0.005)
@@ -790,7 +811,7 @@ BUILDERS = {
     "leg_ripple": _leg_ripple, "stomp": _stomp_move, "dance": _dance,
     "attack_stance": _attack_stance, "defense_stance": _defense_stance, "alert": _alert,
     "crab_sway": _crab_move, "stretch": _stretch, "sleep": _sleep, "celebrate": _celebrate,
-    "hi": _hi, "double_hi": _double_hi, "offer_hand": _offer_hand,
+    "hi": _hi, "double_hi": _double_hi, "offer_hand": _offer_hand, "table": _table,
 }
 SIDED = frozenset({"wave", "hi", "offer_hand"})  # these take a leg: LF (default) or RF
 
@@ -889,7 +910,9 @@ class MoveLibrary:
                 c.step(leg, 0.0, 0.0, height=0.02)
         if len(c.frames) == 1:
             c.hold(0.1)
-        return fit_timing(self.geo, c.spec("recover", from_neutral=False, guard="none"))
+        rise = max(MAX_RISE_M, float(body[0]))  # it may start higher (table): it only goes down
+        return fit_timing(self.geo, c.spec("recover", from_neutral=False, guard="none",
+                                           max_rise_m=rise))
 
     def recovery(self, body: np.ndarray, feet: np.ndarray) -> tuple[MoveSpec, Report]:
         """From a held pose back to the neutral stand: the first path that validates."""

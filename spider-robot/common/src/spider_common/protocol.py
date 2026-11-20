@@ -173,7 +173,7 @@ class Look(_Cmd):
 MoveName = Literal[
     "wave", "bow", "body_wave", "shimmy", "leg_ripple", "stomp", "dance",
     "attack_stance", "defense_stance", "alert", "crab_sway", "stretch", "sleep", "celebrate",
-    "hi", "double_hi", "offer_hand",
+    "hi", "double_hi", "offer_hand", "table",
 ]
 MOVE_NAMES: tuple[str, ...] = get_args(MoveName)
 FrontLeg = Literal["LF", "RF"]
@@ -268,6 +268,8 @@ class RobotState(BaseModel):
     rt_ok: bool = False  # SCHED_FIFO and locked memory are really active
     perform: str | None = None  # the move running now (mode stays "standing" while it runs)
     camera_pan_deg: float | None = None  # front camera pan (+ left); None: no pan servo, or limp
+    # A pose the body holds until Stand: "table", or "stopped" (a move stopped halfway); else None
+    held_pose: str | None = None
 
 
 EventKind = Literal[
