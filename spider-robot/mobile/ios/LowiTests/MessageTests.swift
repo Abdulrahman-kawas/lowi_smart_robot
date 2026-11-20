@@ -14,7 +14,9 @@ struct MessageTests {
          "rt_ok":false,"perform":null},
          "robot_age_ms":40,"online":true,
          "gateway":{"online":true,"owner":"remote","owner_remaining_s":0.8,"estop":false,
-                    "remote_alive":true,"moves":{"voice":true,"remote":false}},
+                    "remote_alive":true,"moves":{"voice":true,"remote":false},
+                    "remote_limits":{"max_speed_mps":0.08,"max_wz_rps":0.4,
+                                     "ceiling_speed_mps":0.12,"ceiling_wz_rps":0.6}},
          "drive":{"holder":"iPhone"},"latency":{"robot_cmd_rtt_ms":4.5,"frame_rtt_ms":null},
           "frame_age_ms":310,"caps":{"max_speed_mps":0.05,"max_wz_rps":0.3,"move_s":1.0,
           "moves":["wave","dance","hi"]}}
@@ -29,6 +31,8 @@ struct MessageTests {
         #expect(state.robot?.limiter == "slowing: obstacle 0.40 m from the legs")
         #expect(state.gateway.owner == "remote" && state.drive.holder == "iPhone")
         #expect(state.gateway.moves == MovesState(voice: true, remote: false))
+        #expect(state.gateway.remoteLimits == RemoteLimits(
+            maxSpeedMps: 0.08, maxWzRps: 0.4, ceilingSpeedMps: 0.12, ceilingWzRps: 0.6))
         #expect(state.latency.robotCmdRttMs == 4.5 && state.latency.frameRttMs == nil)
         #expect(state.caps == Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0,
                                    moves: ["wave", "dance", "hi"]))
@@ -44,7 +48,7 @@ struct MessageTests {
             Issue.record("not a state message")
             return
         }
-        #expect(state.gateway.moves == nil)
+        #expect(state.gateway.moves == nil && state.gateway.remoteLimits == nil)
     }
 
     @Test func eventsCarryTheHoldTheyEnd() throws {
@@ -74,6 +78,15 @@ struct MessageTests {
         #expect(object["type"] as? String == "drive" && object["hold_id"] as? String == "h-1")
         #expect(object["x"] as? Double == 1 && object["y"] as? Double == -0.5)
         #expect(object["turn"] as? Double == 0.25)
+        #expect(object["speed"] as? Double == 1 && object["turn_speed"] as? Double == 1)
+        let slow = ClientMessage.drive(DriveInput(x: 1), holdId: "h-2", speed: 0.4, turnSpeed: 0.7).json
+        let slowObject = try #require(try JSONSerialization.jsonObject(with: Data(slow.utf8)) as? [String: Any])
+        #expect(slowObject["speed"] as? Double == 0.4 && slowObject["turn_speed"] as? Double == 0.7)
+        let limit = ClientMessage.speedLimit(maxSpeedMps: 0.08, maxWzRps: 0.4).json
+        let limitObject = try #require(try JSONSerialization.jsonObject(with: Data(limit.utf8)) as? [String: Any])
+        #expect(limitObject["type"] as? String == "speed_limit")
+        #expect(limitObject["max_speed_mps"] as? Double == 0.08)
+        #expect(limitObject["max_wz_rps"] as? Double == 0.4)
         let look = ClientMessage.look(panDeg: -40, speed: 0.5).json
         let lookObject = try #require(try JSONSerialization.jsonObject(with: Data(look.utf8)) as? [String: Any])
         #expect(lookObject["type"] as? String == "look")

@@ -69,8 +69,9 @@ def test_settings_keep_the_app_on_the_remote_source_and_under_its_caps(tmp_path)
     with pytest.raises(ValidationError, match="gateway"):
         Settings(_env_file=None, mobile=True, robot_source="planner")  # owner would be planner
     ok = Settings(_env_file=None, mobile=True, robot_source="planner", human_source="remote")
-    assert ok.mobile_max_speed_mps == 0.05 and ok.mobile_deadman_s == 0.6
-    for field, value in [("mobile_max_speed_mps", 0.06), ("mobile_max_wz_rps", 0.31),
+    assert ok.mobile_max_speed_mps == 0.12 and ok.mobile_max_wz_rps == 0.6  # the body's limits
+    assert ok.mobile_deadman_s == 0.6
+    for field, value in [("mobile_max_speed_mps", 0.13), ("mobile_max_wz_rps", 0.61),
                          ("mobile_move_s", 1.5), ("mobile_deadman_s", 0.8),
                          ("mobile_max_frame_age_s", 3.0)]:
         with pytest.raises(ValidationError):
@@ -168,6 +169,28 @@ def test_drive_is_clamped_to_the_remote_caps():
     assert math.hypot(vx, vy) <= 0.05 and wz == pytest.approx(0.3) and duration == 1.0
     drive.drive("phone", float("nan"), 0, 0, "h2")
     assert robot.kinds() == ["move"] and notes[-1][1] == "drive_refused"
+
+
+def test_drive_speed_and_turn_speed_are_fractions_of_the_caps():
+    assert scale(1, 0, 0, CAPS, speed=0.5) == pytest.approx((0.025, 0.0, 0.0))
+    assert scale(0, 0, -1, CAPS, turn_speed=0.4)[2] == pytest.approx(-0.12)
+    assert scale(1, 0, 1, CAPS) == pytest.approx((0.05, 0.0, 0.3))  # an older app: 1 and 1
+    vx, vy, _ = scale(0.7071068, 0.7071068, 0, CAPS, speed=0.7)
+    assert math.hypot(vx, vy) <= 0.05 * 0.7
+    for bad in (0, -0.5, 1.5, float("nan"), float("inf"), True, "0.5", None):
+        with pytest.raises(ValueError):
+            scale(1, 0, 0, CAPS, speed=bad)
+        with pytest.raises(ValueError):
+            scale(1, 0, 0, CAPS, turn_speed=bad)
+
+    drive, robot, clock, notes = make_drive()
+    drive.drive("phone", 1, 0, 1, "h1", speed=0.5, turn_speed=0.4)
+    kind, vx, vy, wz, duration, human = robot.calls[-1]
+    assert vx == pytest.approx(0.025) and wz == pytest.approx(0.12)
+    drive.drive("phone", 1, 0, 0, "h2", speed=2)
+    assert notes[-1][:2] == ("phone", "drive_refused") and notes[-1][4] == "h2"
+    assert "speed must be a number greater than 0 and at most 1" in notes[-1][2]
+    assert robot.kinds() == ["move"]
 
 
 def test_deadman_stops_the_robot_after_0_6_s_without_renewal():
@@ -686,6 +709,11 @@ def _looks(stack):
     return out
 
 
+def _requests(stack, kind):
+    return [data for data in (json.loads(m.payload) for m in stack.svc.robot.link.published
+                              if m.topic == T.request("remote")) if data.get("type") == kind]
+
+
 def _drain(session):
     out = []
     while not session.queue.empty():
@@ -777,3 +805,59 @@ async def test_hello_advertises_every_move(brain):
     session = brain.svc.mobile.connect("phone")
     hello = _drain(session)[0]
     assert hello["caps"]["moves"] == list(MOVE_NAMES)
+
+
+async def test_a_speed_limit_message_sends_one_speed_limit_on_the_remote_source(brain):
+    session = brain.svc.mobile.connect("phone")
+    _drain(session)
+    brain.svc.mobile.handle(session, {"type": "speed_limit", "max_speed_mps": 0.08,
+                                      "max_wz_rps": 0.4})
+    out = _requests(brain, "speed_limit")
+    assert len(out) == 1 and (out[0]["max_speed_mps"], out[0]["max_wz_rps"]) == (0.08, 0.4)
+    for bad in ({"max_speed_mps": 0, "max_wz_rps": 0.4},
+                {"max_speed_mps": "0.1", "max_wz_rps": 0.4},
+                {"max_speed_mps": 0.08},
+                {"max_speed_mps": True, "max_wz_rps": 0.4},
+                {"max_speed_mps": 0.08, "max_wz_rps": float("nan")},
+                {"max_speed_mps": 0.13, "max_wz_rps": 0.4},
+                {"max_speed_mps": 0.08, "max_wz_rps": 0.7}):
+        brain.svc.mobile.handle(session, {"type": "speed_limit", **bad})
+    assert len(_requests(brain, "speed_limit")) == 1
+    refusals = [m for m in _drain(session) if m.get("kind") == "speed_limit"]
+    assert len(refusals) == 7 and all(m["refusal"] for m in refusals)
+    assert refusals[-1]["detail"] == "above the brain's caps of 0.12 m/s and 0.6 rad/s"
+
+
+async def test_caps_are_the_lower_of_the_brain_and_the_gateway(brain):
+    hub = brain.svc.mobile
+    view = hub.caps_view()
+    assert (view["max_speed_mps"], view["max_wz_rps"]) == (0.05, 0.3)  # no gateway heard yet
+    status = {"remote_limits": {"max_speed_mps": 0.09, "max_wz_rps": 0.45,
+                                "ceiling_speed_mps": 0.12, "ceiling_wz_rps": 0.6}}
+    hub._on_bus({"kind": "gateway_status", "status": status})
+    assert (hub.caps_view()["max_speed_mps"], hub.drive.caps.max_wz_rps) == (0.09, 0.45)
+    assert hub.state_view()["gateway"]["remote_limits"]["ceiling_speed_mps"] == 0.12
+    hub._on_bus({"kind": "gateway_status", "status": {"online": True}})  # an older gateway
+    assert hub.caps_view()["max_speed_mps"] == 0.05
+    assert hub.state_view()["gateway"]["remote_limits"] is None
+    hub.brain_caps = Caps(0.07, 0.6, 1.0)  # as if SB_MOBILE_MAX_SPEED_MPS=0.07
+    hub._on_bus({"kind": "gateway_status", "status": status})
+    assert hub.caps_view()["max_speed_mps"] == 0.07
+
+
+async def test_the_app_sets_its_top_speed_and_drives_at_a_fraction_of_it(stack):
+    await stand(stack)
+    app = await live_view(stack)
+    assert app.states[-1]["gateway"]["remote_limits"]["max_speed_mps"] == 0.05
+    await app.send(type="speed_limit", max_speed_mps=0.08, max_wz_rps=0.4)
+    assert await _until(lambda: app.states[-1]["caps"]["max_speed_mps"] == 0.08, 3.0)
+    limits = app.states[-1]["gateway"]["remote_limits"]
+    assert (limits["max_wz_rps"], limits["ceiling_speed_mps"]) == (0.4, 0.12)
+    await app.send(type="drive", x=1, y=0, turn=0, hold_id="h", speed=0.5)
+    assert await _until(lambda: stack.body.move is not None, 2.0)
+    assert stack.body.move.vx == pytest.approx(0.04)
+    assert "capped" not in stack.gateway.counters  # the brain kept to the new limit
+    await app.send(type="stop")
+    await app.send(type="drive", x=1, y=0, turn=0, hold_id="h2", speed=0)
+    assert await _until(lambda: refused(app, "speed must be a number"), 2.0)
+    await app.close()

@@ -1,8 +1,11 @@
 """Per-source limits the gateway enforces before anything reaches the body.
 
 These add to the body's own limits and replace none of them. A remote operator is not next to the
-robot, so remote motion is slower and shorter than local voice: if the network dies mid-command the
-robot has moved at most max_speed_mps * max_duration_s before its Move expires.
+robot, so remote moves are shorter than local voice: if the network dies mid-command the robot has
+moved at most speed * max_duration_s before its Move expires (12 cm at the remote ceiling).
+
+The remote source's speed and turn rate are the app's own setting (SpeedLimit, kept by the gateway);
+remote max_speed_mps and max_wz_rps here are only its ceiling.
 """
 
 from __future__ import annotations
@@ -36,7 +39,8 @@ BENCH_POLICY = SourcePolicy(max_speed_mps=0.12, max_wz_rps=0.6, max_duration_s=3
 DEFAULT_POLICIES: dict[str, SourcePolicy] = {
     "voice": SourcePolicy(max_speed_mps=0.08, max_wz_rps=0.5, max_duration_s=2.0,
                           max_excess_delay_s=0.5, allow_moves=True),
-    "remote": SourcePolicy(max_speed_mps=0.05, max_wz_rps=0.3, max_duration_s=1.0,
+    # Speed and turn rate: the ceiling of the app's own setting, at the body's gait limits.
+    "remote": SourcePolicy(max_speed_mps=0.12, max_wz_rps=0.6, max_duration_s=1.0,
                            max_excess_delay_s=0.75, allow_moves=True,
                            may_release_estop=True, needs_frame_proof=True),
     "planner": SourcePolicy(max_speed_mps=0.06, max_wz_rps=0.45, max_duration_s=1.0,
@@ -45,10 +49,14 @@ DEFAULT_POLICIES: dict[str, SourcePolicy] = {
 
 
 def check_order(policies: dict[str, SourcePolicy]) -> None:
-    """Refuse a configuration that would let a remote operator outrun local voice."""
+    """Refuse a policy file that breaks the rules between the sources.
+
+    Remote speed and turn rate may be above voice: the owner decided on 2026-11-20 that the app
+    sets the robot's speed, and its own top speed up to the body's limits (0.12 m/s, 0.6 rad/s).
+    The remote ceiling here bounds that setting; the body's own checks are unchanged. A remote
+    Move still may not last longer than a voice one, and every E-stop rule stays.
+    """
     voice, remote = policies["voice"], policies["remote"]
-    if remote.max_speed_mps > voice.max_speed_mps or remote.max_wz_rps > voice.max_wz_rps:
-        raise ValueError("remote caps must not exceed voice caps")
     if remote.max_duration_s > voice.max_duration_s:
         raise ValueError("remote max_duration_s must not exceed voice max_duration_s")
     if remote.may_release_estop and not remote.needs_frame_proof:

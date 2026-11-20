@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ cm/s": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ cm/秒"
+          }
+        }
+      }
+    },
     "%@ is driving": {
       "localizations": {
         "ja": {
@@ -43,6 +53,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 秒前"
+          }
+        }
+      }
+    },
+    "%@ °/s": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ °/秒"
           }
         }
       }
@@ -704,6 +724,22 @@
         }
       }
     },
+    "Most the robot allows: %@, %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Most the robot allows: %1$@, %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットの上限: %1$@・%2$@"
+          }
+        }
+      }
+    },
     "Motion limited: %@": {
       "localizations": {
         "ja": {
@@ -1070,6 +1106,16 @@
         }
       }
     },
+    "Slow": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遅い"
+          }
+        }
+      }
+    },
     "STOP": {
       "localizations": {
         "ja": {
@@ -1391,10 +1437,50 @@
         }
       }
     },
+    "Top speed from the app": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリからの最高速度"
+          }
+        }
+      }
+    },
+    "Top turning speed": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最高旋回速度"
+          }
+        }
+      }
+    },
+    "Turning": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋回"
+          }
+        }
+      }
+    },
     "Wait for the current move": {
       "localizations": {
         "ja": {
           "stringUnit": { "state": "translated", "value": "今の動きが終わるまで待ってください" }
+        }
+      }
+    },
+    "Walking": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歩行"
+          }
         }
       }
     },

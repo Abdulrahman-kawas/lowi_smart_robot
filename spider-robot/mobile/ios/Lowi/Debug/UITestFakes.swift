@@ -37,7 +37,7 @@ enum UITestFakes {
                                    cameraPanDeg: 0, perform: nil),
                 robotAgeMs: 40, online: true,
                 gateway: GatewayView(online: true, owner: nil, estop: false, remoteAlive: true,
-                                     moves: switchState),
+                                     moves: switchState, remoteLimits: remoteLimits),
                 drive: DriveView(holder: nil),
                 latency: LatencyView(robotCmdRttMs: 4.5, frameRttMs: 6.0),
                 frameAgeMs: 120,
@@ -51,10 +51,14 @@ enum UITestFakes {
                            rollDeg: 0.4, pitchDeg: -1.2, cameraPanDeg: 0),
         robotAgeMs: 40, online: true,
         gateway: GatewayView(online: true, owner: nil, estop: true, remoteAlive: true,
-                             moves: MovesState()),
+                             moves: MovesState(), remoteLimits: remoteLimits),
         drive: DriveView(holder: nil),
         latency: LatencyView(robotCmdRttMs: 4.5, frameRttMs: 6.0),
         frameAgeMs: 120, caps: Caps(maxSpeedMps: 0.05, maxWzRps: 0.3, moveS: 1.0))
+
+    /// The gateway's first-start top speed under its default ceiling.
+    static let remoteLimits = RemoteLimits(maxSpeedMps: 0.05, maxWzRps: 0.3, ceilingSpeedMps: 0.12,
+                                           ceilingWzRps: 0.6)
 
     static let lidar: LidarScan = {
         var sectors = (0..<36).map { i in 1.4 + 0.5 * sin(Double(i) / 3) }

@@ -47,6 +47,7 @@ REFUSALS = frozenset({"rejected", "preempted", "perform_rejected"})
 QUIET = frozenset({"ack", "move_done", "challenge"})
 DRIVE_MODES = frozenset({"standing", "walking"})
 POSTURES = frozenset({"stand", "sit", "relax"})
+OLD_GATEWAY_LIMITS = (0.05, 0.3)  # remote caps of a gateway that reports none (before 2026-11-20)
 
 
 class Busy(RuntimeError):
@@ -92,9 +93,9 @@ class MobileHub:
         self.source = self.robot.human_source  # "remote": the settings refuse anything else
         self.devices = DeviceStore(data_dir)
         self.codes = PairingCodes(data_dir, s.mobile_pair_code_s)
-        self.caps = Caps(s.mobile_max_speed_mps, s.mobile_max_wz_rps, s.mobile_move_s)
-        self.drive = DriveControl(self.robot, self.caps, s.mobile_deadman_s, self._preflight,
-                                  self._notify, gait=s.gait)
+        self.brain_caps = Caps(s.mobile_max_speed_mps, s.mobile_max_wz_rps, s.mobile_move_s)
+        self.drive = DriveControl(self.robot, self._caps_for(None), s.mobile_deadman_s,
+                                  self._preflight, self._notify, gait=s.gait)
         self.feed = FrameFeed(self.robot, self._on_frame,
                               lambda kind, detail: self._notify(None, kind, detail, False))
         self.sessions: dict[int, Session] = {}
@@ -143,7 +144,8 @@ class MobileHub:
             self.estop(session.device)
         elif kind == "drive":
             self.drive.drive(session.device, msg.get("x", 0.0), msg.get("y", 0.0),
-                             msg.get("turn", 0.0), msg.get("hold_id"))
+                             msg.get("turn", 0.0), msg.get("hold_id"), msg.get("speed", 1.0),
+                             msg.get("turn_speed", 1.0))
         elif kind == "heartbeat":
             t = msg.get("t")
             session.put({"type": "pong", "t": t if isinstance(t, (int, float)) else None})
@@ -156,6 +158,8 @@ class MobileHub:
             self._spawn(self._perform(session, msg))
         elif kind == "moves_switch":
             self._moves_switch(session, msg)
+        elif kind == "speed_limit":
+            self._speed_limit(session.device, msg.get("max_speed_mps"), msg.get("max_wz_rps"))
         elif kind == "posture":
             self._spawn(self._posture(session, msg.get("posture")))
         else:
@@ -243,6 +247,29 @@ class MobileHub:
             values[name] = value
         self.robot.moves_switch(values["voice"], values["remote"])
 
+    def _speed_limit(self, device: str, speed: object, turn: object) -> None:
+        """The app's top speed and turn rate, kept by the gateway up to its remote ceiling."""
+        if not (self._number(speed) and speed > 0 and self._number(turn) and turn > 0):
+            self._notify(device, "speed_limit",
+                         "max_speed_mps and max_wz_rps must be numbers above 0", True)
+            return
+        b = self.brain_caps
+        if speed > b.max_speed_mps or turn > b.max_wz_rps:
+            self._notify(device, "speed_limit", f"above the brain's caps of {b.max_speed_mps:g} "
+                         f"m/s and {b.max_wz_rps:g} rad/s", True)
+            return
+        if self.robot.speed_limit(speed, turn) < 0:
+            self._notify(device, "speed_limit", "the brain is not connected to the robot", True)
+
+    def _caps_for(self, status: dict[str, Any] | None) -> Caps:
+        """The brain's caps, lowered to the gateway's runtime remote limit (the app's top speed)."""
+        limits = (status or {}).get("remote_limits") or {}
+        speed, turn = limits.get("max_speed_mps"), limits.get("max_wz_rps")
+        if not (self._number(speed) and speed > 0 and self._number(turn) and turn > 0):
+            speed, turn = OLD_GATEWAY_LIMITS
+        b = self.brain_caps
+        return Caps(min(b.max_speed_mps, speed), min(b.max_wz_rps, turn), b.move_s)
+
     @staticmethod
     def _number(value: object) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool) \
@@ -310,18 +337,19 @@ class MobileHub:
 
     # ------------------------------------------------------------------ views
     def caps_view(self) -> dict[str, Any]:
-        return {"max_speed_mps": self.caps.max_speed_mps, "max_wz_rps": self.caps.max_wz_rps,
-                "move_s": self.caps.move_s, "moves": list(MOVE_NAMES)}
+        caps = self.drive.caps  # min(brain caps, the gateway's remote limit)
+        return {"max_speed_mps": caps.max_speed_mps, "max_wz_rps": caps.max_wz_rps,
+                "move_s": caps.move_s, "moves": list(MOVE_NAMES)}
 
     def _gateway_view(self, now: float) -> dict[str, Any]:
         g = self.gateway
         if g is None or self._gateway_rx is None or now - self._gateway_rx > GATEWAY_STALE_S:
             return {"online": False, "owner": None, "owner_remaining_s": 0.0, "estop": None,
-                    "remote_alive": False, "moves": {}}
+                    "remote_alive": False, "moves": {}, "remote_limits": None}
         return {"online": bool(g.get("online", True)), "owner": g.get("owner"),
                 "owner_remaining_s": g.get("owner_remaining_s", 0.0), "estop": g.get("estop"),
                 "remote_alive": bool(g.get("sources", {}).get(self.source, {}).get("alive")),
-                "moves": g.get("moves", {})}
+                "moves": g.get("moves", {}), "remote_limits": g.get("remote_limits") or None}
 
     def state_view(self) -> dict[str, Any]:
         now = time.monotonic()
@@ -385,6 +413,7 @@ class MobileHub:
         kind = ev.get("kind")
         if kind == "gateway_status":
             self.gateway, self._gateway_rx = ev.get("status") or {}, time.monotonic()
+            self.drive.caps = self._caps_for(self.gateway)
         elif kind == "robot_event" and ev.get("source") in (None, self.source):
             name, seq, detail = ev.get("event", ""), ev.get("seq"), ev.get("detail", "")
             if ev.get("source") == self.source:

@@ -207,9 +207,19 @@ class MovesSwitch(_Cmd):
     remote: bool | None = None
 
 
+class SpeedLimit(_Cmd):
+    """Gateway only: the remote source's (the app's) top speed and turn rate from now on. It can
+    never go above the remote policy's max_speed_mps and max_wz_rps (the ceiling in
+    SG_POLICY_FILE), and the body still clamps with its own limits."""
+
+    type: Literal["speed_limit"] = "speed_limit"
+    max_speed_mps: float = Field(gt=0.0, le=0.5)
+    max_wz_rps: float = Field(gt=0.0, le=2.0)
+
+
 Command = Annotated[
     Move | Stop | Posture | BodyPose | Snapshot | Heartbeat | EStop | EStopRelease | ConfirmRequest
-    | Perform | Reach | Look | MovesSwitch,
+    | Perform | Reach | Look | MovesSwitch | SpeedLimit,
     Field(discriminator="type"),
 ]
 _COMMAND: TypeAdapter[Command] = TypeAdapter(Command)
@@ -310,6 +320,9 @@ class GatewayStatus(BaseModel):
     sources: dict[str, SourceStatus] = Field(default_factory=dict)
     holdoff_s: dict[str, float] = Field(default_factory=dict)
     moves: dict[str, bool] = Field(default_factory=dict)
+    # The app's speed limit now and its ceiling: max_speed_mps, max_wz_rps, ceiling_speed_mps,
+    # ceiling_wz_rps. Empty from a gateway older than 2026-11-20.
+    remote_limits: dict[str, float] = Field(default_factory=dict)
     pending_challenges: int = 0
     counters: dict[str, int] = Field(default_factory=dict)
 

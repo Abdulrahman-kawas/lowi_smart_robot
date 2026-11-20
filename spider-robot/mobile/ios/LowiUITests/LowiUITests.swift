@@ -57,6 +57,47 @@ final class MovesTests: XCTestCase {
     }
 }
 
+final class SpeedSettingsTests: XCTestCase {
+    /// The Speed section shows the gateway's real top speed and its ceiling, and stays off while
+    /// the app has no live link (the fake has none).
+    @MainActor
+    func testSpeedSectionShowsTheGatewayLimitsAndIsOffWhileNotLive() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestFake"]
+        XCUIDevice.shared.orientation = .portrait  // an earlier test may have left it in landscape
+        app.launch()
+        XCTAssertTrue(app.buttons["settings"].waitForExistence(timeout: 10))
+        openSheet("settings", marker: "settingsForm", in: app)
+        let slider = app.sliders["topSpeedSlider"]
+        reveal(slider, in: app)
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        XCTAssertEqual(slider.value as? String, "5 cm/s")
+        XCTAssertFalse(slider.isEnabled)
+        let turn = app.sliders["topTurnSlider"]
+        XCTAssertEqual(turn.value as? String, "17 °/s")
+        XCTAssertFalse(turn.isEnabled)
+        XCTAssertEqual(app.staticTexts["speedCeiling"].label, "Most the robot allows: 12 cm/s, 34 °/s")
+        reveal(app.descendants(matching: .any)["moveSpeed"], in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["walkSpeedValue"].label.hasSuffix("5 cm/s"))
+        XCTAssertTrue(app.descendants(matching: .any)["walkSpeed"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["turnSpeed"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["moveSpeed"].exists)
+    }
+
+    /// Scrolls Settings a third of the form at a time until the element is on screen. A swipe
+    /// keeps scrolling after the finger lifts and can pass a whole section, whose rows the form
+    /// then drops; a press and drag stops where it ends.
+    @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        let form = app.descendants(matching: .any)["settingsForm"]
+        for _ in 0..<12 where !(element.exists && element.isHittable) {
+            form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.1, thenDragTo: form.coordinate(
+                    withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)))
+        }
+    }
+}
+
 /// The app against the real simulator stack on this Mac (mobile/README.md). Skipped unless a
 /// pairing code from `spider-brain pair` is passed:
 ///   TEST_RUNNER_LOWI_PAIR_CODE=123456 xcodebuild test -only-testing:LowiUITests/SimulatorDriveTests
@@ -448,7 +489,12 @@ final class AccessibilityAuditTests: XCTestCase {
                     return "off screen under the sheet's edge: the audit measured what covers it"
                 }
                 guard issue.auditType == .dynamicType else { return nil }
-                if screen == "Settings", id.isEmpty, label == "Moves" {
+                if pad, screen == "Settings", element == nil {
+                    // iPadOS 26 reports the two native Speed sliders with no element in the
+                    // Dynamic Type audit; their labels use system text.
+                    return "no element: the native Speed sliders use system text"
+                }
+                if screen == "Settings", id.isEmpty, ["Speed", "Moves"].contains(label) {
                     // The same header style as "This device", which passes at the top of the form.
                     return "a section header near the sheet's bottom edge leaves the screen as the text grows"
                 }

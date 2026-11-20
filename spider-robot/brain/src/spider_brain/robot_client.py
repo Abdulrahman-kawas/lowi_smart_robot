@@ -39,6 +39,7 @@ from spider_common.protocol import (
     RobotEvent,
     RobotState,
     Snapshot,
+    SpeedLimit,
     Stop,
     Topics,
 )
@@ -254,6 +255,11 @@ class RobotClient:
 
     def moves_switch(self, voice: bool | None, remote: bool | None) -> int:
         return self._send(MovesSwitch(voice=voice, remote=remote), human=True)
+
+    def speed_limit(self, max_speed_mps: float, max_wz_rps: float) -> int:
+        """The app's top speed and turn rate. The gateway keeps it, up to its remote ceiling."""
+        return self._send(SpeedLimit(max_speed_mps=max_speed_mps, max_wz_rps=max_wz_rps),
+                          human=True)
 
     def estop(self) -> int:
         return self._send(EStop(), human=True)

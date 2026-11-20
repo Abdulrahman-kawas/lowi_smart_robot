@@ -39,6 +39,10 @@ final class AppModel {
     var hapticsOn: Bool { didSet { defaults.set(hapticsOn, forKey: Keys.haptics) } }
     var speakAnswers: Bool { didSet { defaults.set(speakAnswers, forKey: Keys.speak) } }
     var moveSpeed: Double { didSet { defaults.set(moveSpeed, forKey: Keys.moveSpeed) } }
+    /// Walking and Turning in Settings: Slow, Normal or Fast, a fraction of the top speed.
+    var walkSpeed: Double { didSet { defaults.set(walkSpeed, forKey: Keys.walkSpeed) } }
+    var turnSpeed: Double { didSet { defaults.set(turnSpeed, forKey: Keys.turnSpeed) } }
+    static let speedSteps = [0.4, 0.7, 1.0]
     private(set) var token: String?
 
     // MARK: live state
@@ -53,6 +57,8 @@ final class AppModel {
     private(set) var appRttMs: Double?
     private(set) var robotId: String?
     var prompt: ConfirmPrompt?
+    /// The top speed the owner just set, shown until the gateway reports it (at most 3 s).
+    private(set) var limitRequest: (speedMps: Double, wzRps: Double, at: TimeInterval)?
     var notice: String? {
         didSet {
             guard let notice else { return }
@@ -101,6 +107,8 @@ final class AppModel {
         static let haptics = "haptics"
         static let speak = "speakAnswers"
         static let moveSpeed = "moveSpeed"
+        static let walkSpeed = "walkSpeed"
+        static let turnSpeed = "turnSpeed"
         static let token = "deviceToken"
     }
 
@@ -117,6 +125,9 @@ final class AppModel {
         hapticsOn = defaults.object(forKey: Keys.haptics) as? Bool ?? true
         speakAnswers = defaults.object(forKey: Keys.speak) as? Bool ?? true
         moveSpeed = defaults.object(forKey: Keys.moveSpeed) as? Double ?? 0.5
+        // Fast (all of the top speed) by default: driving feels as it did before the setting.
+        walkSpeed = Self.speedStep(defaults.object(forKey: Keys.walkSpeed) as? Double)
+        turnSpeed = Self.speedStep(defaults.object(forKey: Keys.turnSpeed) as? Double)
         token = Keychain.read(Keys.token)
         socket.onStatus = { [weak self] status in self?.linkChanged(status) }
         socket.onMessage = { [weak self] message in self?.handle(message) }
@@ -157,6 +168,31 @@ final class AppModel {
         }
     }
     var movesState: MovesState { brain?.gateway.moves ?? MovesState() }
+
+    static func speedStep(_ stored: Double?) -> Double {
+        stored.flatMap { value in speedSteps.first { abs($0 - value) < 0.001 } } ?? 1.0
+    }
+
+    /// The app's top speed (m/s) and turn rate (rad/s) at the gateway, or what the owner just
+    /// set until the gateway reports it. Nil while the gateway reports none.
+    var topSpeed: (speedMps: Double, wzRps: Double)? {
+        if let request = limitRequest, clock() - request.at < 3 {
+            return (request.speedMps, request.wzRps)
+        }
+        guard let limits = brain?.gateway.remoteLimits else { return nil }
+        return (limits.maxSpeedMps, limits.maxWzRps)
+    }
+
+    /// Sends the app's new top speed; the gateway refuses anything above its ceiling.
+    func setTopSpeed(speedMps: Double? = nil, wzRps: Double? = nil) {
+        guard let current = topSpeed else { return }
+        let speed = speedMps ?? current.speedMps, turn = wzRps ?? current.wzRps
+        guard socket.send(.speedLimit(maxSpeedMps: speed, maxWzRps: turn)) else {
+            notice = String(localized: "Not connected to the brain.")
+            return
+        }
+        limitRequest = (speed, turn, clock())
+    }
 
     // MARK: derived
 
@@ -224,7 +260,7 @@ final class AppModel {
         for command in commands {
             switch command {
             case .drive(let input, let holdId):
-                socket.send(.drive(input, holdId: holdId))
+                socket.send(.drive(input, holdId: holdId, speed: walkSpeed, turnSpeed: turnSpeed))
             case .stop:
                 if !socket.send(.stop) { Task { try? await api?.stop() } }
             }
@@ -436,6 +472,11 @@ final class AppModel {
             robotId = hello.robotId
         case .state(let state):
             brain = state
+            if let request = limitRequest, let limits = state.gateway.remoteLimits,
+               abs(limits.maxSpeedMps - request.speedMps) < 1e-9,
+               abs(limits.maxWzRps - request.wzRps) < 1e-9 {
+                limitRequest = nil  // the gateway has it
+            }
         case .lidar(let scan):
             lidar = scan
         case .event(let event):
