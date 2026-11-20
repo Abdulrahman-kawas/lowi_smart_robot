@@ -199,6 +199,58 @@ class LidarCfg(_M):
     sectors: int = 36
     # One cloud can miss sectors, so each sector reports its nearest return over this many clouds.
     history_clouds: int = Field(3, ge=1, le=10)
+    # The front camera and its pan servo as the L2 sees them, measured on the robot by
+    # infra/pi/lidar_self_mask.py. None, or a file that does not exist: nothing is ignored.
+    self_mask_file: str | None = None
+
+
+SELF_MASK_MAX_M = 0.6  # nothing farther than this from the L2 is part of the robot
+
+
+class SelfMaskPan(_M):
+    """The camera at one pan angle: sector -> its points up to r_m are the camera; shadow =
+    sectors it hides completely (the L2 sees nothing there)."""
+
+    mask: dict[int, float] = Field(default_factory=dict)
+    shadow: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _only_the_robot(self) -> SelfMaskPan:
+        for sector, r_m in self.mask.items():
+            if not 0.0 < r_m <= SELF_MASK_MAX_M:
+                raise ValueError(f"sector {sector}: {r_m} m is not the robot "
+                                 f"(a mask reaches at most {SELF_MASK_MAX_M} m)")
+        return self
+
+
+class SelfMask(_M):
+    """lidar_self_mask.yaml: camera pan (deg, + left) -> what the camera puts in the sector map."""
+
+    margin_m: float = Field(0.05, ge=0.0, le=0.1)  # also drop points this far past r_m
+    pans: dict[float, SelfMaskPan] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _pans_in_range(self) -> SelfMask:
+        for pan in self.pans:
+            if not -90.0 <= pan <= 90.0:
+                raise ValueError(f"pan {pan} is outside -90..90")
+        return self
+
+
+def load_self_mask(cfg: LidarCfg) -> SelfMask | None:
+    """The measured self-mask, or None when robot.yaml names none or the file is missing.
+    A file that exists but is wrong raises: spider-body must not start on a bad mask."""
+    if cfg.self_mask_file is None:
+        return None
+    path = Path(cfg.self_mask_file)
+    if not path.exists():
+        return None
+    mask = SelfMask.model_validate(yaml.safe_load(path.read_text("utf-8")) or {})
+    used = {i for entry in mask.pans.values() for i in (*entry.mask, *entry.shadow)}
+    bad = sorted(i for i in used if not 0 <= i < cfg.sectors)
+    if bad:
+        raise ValueError(f"{path}: sectors {bad} are outside 0..{cfg.sectors - 1}")
+    return mask
 
 
 class CameraCfg(_M):

@@ -589,6 +589,7 @@ class Robot:
 
         # 4. obstacle / LiDAR limits on the active Move
         self.lidar.set_height_offset(self.gait.height - self.cfg.geometry.body_height_m)
+        self.lidar.set_camera_pan(self.pan_deg)  # the self-mask follows the camera
         level = max(abs(a) for a in self.pose) <= math.radians(s.max_level_deg)
         tilt_unknown = roll is None and self.cfg.lidar.enabled and s.require_lidar
         if self.move is not None and not self.estop and (not level or tilt_unknown):
