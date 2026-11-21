@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 from spider_common.link import Link
 from spider_common.protocol import (
+    PROTOCOL_VERSION,
     AskReply,
     Command,
     EStop,
@@ -18,6 +19,7 @@ from spider_common.protocol import (
     Move,
     RobotEvent,
     RobotState,
+    SayRequest,
     Stop,
     Topics,
 )
@@ -33,10 +35,12 @@ class GatewayClient:
     SOURCE = "voice"
 
     def __init__(
-        self, link: Link, robot_id: str, clock: Callable[[], float] = time.monotonic
+        self, link: Link, robot_id: str, clock: Callable[[], float] = time.monotonic,
+        on_say: Callable[[SayRequest], None] | None = None,
     ) -> None:
         self.link = link
         self.clock = clock
+        self.on_say = on_say
         self.rpc = RpcClient(link, robot_id)
         self._motion_until = 0.0
         self.topics = Topics(robot_id)
@@ -52,7 +56,7 @@ class GatewayClient:
     def subscriptions(robot_id: str) -> list[str]:
         t = Topics(robot_id)
         return [t.source_event(GatewayClient.SOURCE), t.state, t.rpc_reply("ask", "voice"),
-                t.rpc_reply("stt", "voice")]
+                t.rpc_reply("stt", "voice"), t.voice_say]
 
     @property
     def walking(self) -> bool:
@@ -96,8 +100,23 @@ class GatewayClient:
                     self._on_event(RobotEvent.model_validate_json(msg.payload))
                 elif msg.topic in self.rpc.reply_topics():
                     self.rpc.on_reply(AskReply.model_validate_json(msg.payload).trace, msg.payload)
+                elif msg.topic == self.topics.voice_say:
+                    self._on_say(msg.payload)
             except Exception:
                 log.exception("bad message on %s", msg.topic)
+
+    def _on_say(self, payload: bytes) -> None:
+        if self.on_say is None:
+            return
+        try:
+            req = SayRequest.model_validate_json(payload)
+        except Exception:
+            log.warning("bad voice/say message")
+            return
+        if req.v != PROTOCOL_VERSION or not req.text.strip():
+            log.warning("voice/say with wrong version or empty text: dropped")
+            return
+        self.on_say(req)
 
     def _on_event(self, ev: RobotEvent) -> None:
         self.last_event = ev

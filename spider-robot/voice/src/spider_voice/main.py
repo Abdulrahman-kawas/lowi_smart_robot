@@ -10,7 +10,7 @@ from pathlib import Path
 
 from spider_common.link import MqttLink, MqttSettings
 from spider_common.obs import setup_logging
-from spider_common.protocol import HealthReport, Topics, VoiceTurn
+from spider_common.protocol import HealthReport, SayRequest, Topics, VoiceTurn
 
 from . import registry
 from .adapters.vad_webrtc import WebRtcVad
@@ -91,6 +91,11 @@ async def run(cfg: VoiceConfig) -> None:
         answerers=registry.build_answerers(cfg, gateway.rpc),
         publish_turn=publish_turn,
     )
+    def on_say(req: SayRequest) -> None:
+        if not pipeline.speak_remote(req.text, req.trace):
+            log.info("dropped brain speech while the voice loop was busy")
+
+    gateway.on_say = on_say
     vad = WebRtcVad(cfg.audio.vad_aggressiveness, cfg.audio.sample_rate)
     await link.start()
     stop = asyncio.Event()

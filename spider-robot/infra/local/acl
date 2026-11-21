@@ -35,6 +35,7 @@ topic read spider/+/rpc/+/req
 topic write spider/+/rpc/+/res/+
 topic write spider/+/rec/cmd
 topic read spider/+/rec/event
+topic write spider/+/voice/say
 
 # The voice loop on the Pi.
 user spider-voice
@@ -42,6 +43,7 @@ topic write spider/+/gw/voice/cmd
 topic read spider/+/gw/voice/event
 topic read spider/+/state
 topic write spider/+/voice/turn
+topic read spider/+/voice/say
 topic write spider/+/health/voice
 topic write spider/+/rpc/+/req
 topic read spider/+/rpc/+/res/voice

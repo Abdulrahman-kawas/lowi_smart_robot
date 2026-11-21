@@ -50,7 +50,7 @@ CLIENTS = {
     },
     "spider-brain": {
         "write": [T.request("remote"), T.request("planner"), T.rpc_reply("ask", "voice"),
-                  T.rpc_reply("stt", "voice"), T.record_cmd, T.health("brain")],
+                  T.rpc_reply("stt", "voice"), T.record_cmd, T.voice_say, T.health("brain")],
         "read": [T.source_event("remote"), T.source_event("planner"), T.state, T.camera("x"),
                  T.voice_turn, T.health("voice"), T.health("system"), T.gateway_status,
                  T.rpc_request("ask"), T.rpc_request("stt"), T.record_event],
@@ -59,7 +59,7 @@ CLIENTS = {
         "write": [T.request("voice"), T.voice_turn, T.health("voice"), T.rpc_request("ask"),
                   T.rpc_request("stt")],
         "read": [T.source_event("voice"), T.state, T.rpc_reply("ask", "voice"),
-                 T.rpc_reply("stt", "voice")],
+                 T.rpc_reply("stt", "voice"), T.voice_say],
     },
     "spider-camera": {"read": [T.cmd], "write": [T.event, T.camera("x"), T.health("camera")]},
     "spider-recorder": {"read": [T.record_cmd], "write": [T.record_event]},
@@ -95,6 +95,13 @@ def test_only_the_gateway_may_command_the_body(user):
 
 def test_brain_cannot_impersonate_voice():
     assert not allowed("spider-brain", "write", T.request("voice"))
+
+
+def test_only_the_brain_may_ask_voice_to_speak():
+    assert allowed("spider-brain", "write", T.voice_say)
+    assert allowed("spider-voice", "read", T.voice_say)
+    assert not allowed("spider-voice", "write", T.voice_say)
+    assert not allowed("spider-console", "write", T.voice_say)
 
 
 def test_voice_cannot_impersonate_remote():

@@ -42,6 +42,7 @@ class Topics:
         self._gateway = f"{base}/gw"  # command sources <-> the gateway on the Pi
         self.gateway_status = f"{self._gateway}/status"  # gateway -> all (retained + last will)
         self.voice_turn = f"{base}/voice/turn"  # voice -> brain (one record per utterance)
+        self.voice_say = f"{base}/voice/say"  # brain -> voice (speak this, text only)
         self.record_cmd = f"{base}/rec/cmd"  # brain -> recorder on the Pi
         self.record_event = f"{base}/rec/event"  # recorder -> brain
         self._health = f"{base}/health"
@@ -368,6 +369,7 @@ class VoiceTurn(BaseModel):
 
 MAX_ASK_CHARS = 2000
 MAX_AUDIO_B64 = 400_000  # about 18 s of 16 kHz mono PCM
+MAX_SAY_CHARS = 200
 
 
 class AskRequest(BaseModel):
@@ -391,6 +393,16 @@ class AskReply(BaseModel):
     provider: str = ""
     elapsed_ms: float = 0.0
     error: str = ""
+
+
+class SayRequest(BaseModel):
+    """Brain -> Pi voice: words to speak. Text only: nothing here can move the robot."""
+
+    model_config = ConfigDict(extra="forbid")
+    v: int = PROTOCOL_VERSION
+    trace: str = Field(min_length=1, max_length=32, pattern=PATTERN_ID)
+    ts: float = Field(default_factory=now)
+    text: str = Field(min_length=1, max_length=MAX_SAY_CHARS)
 
 
 class SttRequest(BaseModel):

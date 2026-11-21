@@ -18,6 +18,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from spider_common.link import Link
+from spider_common.obs import new_trace
+from spider_common.protocol import MAX_SAY_CHARS, SayRequest
 
 from .config import Settings
 from .confirm import ConfirmFlow
@@ -158,6 +160,14 @@ class BrainService:
 
     def _on_gateway_status(self, _topic: str, payload: bytes) -> None:
         self.bus.publish("gateway_status", status=json.loads(payload))
+
+    def say_on_robot(self, text: str) -> bool:
+        """Ask the Pi voice to speak one short line. Text only: no path to a motion command."""
+        clean = text.strip()
+        if not clean:
+            return False
+        req = SayRequest(trace=new_trace(), text=clean[:MAX_SAY_CHARS])
+        return self.link.publish(self.robot.topics.voice_say, req.model_dump_json(), qos=0)
 
     # ------------------------------------------------------------------ lifecycle
     def context(self) -> str:
