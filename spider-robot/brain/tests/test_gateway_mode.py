@@ -34,7 +34,7 @@ from spider_brain.robot_client import ConfirmRefused, RobotClient
 from spider_brain.supervision.events import EventBus
 from spider_brain.supervision.server import handle
 from spider_brain.supervision.supervisor import Supervisor
-from spider_brain.vision import CompatVision, make_vision
+from spider_brain.vision import CompatVision, RoutedVision, make_vision
 from spider_brain.workers import AskService, ChatClient, SttWorker, make_chat_chain
 
 ROBOT = "spider-01"
@@ -277,6 +277,86 @@ async def test_ask_with_image_uses_vision():
     svc.on_request("t", request.model_dump_json().encode())
     reply = await reply_of(voice, AskReply)
     assert reply.provider == "vision" and reply.text == "seen 4 bytes"
+
+
+class FakePerception:
+    def __init__(self, who="هاد سامي", facts="Fast detectors (they can be wrong) found: سامي"):
+        self.who_text, self.facts_text = who, facts
+
+    async def run(self, fn, *args):
+        return fn(*args)
+
+    def who(self, _frame):
+        return self.who_text
+
+    def facts(self, _frame):
+        return self.facts_text
+
+
+class PrefixVision:
+    def __init__(self):
+        self.calls = []
+
+    async def ask(self, jpeg, question, local_prefix=""):
+        self.calls.append((question, local_prefix))
+        return "في كرسي قدامي"
+
+
+def jpeg_bytes():
+    import cv2
+    import numpy as np
+
+    ok, frame = cv2.imencode(".jpg", np.zeros((16, 16, 3), np.uint8))
+    assert ok
+    return frame.tobytes()
+
+
+class SnapJpeg:
+    async def snapshot(self):
+        return jpeg_bytes()
+
+
+async def test_facts_go_only_to_the_local_vision():
+    link, voice, chat = await worker_rig()
+    vision = PrefixVision()
+    svc = AskService(link, settings(), SnapJpeg(), vision, [chat],
+                     perception=FakePerception())
+    svc.on_request("t", AskRequest(trace="p1", text="شو قدامك", need_image=True)
+                   .model_dump_json().encode())
+    reply = await reply_of(voice, AskReply)
+    assert reply.ok and reply.text == "في كرسي قدامي" and reply.provider == "vision"
+    assert vision.calls == [("شو قدامك", "Fast detectors (they can be wrong) found: سامي")]
+
+
+async def test_who_question_is_answered_by_the_face_book():
+    link, voice, chat = await worker_rig()
+    vision = PrefixVision()
+    svc = AskService(link, settings(), SnapJpeg(), vision, [chat],
+                     perception=FakePerception())
+    svc.on_request("t", AskRequest(trace="p2", text="مين هاد؟", need_image=True)
+                   .model_dump_json().encode())
+    reply = await reply_of(voice, AskReply)
+    assert reply.ok and reply.text == "هاد سامي" and reply.provider == "faces"
+    assert vision.calls == []
+
+
+async def test_cloud_vision_backup_never_receives_names():
+    class Down:
+        async def ask(self, jpeg, question, local_prefix=""):
+            raise httpx.TransportError("local vision down")
+
+    class Backup:
+        def __init__(self):
+            self.questions = []
+
+        async def ask(self, jpeg, question):
+            self.questions.append(question)
+            return "cloud answer"
+
+    backup = Backup()
+    answer = await RoutedVision(Down(), backup).ask(b"jpeg", "شو قدامك",
+                                                    local_prefix="face: سامي")
+    assert answer == "cloud answer" and backup.questions == ["شو قدامك"]
 
 
 async def test_ask_falls_through_to_the_cloud_route():

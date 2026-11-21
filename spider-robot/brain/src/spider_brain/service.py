@@ -100,8 +100,14 @@ class BrainService:
                                      self.skills, self.memory)
         self.voice = voice if voice is not None else (
             VoiceService(settings) if settings.gemini_api_key else None)
+        self.perception = None
+        if settings.perception:
+            from .perception import make_perception
+
+            self.perception = make_perception(settings)
         self.ask = (
-            AskService(self.link, settings, self.robot, self.vision, make_chat_chain(settings))
+            AskService(self.link, settings, self.robot, self.vision, make_chat_chain(settings),
+                       perception=self.perception)
             if settings.ask_worker else None
         )
         self.stt = SttWorker(self.link, settings) if settings.stt_worker else None
@@ -192,6 +198,8 @@ class BrainService:
         for t in self._bg:
             t.cancel()
         await asyncio.gather(*self._bg, return_exceptions=True)
+        if self.perception is not None:
+            self.perception.close()
         with contextlib.suppress(Exception):
             await self.link.stop()
 
