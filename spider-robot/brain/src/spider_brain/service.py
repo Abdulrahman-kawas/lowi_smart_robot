@@ -103,10 +103,25 @@ class BrainService:
         self.voice = voice if voice is not None else (
             VoiceService(settings) if settings.gemini_api_key else None)
         self.perception = None
+        self.watcher = None
         if settings.perception:
             from .perception import make_perception
+            from .perception.watch import Watcher
 
             self.perception = make_perception(settings)
+
+            async def say(text: str) -> None:
+                self.say_on_robot(text)
+
+            async def photo(jpeg: bytes, caption: str) -> None:
+                if self.telegram is not None:
+                    await self.telegram.send_owner_photo(jpeg, caption)
+
+            self.watcher = Watcher(
+                self.robot, self.perception, settings.gesture_actions,
+                set(settings.gesture_anyone), say, photo,
+                period_s=settings.watch_period_s, minutes=settings.watch_minutes,
+            )
         self.ask = (
             AskService(self.link, settings, self.robot, self.vision, make_chat_chain(settings),
                        perception=self.perception)
@@ -132,6 +147,8 @@ class BrainService:
             from .mobile.hub import MobileHub
 
             self.mobile = MobileHub(self, data_dir(settings.mobile_data_dir))
+        if self.watcher is not None and self.mobile is not None:
+            self.watcher.feed = self.mobile.feed
         self.telegram = None
         if settings.telegram_enabled:
             from .telegram import TelegramBot
@@ -183,6 +200,8 @@ class BrainService:
             asyncio.create_task(self.robot.heartbeat_loop(self.settings.heartbeat_hz),
                                 name="heartbeat"),
         ]
+        if self.watcher is not None:
+            self._bg.append(asyncio.create_task(self.watcher.run(), name="watch"))
         if self.settings.dashboard or self.mobile is not None:
             self._server = self._build_server()
             self._bg.append(asyncio.create_task(self._server.serve(), name="http"))

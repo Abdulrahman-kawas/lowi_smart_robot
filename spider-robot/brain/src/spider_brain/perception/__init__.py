@@ -17,7 +17,8 @@ from typing import Any
 import numpy as np
 
 from .detect import Detection, ObjectDetector, YoloOnnx, speak_objects
-from .faces import FaceBook, FaceModels
+from .faces import FaceBook, FaceMatch, FaceModels
+from .gestures import GestureReader, HandGesture, bind
 
 log = logging.getLogger(__name__)
 
@@ -31,8 +32,8 @@ _WORD = re.compile(r"[\w']+")
 
 @dataclass(frozen=True)
 class Seen:
-    faces: list
-    gestures: list
+    faces: list[FaceMatch]
+    gestures: list[HandGesture]
 
 
 def perception_dir(settings) -> Path:
@@ -83,6 +84,11 @@ class Perception:
     async def run(self, fn, *args):
         return await asyncio.get_running_loop().run_in_executor(self._pool, fn, *args)
 
+    def see(self, bgr: np.ndarray) -> Seen:
+        faces = self.faces.identify(bgr) if self.faces else []
+        hands = self.gestures.read(bgr) if self.gestures else []
+        return Seen(faces, [bind(h, faces) for h in hands])
+
     def facts(self, bgr: np.ndarray, with_names: bool = True) -> str:
         dets = self.objects.detect(bgr) if self.objects else []
         faces = self.faces.identify(bgr) if self.faces else []
@@ -119,4 +125,13 @@ def make_perception(settings) -> Perception:
                               settings.face_margin)
     else:
         log.warning("face models are missing under %s: nobody can be named", base)
-    return Perception(objects, faces)
+    gestures = None
+    if (base / GESTURES).exists():
+        head = str(base / settings.gesture_head) if settings.gesture_head else None
+        if head and not Path(head).exists():
+            log.warning("gesture head %s is missing; using MediaPipe's built-in names", head)
+            head = None
+        gestures = GestureReader(str(base / GESTURES), head, settings.gesture_min_score)
+    else:
+        log.warning("gesture model %s is missing: watch mode has no gestures", GESTURES)
+    return Perception(objects, faces, gestures)

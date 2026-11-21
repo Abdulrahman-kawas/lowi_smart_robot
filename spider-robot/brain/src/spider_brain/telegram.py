@@ -6,6 +6,7 @@ What the owner can do from the phone:
   - /run <task>          multi-step robot task on the strong model tier
   - /status /scan        robot state and LiDAR summary
   - /photo [question]    camera photo (+ vision answer)
+  - /watch on|off  /who  gesture watch and face names (perception on the home server)
   - /stand /sit /relax   posture;  /stop /estop /release  stopping;  /pause /resume /cancel
   - /memory [query]  /forget <id>
   - Approve / Reject buttons for every action that needs approval
@@ -38,7 +39,8 @@ MAX_TEXT = 4000
 HELP = (
     "Write or say anything: a question, a CV/email request, or a robot job.\n"
     "/run <task> - multi-step robot task\n"
-    "/status /scan /photo [question]\n"
+    "/status /scan /photo [question] /who\n"
+    "/watch on|off - held gestures: Stop, greet, describe, photo\n"
     "/stand /sit /relax\n"
     "/stop /estop /release /pause /resume /cancel\n"
     "/record [seconds] /map <job id>\n"
@@ -90,6 +92,17 @@ class TelegramBot:
                 log.warning("Telegram %s failed: %s", method, resp.text[:200])
         except httpx.HTTPError as exc:
             log.warning("Telegram %s failed: %s", method, exc)
+
+    @staticmethod
+    def _watch_text(watcher) -> str:
+        gestures = ", ".join(f"{g}: {a}" for g, a in sorted(watcher.actions.items()))
+        return (f"Watch {'on' if watcher.on else 'off'}: {watcher.remaining_s / 60:.0f} min left.\n"
+                f"Gestures: {gestures}")
+
+    async def send_owner_photo(self, jpeg: bytes, caption: str = "") -> None:
+        for owner in self.owners:
+            await self._upload("sendPhoto", owner, "photo", "watch.jpg", jpeg, "image/jpeg",
+                               caption=caption)
 
     async def _download(self, file_id: str) -> bytes:
         info = await self.call("getFile", file_id=file_id)
@@ -194,6 +207,29 @@ class TelegramBot:
                     answer = await self.svc.vision.ask(jpeg, arg)
                 await self._upload("sendPhoto", chat, "photo", "photo.jpg", jpeg, "image/jpeg",
                                    caption=answer)
+            elif cmd == "/watch":
+                watcher = self.svc.watcher
+                if watcher is None:
+                    await self.send(chat, "Perception is off on the home server.")
+                elif arg.strip().lower() == "on":
+                    watcher.turn_on()
+                    await self.send(chat, self._watch_text(watcher))
+                elif arg.strip().lower() == "off":
+                    watcher.turn_off()
+                    await self.send(chat, "Watch off.")
+                else:
+                    await self.send(chat, "Usage: /watch on or /watch off")
+            elif cmd == "/who":
+                if self.svc.perception is None:
+                    await self.send(chat, "Perception is off on the home server.")
+                else:
+                    from .perception import decode_jpeg
+
+                    jpeg = await robot.snapshot(timeout_s=3.0, human=True)
+                    frame = decode_jpeg(jpeg)
+                    who = await self.svc.perception.run(self.svc.perception.who, frame)
+                    await self._upload("sendPhoto", chat, "photo", "who.jpg", jpeg,
+                                       "image/jpeg", caption=who)
             elif cmd in ("/stand", "/sit", "/relax"):
                 posture = cmd[1:]
                 if self.svc.confirm.needs_wake(posture):
