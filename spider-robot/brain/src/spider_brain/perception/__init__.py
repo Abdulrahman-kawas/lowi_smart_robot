@@ -7,6 +7,7 @@ answers are spoken. Heavy libraries load only when SB_PERCEPTION=true.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -16,6 +17,9 @@ from typing import Any
 import numpy as np
 
 from .detect import Detection, ObjectDetector, YoloOnnx, speak_objects
+from .faces import FaceBook, FaceModels
+
+log = logging.getLogger(__name__)
 
 YUNET = "models/face_detection_yunet_2023mar.onnx"
 SFACE = "models/face_recognition_sface_2021dec.onnx"
@@ -108,4 +112,11 @@ def make_perception(settings) -> Perception:
         YoloOnnx(str(base / p), settings.perception_min_score, settings.perception_threads)
         for p in settings.perception_detectors
     ])
-    return Perception(objects)
+    faces = None
+    if (base / YUNET).exists() and (base / SFACE).exists():
+        models = FaceModels(str(base / YUNET), str(base / SFACE))
+        faces = FaceBook.load(models, base / "faces.npz", settings.face_threshold,
+                              settings.face_margin)
+    else:
+        log.warning("face models are missing under %s: nobody can be named", base)
+    return Perception(objects, faces)
