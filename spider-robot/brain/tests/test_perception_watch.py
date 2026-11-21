@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 
 import cv2
@@ -24,10 +25,11 @@ class Robot:
         self.state = None
         self.stops = 0
         self.snapshots = 0
+        self.free = True
         self.jpeg = jpeg_bytes()
 
     def camera_free(self):
-        return True
+        return self.free
 
     def stop(self):
         self.stops += 1
@@ -120,6 +122,21 @@ async def test_watch_halves_its_rate_when_the_control_loop_is_late():
         robot.state = RobotState(robot_id="r", mode="standing", ts=ts, loop_late_max_ms=12.0)
         rate = w.effective_period_s()
     assert rate == 1.2
+
+
+async def test_no_snapshots_while_the_phone_live_view_is_streaming():
+    robot = Robot()
+    robot.free = False
+    w, _said, _photos = watcher(robot, Perception(["Open_Palm"]))
+    w.turn_on()
+    task = asyncio.create_task(w.run())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    assert robot.snapshots == 0
 
 
 def test_turn_on_and_off_are_owner_only_state():
