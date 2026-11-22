@@ -131,7 +131,8 @@ class YoloOnnx:
 
 
 class ObjectDetector:
-    """Several models (COCO + home classes) as one; cross-model duplicates removed."""
+    """Several models (COCO + home classes) as one; duplicates removed: the same thing named twice
+    in one place, or a smaller box mostly inside a better one of the same thing."""
 
     def __init__(self, models: list[YoloOnnx]) -> None:
         self.models = models
@@ -141,30 +142,87 @@ class ObjectDetector:
         kept: list[Detection] = []
         for d in found:
             same = ALIASES.get(d.label, d.label)
-            if not any(ALIASES.get(k.label, k.label) == same and iou(k.box, d.box) > IOU_SAME
+            if not any(ALIASES.get(k.label, k.label) == same
+                       and (iou(k.box, d.box) > IOU_SAME or inside(d.box, k.box) > INSIDE_SAME)
                        for k in kept):
                 kept.append(d)
         return kept
 
 
+INSIDE_SAME = 0.85  # this much of a box inside a better box of the same thing: one object
+
+
+def inside(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    """How much of box a lies inside box b (0..1)."""
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    area = (a[2] - a[0]) * (a[3] - a[1])
+    return ix * iy / area if area > 0 else 0.0
+
+
 ALIASES = {"sofa": "couch", "dining table": "table"}  # COCO vs HomeObjects names
 
-ARABIC = {
-    "person": "شخص", "chair": "كرسي", "couch": "كنباية", "sofa": "كنباية", "bed": "تخت",
-    "dining table": "طاولة", "table": "طاولة", "tv": "تلفزيون", "laptop": "لابتوب",
-    "potted plant": "نبتة", "bottle": "قنينة", "cup": "كاسة", "book": "كتاب", "door": "باب",
-    "window": "شباك", "lamp": "أباجورة", "wardrobe": "خزانة", "photo frame": "برواز",
-    "cat": "بسة", "dog": "كلب", "backpack": "شنتة", "cell phone": "موبايل", "remote": "ريموت",
-    "clock": "ساعة", "refrigerator": "براد", "sink": "مجلى", "keyboard": "كيبورد",
-    "mouse": "ماوس", "vase": "مزهرية", "handbag": "جزدان", "suitcase": "شنتة سفر",
+# Levantine names for every COCO class and the HomeObjects-3K extras: (one, plural or "").
+ARABIC: dict[str, tuple[str, str]] = {
+    "person": ("شخص", "أشخاص"), "bicycle": ("بسكليت", ""), "car": ("سيارة", "سيارات"),
+    "motorcycle": ("موتور", ""), "airplane": ("طيارة", "طيارات"), "bus": ("باص", "باصات"),
+    "train": ("قطار", ""), "truck": ("شاحنة", "شاحنات"), "boat": ("قارب", ""),
+    "traffic light": ("إشارة مرور", ""), "fire hydrant": ("حنفية إطفاء", ""),
+    "stop sign": ("شاخصة وقوف", ""), "parking meter": ("عداد موقف", ""), "bench": ("مقعد", ""),
+    "bird": ("عصفور", "عصافير"), "cat": ("بسة", "بسس"), "dog": ("كلب", "كلاب"),
+    "horse": ("حصان", ""), "sheep": ("خروف", ""), "cow": ("بقرة", ""), "elephant": ("فيل", ""),
+    "bear": ("دب", ""), "zebra": ("حمار وحشي", ""), "giraffe": ("زرافة", ""),
+    "backpack": ("شنتة ظهر", ""), "umbrella": ("شمسية", ""), "handbag": ("جزدان", ""),
+    "tie": ("كرافة", ""), "suitcase": ("شنتة سفر", ""), "frisbee": ("فريزبي", ""),
+    "skis": ("زلاجات", ""), "snowboard": ("لوح تزلج", ""), "sports ball": ("طابة", "طابات"),
+    "kite": ("طيارة ورق", ""), "baseball bat": ("مضرب", ""), "baseball glove": ("كف بيسبول", ""),
+    "skateboard": ("سكيت بورد", ""), "surfboard": ("لوح ركمجة", ""),
+    "tennis racket": ("مضرب تنس", ""), "bottle": ("قنينة", "قناني"),
+    "wine glass": ("كاسة", "كاسات"),
+    "cup": ("كاسة", "كاسات"), "fork": ("شوكة", ""), "knife": ("سكين", ""), "spoon": ("معلقة", ""),
+    "bowl": ("زبدية", ""), "banana": ("موزة", ""), "apple": ("تفاحة", ""),
+    "sandwich": ("سندويشة", ""), "orange": ("برتقانة", ""), "broccoli": ("بروكلي", ""),
+    "carrot": ("جزرة", ""), "hot dog": ("هوت دوغ", ""), "pizza": ("بيتزا", ""),
+    "donut": ("دونات", ""), "cake": ("كيكة", ""), "chair": ("كرسي", "كراسي"),
+    "couch": ("كنباية", "كنبايات"), "sofa": ("كنباية", "كنبايات"),
+    "potted plant": ("نبتة", "نبتات"),
+    "bed": ("تخت", "تخوت"), "dining table": ("طاولة", "طاولات"), "table": ("طاولة", "طاولات"),
+    "toilet": ("تواليت", ""), "tv": ("تلفزيون", "تلفزيونات"), "laptop": ("لابتوب", "لابتوبات"),
+    "mouse": ("ماوس", ""), "remote": ("ريموت", ""), "keyboard": ("كيبورد", ""),
+    "cell phone": ("موبايل", "موبايلات"), "microwave": ("مايكرويف", ""), "oven": ("فرن", ""),
+    "toaster": ("محمصة", ""), "sink": ("مجلى", ""), "refrigerator": ("براد", ""),
+    "book": ("كتاب", "كتب"), "clock": ("ساعة", "ساعات"), "vase": ("مزهرية", ""),
+    "scissors": ("مقص", ""), "teddy bear": ("دبدوب", ""), "hair drier": ("سشوار", ""),
+    "toothbrush": ("فرشاة سنان", ""), "lamp": ("أباجورة", ""), "wardrobe": ("خزانة", "خزاين"),
+    "window": ("شباك", "شبابيك"), "door": ("باب", "أبواب"), "photo frame": ("برواز", ""),
 }
 SIDE_AR = {"left": "عاليسار", "right": "عاليمين", "centre": "قدامي"}
+NUMBER_AR = {3: "تلات", 4: "أربع", 5: "خمس", 6: "ست", 7: "سبع", 8: "تمن", 9: "تسع", 10: "عشر"}
+SPEAK_MIN_SCORE = 0.5  # say only what the model is fairly sure of; the VLM gets the rest
+
+
+def _how_many(label: str, n: int) -> str:
+    one, many = ARABIC.get(label, (label, ""))
+    if n == 1:
+        return one
+    if n == 2 and label in ARABIC and " " not in one:
+        return one[:-1] + "تين" if one.endswith("ة") else one + "ين"  # كرسيين، طاولتين
+    if many and n in NUMBER_AR:
+        return f"{NUMBER_AR[n]} {many}"
+    return f"كم {one}"  # "a few"; for a plural it does not know
 
 
 def speak_objects(dets: list[Detection], width: int, limit: int = 4) -> str:
-    """Short Levantine sentence for Piper. Unknown labels are said in English."""
-    things = [d for d in dets if d.label != "person"][:limit]
-    if not things:
+    """Short Levantine sentence for Piper: counts instead of repeats, a side when they agree."""
+    groups: dict[str, list[Detection]] = {}
+    for d in dets:
+        if d.score >= SPEAK_MIN_SCORE:
+            groups.setdefault(ALIASES.get(d.label, d.label), []).append(d)
+    if not groups:
         return "ما شايف شي بعرفه"
-    return "شايف " + " و".join(f"{ARABIC.get(d.label, d.label)} {SIDE_AR[d.side(width)]}"
-                               for d in things)
+    parts = []
+    for label, items in sorted(groups.items(), key=lambda kv: -max(d.score for d in kv[1])):
+        sides = {d.side(width) for d in items}
+        where = f" {SIDE_AR[sides.pop()]}" if len(sides) == 1 else ""
+        parts.append(_how_many(label, len(items)) + where)
+    return "شايف " + " و".join(parts[:limit])

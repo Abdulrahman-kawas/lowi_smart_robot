@@ -3,6 +3,7 @@ import pytest
 
 from spider_brain.perception import facts_line, is_who_question
 from spider_brain.perception.detect import (
+    ARABIC,
     Detection,
     ObjectDetector,
     YoloOnnx,
@@ -93,7 +94,7 @@ def test_two_models_naming_the_same_thing_keep_the_better_detection():
 def test_speech_and_facts_lines_stay_short_and_in_arabic():
     dets = [Detection("chair", 0.9, (0, 0, 100, 100)),
             Detection("person", 0.8, (0, 0, 100, 100))]
-    assert speak_objects(dets, 640) == "شايف كرسي عاليسار"
+    assert speak_objects(dets, 640) == "شايف كرسي عاليسار وشخص عاليسار"
     assert speak_objects([], 640) == "ما شايف شي بعرفه"
     line = facts_line(dets, [], 640, 480, True)
     assert "chair (left, far, 0.90)" in line and "face" not in line
@@ -104,3 +105,45 @@ def test_who_questions_are_recognised_in_arabic_and_english():
     assert is_who_question("مين هاد؟")
     assert is_who_question("who is that?")
     assert not is_who_question("شو قدامك؟")
+
+
+COCO = (
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+    "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog",
+    "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella",
+    "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite",
+    "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
+    "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+    "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant",
+    "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
+    "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors",
+    "teddy bear", "hair drier", "toothbrush",
+)
+
+
+def test_every_coco_class_has_an_arabic_name():
+    assert len(set(COCO)) == 80
+    assert [n for n in COCO if n not in ARABIC] == []
+
+
+def test_speech_counts_things_instead_of_repeating_them():
+    chairs = [Detection("chair", 0.8, (300 + 30 * i, 200, 320 + 30 * i, 300)) for i in range(3)]
+    tables = [Detection("table", 0.9, (10, 200, 60, 300)), Detection("dining table", 0.7,
+                                                                      (500, 200, 600, 300))]
+    said = speak_objects(chairs + tables, 640)
+    assert said == "شايف طاولتين وتلات كراسي قدامي"
+    assert speak_objects([Detection("chair", 0.9, (0, 0, 10, 10)),
+                          Detection("chair", 0.9, (600, 0, 640, 10))], 640) == "شايف كرسيين"
+    assert speak_objects([Detection("bus", 0.9, (0, 0, 640, 400))], 640) == "شايف باص قدامي"
+    assert speak_objects([Detection("chair", 0.4, (0, 0, 10, 10))], 640) == "ما شايف شي بعرفه"
+
+
+def test_a_box_inside_a_better_box_of_the_same_thing_is_one_object():
+    rows = np.zeros((1, 300, 6), np.float32)
+    rows[0, 0] = (100, 160, 300, 400, 0.6, 1)  # chair
+    rows[0, 1] = (200, 170, 290, 390, 0.5, 1)  # a part of it, IoU < 0.6
+    rows[0, 2] = (400, 160, 500, 400, 0.5, 1)  # another chair
+    names = "{0: 'person', 1: 'chair', 2: 'sofa', 3: 'couch'}"
+    found = ObjectDetector([YoloOnnx("unused", session=Session(rows, names=names))]).detect(
+        np.zeros((480, 640, 3), np.uint8))
+    assert len(found) == 2
