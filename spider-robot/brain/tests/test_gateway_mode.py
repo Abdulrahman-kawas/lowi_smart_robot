@@ -110,6 +110,27 @@ async def test_voice_stop_ends_a_planner_walk_for_good(world):
     assert robot.move is None
 
 
+async def test_brain_snapshots_queue_for_the_gateway_instead_of_being_refused(world):
+    """Watch mode, a voice question and a photo can all want a frame at once on the brain's
+    source; the gateway allows one per 0.5 s per source, so they must take turns."""
+    _robot, _gateway, client, _voice = world
+    started = time.monotonic()
+    frames = await asyncio.gather(*(client.snapshot(timeout_s=4.0) for _ in range(3)))
+    assert all(f[:2] == b"\xff\xd8" for f in frames)
+    assert time.monotonic() - started >= 2 * 0.5
+
+
+async def test_a_refused_snapshot_is_retried_at_once_instead_of_timing_out(world):
+    from spider_common.protocol import Snapshot
+
+    _robot, _gateway, client, _voice = world
+    client._send(Snapshot(request_id="outside-the-queue"))  # spends the planner's allowance
+    started = time.monotonic()
+    frame = await client.snapshot(timeout_s=5.0)
+    assert frame[:2] == b"\xff\xd8"
+    assert time.monotonic() - started < 2.5  # refused, retried one turn later; not 5 s
+
+
 async def test_remote_estop_release_through_the_real_stack(world):
     robot, gateway, client, voice = world
     await stand(robot, voice)

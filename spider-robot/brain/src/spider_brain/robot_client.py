@@ -56,7 +56,7 @@ _OWN_STOPPERS = {"obstacle_stop", "error", "rejected"}
 TELEMETRY_STALE_S = 1.5
 # The gateway lets the remote source ask for one camera frame per 0.5 s, counting snapshots and
 # confirmation frames together. Asking at 0.6 s leaves room for network jitter.
-CAMERA_GAP_S = 0.6
+CAMERA_GAP_S = 0.6  # above the gateway's min_snapshot_period_s (0.5 s) per source
 COMPASS = [
     ("front", 0), ("front-left", 45), ("left", 90), ("back-left", 135),
     ("back", 180), ("back-right", -135), ("right", -90), ("front-right", -45),
@@ -69,6 +69,19 @@ class RobotOffline(RuntimeError):
 
 class ConfirmRefused(RuntimeError):
     """The gateway would not issue a challenge, or the frame did not match it."""
+
+
+class SnapshotRefused(RuntimeError):
+    """The gateway refused a Snapshot, for example for its rate limit."""
+
+
+class _CameraGate:
+    """One gateway source's snapshot allowance: callers queue here instead of being refused."""
+
+    def __init__(self) -> None:
+        self.lock = asyncio.Lock()
+        self.waiting = 0
+        self.last = -math.inf
 
 
 @dataclass(frozen=True)
@@ -118,12 +131,14 @@ class RobotClient:
             or {self.topics.event}
         )
         self.human_source = human_source or source  # None: straight to the body, no gateway
-        # Every frame the remote source asks for, from any caller, shares one gateway allowance.
-        self._camera_topic = self.topics.request("remote") if "remote" in (
-            source, human_source) else None
-        self._camera_lock = asyncio.Lock()
-        self._camera_waiting = 0
-        self._last_camera = -math.inf
+        # The gateway allows each source one Snapshot per min_snapshot_period_s and refuses the
+        # rest. Every frame a source asks for, from any caller (live view, watch mode, a voice
+        # question, a photo), takes its turn here instead.
+        self._camera_gates = {
+            topic: _CameraGate() for topic in {self._cmd_topic, self._human_topic}
+            if topic != self.topics.cmd
+        }
+        self._snapshot_seqs: dict[int, str] = {}  # Snapshot seq -> request id
         self.handlers: list[tuple[str, Callable[[str, bytes], None]]] = []  # topic filter, handler
         self.bus = bus
         self.state: RobotState | None = None
@@ -192,6 +207,10 @@ class RobotClient:
             fut = self._snapshots.pop(rid, None)
             if fut is not None and not fut.done():
                 fut.set_exception(RuntimeError(ev.detail))
+        elif ev.kind == "rejected" and ev.seq in self._snapshot_seqs:
+            fut = self._snapshots.pop(self._snapshot_seqs.pop(ev.seq), None)
+            if fut is not None and not fut.done():
+                fut.set_exception(SnapshotRefused(ev.detail or "snapshot refused"))
         if self.bus is not None:
             self.bus.publish("robot_event", event=ev.kind, seq=ev.seq, detail=ev.detail,
                              source=source)
@@ -277,23 +296,28 @@ class RobotClient:
 
     # ------------------------------------------------------------------ camera allowance
     async def _camera_turn(self, topic: str) -> None:
-        """Wait until the remote source may ask for another frame. No-op for other sources."""
-        if topic != self._camera_topic:
+        """Wait until this source may ask for another frame. No-op straight to the body."""
+        gate = self._camera_gates.get(topic)
+        if gate is None:
             return
-        self._camera_waiting += 1
+        gate.waiting += 1
         try:
-            async with self._camera_lock:
-                wait = self._last_camera + CAMERA_GAP_S - time.monotonic()
+            async with gate.lock:
+                wait = gate.last + CAMERA_GAP_S - time.monotonic()
                 if wait > 0:
                     await asyncio.sleep(wait)
-                self._last_camera = time.monotonic()
+                gate.last = time.monotonic()
         finally:
-            self._camera_waiting -= 1
+            gate.waiting -= 1
 
-    def camera_free(self) -> bool:
-        """A live view may ask for a frame now without delaying a photo or a confirmation."""
-        return (self._camera_waiting == 0 and not self._camera_lock.locked()
-                and time.monotonic() - self._last_camera >= CAMERA_GAP_S)
+    def camera_free(self, human: bool = True) -> bool:
+        """A frame may be asked for now on this source without delaying anyone already waiting
+        (a photo or a confirmation on the owner's source, a voice question on the brain's)."""
+        gate = self._camera_gates.get(self._human_topic if human else self._cmd_topic)
+        if gate is None:
+            return True
+        return (gate.waiting == 0 and not gate.lock.locked()
+                and time.monotonic() - gate.last >= CAMERA_GAP_S)
 
     async def request_confirm(self, action: str, timeout_s: float = 10.0) -> Confirmation:
         """Ask the gateway for a fresh frame and a challenge bound to it."""
@@ -477,18 +501,34 @@ class RobotClient:
     async def snapshot_timed(
         self, timeout_s: float = 8.0, human: bool = False
     ) -> tuple[bytes, float]:
-        """A frame and the monotonic time it was asked for, an upper bound on its age."""
+        """A frame and the monotonic time it was asked for, an upper bound on its age.
+
+        A refusal from the gateway ends the wait at once and is retried one turn later, so a
+        caller that lost a race for the camera does not sit out its whole timeout."""
         self.require_state()
-        await self._camera_turn(self._human_topic if human else self._cmd_topic)
-        rid = uuid.uuid4().hex[:12]
-        fut: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
-        self._snapshots[rid] = fut
-        asked_at = time.monotonic()
-        self._send(Snapshot(request_id=rid), human=human)
-        try:
-            return await asyncio.wait_for(fut, timeout_s), asked_at
-        finally:
-            self._snapshots.pop(rid, None)
+        topic = self._human_topic if human else self._cmd_topic
+        deadline = time.monotonic() + timeout_s
+        for attempt in (1, 2):
+            await self._camera_turn(topic)
+            rid = uuid.uuid4().hex[:12]
+            fut: asyncio.Future[bytes] = asyncio.get_running_loop().create_future()
+            self._snapshots[rid] = fut
+            asked_at = time.monotonic()
+            seq = self._send(Snapshot(request_id=rid), human=human)
+            self._snapshot_seqs[seq] = rid
+            try:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise TimeoutError("no time left for a camera frame")
+                return await asyncio.wait_for(fut, left), asked_at
+            except SnapshotRefused as exc:
+                if attempt == 2:
+                    raise
+                log.info("snapshot refused (%s); asking once more", exc)
+            finally:
+                self._snapshots.pop(rid, None)
+                self._snapshot_seqs.pop(seq, None)
+        raise AssertionError("unreachable")
 
     # ------------------------------------------------------------------ text views
     def surroundings_text(self) -> str:
