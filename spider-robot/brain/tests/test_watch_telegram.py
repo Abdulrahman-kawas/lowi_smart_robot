@@ -104,3 +104,7 @@ async def test_who_without_perception_says_so():
     bot, sent, uploads = bot_with(svc)
     await bot.command(OWNER, "/who")
     assert "Perception is off" in sent[-1][1] and uploads == []
+
+    svc.perception_error = "ImportError: No module named 'mediapipe'"
+    await bot.command(OWNER, "/watch on")
+    assert "failed to start" in sent[-1][1] and "mediapipe" in sent[-1][1]

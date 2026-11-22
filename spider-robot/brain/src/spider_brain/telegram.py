@@ -99,6 +99,11 @@ class TelegramBot:
         return (f"Watch {'on' if watcher.on else 'off'}: {watcher.remaining_s / 60:.0f} min left.\n"
                 f"Gestures: {gestures}")
 
+    def _perception_off(self) -> str:
+        error = getattr(self.svc, "perception_error", None)
+        return ("Perception is off on the home server"
+                + (f": it failed to start ({error})." if error else " (SB_PERCEPTION)."))
+
     async def send_owner_photo(self, jpeg: bytes, caption: str = "") -> None:
         for owner in self.owners:
             await self._upload("sendPhoto", owner, "photo", "watch.jpg", jpeg, "image/jpeg",
@@ -210,7 +215,7 @@ class TelegramBot:
             elif cmd == "/watch":
                 watcher = self.svc.watcher
                 if watcher is None:
-                    await self.send(chat, "Perception is off on the home server.")
+                    await self.send(chat, self._perception_off())
                 elif arg.strip().lower() == "on":
                     watcher.turn_on()
                     await self.send(chat, self._watch_text(watcher))
@@ -221,7 +226,7 @@ class TelegramBot:
                     await self.send(chat, "Usage: /watch on or /watch off")
             elif cmd == "/who":
                 if self.svc.perception is None:
-                    await self.send(chat, "Perception is off on the home server.")
+                    await self.send(chat, self._perception_off())
                 else:
                     from .perception import decode_jpeg
 

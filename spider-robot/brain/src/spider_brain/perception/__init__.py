@@ -37,9 +37,10 @@ class Seen:
 
 
 def perception_dir(settings) -> Path:
-    """Private models and photos live under brain/data, never under the repo's source tree."""
-    path = Path(settings.perception_dir).expanduser()
-    return path if path.is_absolute() else Path(__file__).resolve().parents[2] / path
+    """Private models and photos live under brain/data (gitignored), like the app's data."""
+    from ..mobile.devices import data_dir
+
+    return data_dir(settings.perception_dir)
 
 
 def decode_jpeg(jpeg: bytes) -> np.ndarray:
@@ -110,19 +111,32 @@ class Perception:
 
 
 def make_perception(settings) -> Perception:
+    """Load what is there. A missing or broken model is logged and left out, never raised: the
+    brain also carries Telegram, the app and their Stop/E-stop, and must start without it."""
     import cv2
 
     cv2.setNumThreads(1)
     base = perception_dir(settings)
-    objects = ObjectDetector([
-        YoloOnnx(str(base / p), settings.perception_min_score, settings.perception_threads)
-        for p in settings.perception_detectors
-    ])
+    detectors = []
+    for rel in settings.perception_detectors:
+        path = base / rel
+        if not path.exists():
+            log.warning("object model %s is missing: objects are not detected with it", path)
+            continue
+        try:
+            detectors.append(YoloOnnx(str(path), settings.perception_min_score,
+                                      settings.perception_threads))
+        except Exception as exc:
+            log.error("object model %s failed to load: %r", path, exc)
+    objects = ObjectDetector(detectors) if detectors else None
     faces = None
     if (base / YUNET).exists() and (base / SFACE).exists():
-        models = FaceModels(str(base / YUNET), str(base / SFACE))
-        faces = FaceBook.load(models, base / "faces.npz", settings.face_threshold,
-                              settings.face_margin)
+        try:
+            models = FaceModels(str(base / YUNET), str(base / SFACE))
+            faces = FaceBook.load(models, base / "faces.npz", settings.face_threshold,
+                                  settings.face_margin)
+        except Exception as exc:
+            log.error("face models under %s failed to load: %r", base, exc)
     else:
         log.warning("face models are missing under %s: nobody can be named", base)
     gestures = None
@@ -131,7 +145,10 @@ def make_perception(settings) -> Perception:
         if head and not Path(head).exists():
             log.warning("gesture head %s is missing; using MediaPipe's built-in names", head)
             head = None
-        gestures = GestureReader(str(base / GESTURES), head, settings.gesture_min_score)
+        try:
+            gestures = GestureReader(str(base / GESTURES), head, settings.gesture_min_score)
+        except Exception as exc:
+            log.error("gesture model %s failed to load: %r", base / GESTURES, exc)
     else:
         log.warning("gesture model %s is missing: watch mode has no gestures", GESTURES)
     return Perception(objects, faces, gestures)

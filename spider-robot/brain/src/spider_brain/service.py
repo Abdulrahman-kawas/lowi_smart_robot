@@ -103,12 +103,18 @@ class BrainService:
         self.voice = voice if voice is not None else (
             VoiceService(settings) if settings.gemini_api_key else None)
         self.perception = None
+        self.perception_error: str | None = None
         self.watcher = None
         if settings.perception:
-            from .perception import make_perception
-            from .perception.watch import Watcher
+            try:
+                from .perception import make_perception
 
-            self.perception = make_perception(settings)
+                self.perception = make_perception(settings)
+            except Exception as exc:  # e.g. the perception extra is not installed
+                self.perception_error = f"{type(exc).__name__}: {exc}"
+                log.exception("perception is off: it failed to start")
+        if self.perception is not None:
+            from .perception.watch import Watcher
 
             async def say(text: str) -> None:
                 self.say_on_robot(text)
