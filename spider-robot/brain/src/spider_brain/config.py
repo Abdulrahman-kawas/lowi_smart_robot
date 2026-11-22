@@ -124,7 +124,8 @@ class Settings(BaseSettings):
     # people named, 0.1-0.2 % of strangers (perception/faces.py). Raise it to name fewer strangers.
     face_threshold: float = 0.42
     face_margin: float = 0.05  # the best person must beat the second best by this much
-    gesture_head: str = ""  # "models/gestures_mlp.npz" after a custom head is trained
+    # Trained on HaGRID (perception-train/train_gestures.py); MediaPipe's own classifier if missing.
+    gesture_head: str = "models/gestures_mlp.npz"
     gesture_min_score: float = Field(0.6, gt=0, lt=1)
     watch_period_s: float = Field(0.6, ge=0.5)  # the gateway refuses snapshots < 0.5 s apart
     watch_minutes: float = Field(30.0, gt=0, le=240)

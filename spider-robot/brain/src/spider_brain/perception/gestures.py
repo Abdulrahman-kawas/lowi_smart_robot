@@ -1,8 +1,10 @@
 """Hand gestures with MediaPipe's Gesture Recognizer (Apache-2.0).
 
 Built-in gestures: Closed_Fist, Open_Palm, Pointing_Up, Thumb_Down, Thumb_Up, Victory, ILoveYou
-("None" = a hand showing nothing known). A small head trained on HaGRID landmarks can decide
-instead, with HaGRID's names (palm, like, peace, one, ...).
+("None" = a hand showing nothing known). A small head trained on HaGRID landmarks
+(gestures_mlp.npz) decides instead when it is there. Its gestures that MediaPipe also has are
+called by MediaPipe's names, so one action table serves both; the others (call, mute, ok, rock,
+four, two_up, ...) keep HaGRID's names and trigger nothing unless the owner maps them.
 """
 
 from __future__ import annotations
@@ -14,6 +16,9 @@ import numpy as np
 from .faces import FaceMatch
 
 NOT_A_GESTURE = {"None", "no_gesture"}
+CANONICAL = {"like": "Thumb_Up", "palm": "Open_Palm", "stop": "Open_Palm",
+             "stop_inverted": "Open_Palm", "peace": "Victory", "one": "Pointing_Up",
+             "dislike": "Thumb_Down", "fist": "Closed_Fist"}
 
 
 @dataclass(frozen=True)
@@ -79,10 +84,13 @@ class GestureReader:
         hands = []
         for i, marks in enumerate(result.hand_landmarks):
             xy = np.array([(m.x, m.y) for m in marks], dtype=np.float32)
+            top = result.gestures[i][0] if i < len(result.gestures) and result.gestures[i] else None
             if self.head is not None:
                 label, score = self.head.predict(landmark_features(xy, w / h))
-            elif i < len(result.gestures) and result.gestures[i]:
-                top = result.gestures[i][0]
+                label = CANONICAL.get(label, label)
+                if top is not None and top.category_name == label:
+                    score = max(score, float(top.score))  # both models agree
+            elif top is not None:
                 label, score = top.category_name, float(top.score)
             else:
                 continue

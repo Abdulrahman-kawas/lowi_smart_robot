@@ -43,17 +43,23 @@ def test_gesture_reader_reads_hands_and_skips_unknown_or_weak():
     assert reader(["Victory"], score=0.4).read(np.zeros((480, 640, 3), np.uint8)) == []
 
 
-def test_landmark_head_can_override_mediapipe_names(tmp_path):
-    path = tmp_path / "head.npz"
+def head(path, label):
     w0 = np.eye(42, dtype=np.float32)
     w1 = np.zeros((42, 2), np.float32)
     w1[:, 1] = 1.0
     np.savez(path, n_layers=np.array(2), W0=w0, b0=np.zeros(42, np.float32),
              W1=w1, b1=np.zeros(2, np.float32),
              mean=np.zeros(42, np.float32), std=np.ones(42, np.float32),
-             labels=np.array(["no_gesture", "palm"]))
-    found = reader(["Open_Palm"], head_path=str(path)).read(np.zeros((480, 640, 3), np.uint8))
-    assert [g.label for g in found] == ["palm", "palm"]
+             labels=np.array(["no_gesture", label]))
+    return str(path)
+
+
+def test_landmark_head_decides_and_speaks_mediapipe_names(tmp_path):
+    frame = np.zeros((480, 640, 3), np.uint8)
+    found = reader(["Thumb_Up"], head_path=head(tmp_path / "a.npz", "palm")).read(frame)
+    assert [g.label for g in found] == ["Open_Palm", "Open_Palm"]  # HaGRID palm, the head wins
+    found = reader(["Thumb_Up"], head_path=head(tmp_path / "b.npz", "call")).read(frame)
+    assert [g.label for g in found] == ["call", "call"]  # no MediaPipe twin: no default action
 
 
 def test_landmark_features_are_position_and_size_free():
@@ -75,3 +81,13 @@ def test_bind_finds_the_nearest_enrolled_face_only():
     assert bind(away, [face, far]).person == far
     nobody = HandGesture("Open_Palm", 0.9, (1000, 1000, 1040, 1040))
     assert bind(nobody, [face, far]).person is None
+
+
+def test_head_and_mediapipe_agreeing_lift_a_weak_head_score(tmp_path):
+    frame = np.zeros((480, 640, 3), np.uint8)
+    weak = str(tmp_path / "w.npz")  # zero weights: the head says "like" at 0.5, under 0.6
+    np.savez(weak, n_layers=np.array(1), W0=np.zeros((42, 2), np.float32),
+             b0=np.zeros(2, np.float32), mean=np.zeros(42, np.float32),
+             std=np.ones(42, np.float32), labels=np.array(["like", "no_gesture"]))
+    found = reader(["Thumb_Up", "Victory"], score=0.8, head_path=weak).read(frame)
+    assert [(g.label, g.score) for g in found] == [("Thumb_Up", 0.8)]  # agreed; the other not
