@@ -199,6 +199,52 @@ def test_body_levels_before_walking(cfg):
     assert world.x > 0
 
 
+
+def walking(cfg, seq=7):
+    robot, _servos, lidar, world, brain, clock = make(cfg)
+    stand(robot, lidar, world, clock)
+    robot.handle(Move(vx=0.1, duration_s=10.0, seq=seq, ts=5000.0))
+    run_ticks(robot, lidar, world, clock, 1)
+    assert robot.move is not None
+    return robot, lidar, world, brain, clock
+
+
+def test_a_lasting_lean_while_walking_stops_the_walk(cfg):
+    robot, lidar, world, brain, clock = walking(cfg, seq=7)
+    lidar.tilt = lambda: (2.0, 10.0)  # front feet up on a step
+    run_ticks(robot, lidar, world, clock, cfg.safety.walk_tilt_s - 0.1)
+    assert robot.move is not None  # not yet: one bump is not the ground
+    run_ticks(robot, lidar, world, clock, 0.2)
+    assert robot.move is None
+    tilt = [e for e in events(brain) if e["kind"] == "tilt"]
+    assert len(tilt) == 1 and tilt[0]["seq"] == 7
+    assert tilt[0]["detail"] == "ground not level: roll=2 pitch=10; stopped"
+
+
+def test_short_leans_while_walking_do_not_add_up(cfg):
+    robot, lidar, world, brain, clock = walking(cfg)
+    for _ in range(3):
+        lidar.tilt = lambda: (0.0, -12.0)
+        run_ticks(robot, lidar, world, clock, cfg.safety.walk_tilt_s - 0.1)
+        lidar.tilt = lambda: (1.0, 0.5)
+        run_ticks(robot, lidar, world, clock, 0.1)
+    assert robot.move is not None
+    assert not [e for e in events(brain) if e["kind"] == "tilt"]
+
+
+def test_a_lean_below_walk_tilt_or_while_standing_does_not_stop(cfg):
+    robot, lidar, world, brain, clock = walking(cfg)
+    lidar.tilt = lambda: (cfg.safety.walk_tilt_deg - 1.0, 0.0)
+    run_ticks(robot, lidar, world, clock, 2)
+    assert robot.move is not None
+    robot.handle(Stop(ts=5000.0))
+    run_ticks(robot, lidar, world, clock, 2)
+    lidar.tilt = lambda: (0.0, 15.0)  # standing on a slope is max_tilt's business
+    run_ticks(robot, lidar, world, clock, 2)
+    assert robot.mode == "standing"
+    assert not [e for e in events(brain) if e["kind"] == "tilt"]
+
+
 def test_estop_freezes_feet_without_jump(cfg):
     robot, servos, lidar, world, brain, clock = make(cfg)
     stand(robot, lidar, world, clock)

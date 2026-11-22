@@ -11,7 +11,8 @@ and the obstacle.
                      (footprint corner radius) + turn_clearance.
 3. LiDAR stale     : no motion if the map is older than lidar_timeout (unless require_lidar is
                      false, for bench tests on a stand). Unknown tilt (stale IMU) also blocks.
-4. Tilt            : stop walking past max_tilt; relax the servos past fall_tilt.
+4. Tilt            : stop walking past max_tilt; relax the servos past fall_tilt. A walk
+                     also stops on a lean past walk_tilt that lasts walk_tilt_s (robot.py).
 (The link watchdog, command fencing and level-body checks live in robot.py.)
 """
 

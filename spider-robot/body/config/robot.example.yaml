@@ -41,6 +41,8 @@ safety:
   corridor_margin_m: 0.04
   turn_clearance_m: 0.06
   max_level_deg: 2.0
+  walk_tilt_deg: 8         # a walk stops on a lean this big that lasts walk_tilt_s:
+  walk_tilt_s: 0.5         # the ground is not flat (a step, a cable, a foot on something)
   max_tilt_deg: 30
   fall_tilt_deg: 55
 

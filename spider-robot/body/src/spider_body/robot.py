@@ -122,6 +122,7 @@ class Robot:
         self.last_link = clock()
         self._link_lost_reported = False
         self._tilt_reported = False
+        self._lean_since: float | None = None  # walking and leaning past walk_tilt since then
         self._stale_reported = False
         self._ik_error_reported = False
         self._tasks: set[asyncio.Task] = set()
@@ -593,6 +594,18 @@ class Robot:
                 self.emit("tilt", self.last_seq, f"roll={roll:.0f} pitch={pitch:.0f}; stopped")
         elif tilt == "ok":
             self._tilt_reported = False
+        # Walking holds the body level, so a lean that lasts is the ground: stop early.
+        lean = None if roll is None or pitch is None else max(abs(roll), abs(pitch))
+        if self.move is None or lean is None or lean < s.walk_tilt_deg:
+            self._lean_since = None
+        elif self._lean_since is None:
+            self._lean_since = now
+        elif now - self._lean_since >= s.walk_tilt_s:
+            leaned = self.move
+            self._cancel_move("ground not level")
+            self._lean_since = None
+            self.emit("tilt", leaned.seq,
+                      f"ground not level: roll={roll:.0f} pitch={pitch:.0f}; stopped", leaned.trace)
 
         # 4. obstacle / LiDAR limits on the active Move
         self.lidar.set_height_offset(self.gait.height - self.cfg.geometry.body_height_m)

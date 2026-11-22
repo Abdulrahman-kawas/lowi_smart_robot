@@ -157,6 +157,22 @@ def test_config_rejects_unsafe_stop_distance(cfg):
         BodyConfig.model_validate(data)
 
 
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("walk_tilt_deg", 1.0), ("walk_tilt_deg", 40.0), ("walk_tilt_s", 0.0), ("walk_tilt_s", 5.0)],
+)
+def test_config_rejects_a_walk_tilt_outside_the_other_tilt_limits(cfg, key, value):
+    from pydantic import ValidationError
+
+    from spider_body.config import BodyConfig
+
+    data = cfg.model_dump()
+    data["safety"][key] = value
+    with pytest.raises(ValidationError):
+        BodyConfig.model_validate(data)
+
+
 def test_sim_world_ray():
     w = SimWorld(obstacles=[(1.0, 0.0, 0.2)])
     assert w.ray(0.0, 8.0) == pytest.approx(0.8)

@@ -168,6 +168,10 @@ class SafetyCfg(_M):
     turn_clearance_m: float = 0.06  # free ring needed outside the swept turning circle
     max_level_deg: float = 2.0  # body must be level (roll/pitch) before walking
     imu_timeout_s: float = 0.3  # stale IMU = tilt unknown = no motion (if require_lidar)
+    # Walking holds the body level, so a lean that lasts while walking is the ground (a step, a
+    # cable, a foot on something): stop there, long before max_tilt.
+    walk_tilt_deg: float = 8.0
+    walk_tilt_s: float = 0.5
     max_tilt_deg: float = 30.0  # stop walking
     fall_tilt_deg: float = 55.0  # relax servos (robot has fallen)
 
@@ -325,6 +329,11 @@ class BodyConfig(_M):
             raise ValueError(f"safety.stop_distance_m must be >= {brake:.3f} m for max_vx/accel")
         if s.turn_clearance_m <= 0:
             raise ValueError("safety.turn_clearance_m must be > 0")
+        if not s.max_level_deg < s.walk_tilt_deg <= s.max_tilt_deg < s.fall_tilt_deg:
+            raise ValueError(
+                "safety: need max_level_deg < walk_tilt_deg <= max_tilt_deg < fall_tilt_deg")
+        if not 0 < s.walk_tilt_s <= 2.0:
+            raise ValueError("safety.walk_tilt_s must be in (0, 2] s")
         return self
 
     @model_validator(mode="after")
