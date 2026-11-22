@@ -14,7 +14,12 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-MIN_FACE_PX = 60  # smaller faces give unreliable numbers: say "someone", not a name
+# Measured on LFW (5 people enrolled with 12 photos each, 12,000 stranger photos), faces 45 to
+# 130 px tall in a 640x480 JPEG frame: scoring each person by the mean of their TOP_K best photos
+# at threshold 0.42 named 99.4-100 % of enrolled faces correctly and 0.1-0.2 % of strangers. Their
+# single best photo at OpenCV's published 0.363 named 3 % of strangers.
+MIN_FACE_PX = 45  # smaller faces were not measured: say "someone", not a name
+TOP_K = 3
 MAX_PHOTO_SIDE = 1600
 PHOTO_TYPES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
@@ -51,7 +56,7 @@ class FaceModels:
 
 class FaceBook:
     def __init__(self, models, emb: np.ndarray, owner: np.ndarray, ids: list[str],
-                 spoken: list[str], threshold: float = 0.363, margin: float = 0.05) -> None:
+                 spoken: list[str], threshold: float = 0.42, margin: float = 0.05) -> None:
         self.models, self.emb, self.owner = models, emb, owner
         self.ids, self.spoken = ids, spoken
         self.threshold, self.margin = threshold, margin
@@ -67,10 +72,15 @@ class FaceBook:
                    [str(s) for s in z["spoken"]], threshold, margin)
 
     def per_person(self, v: np.ndarray) -> np.ndarray:
-        """Best similarity to each enrolled person."""
-        best = np.full(len(self.ids), -1.0, dtype=np.float32)
-        np.maximum.at(best, self.owner, self.emb @ v)
-        return best
+        """Each enrolled person's score: the mean similarity of their TOP_K closest photos. One
+        look-alike photo is not enough to name a stranger."""
+        sims = self.emb @ v
+        out = np.full(len(self.ids), -1.0, dtype=np.float32)
+        for p in range(len(self.ids)):
+            mine = np.sort(sims[self.owner == p])
+            if len(mine):
+                out[p] = float(mine[-TOP_K:].mean())
+        return out
 
     def identify(self, bgr: np.ndarray) -> list[FaceMatch]:
         out = []

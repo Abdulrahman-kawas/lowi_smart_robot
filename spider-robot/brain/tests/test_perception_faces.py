@@ -123,3 +123,20 @@ def test_check_and_forget_work_on_the_private_book(tmp_path):
     assert not forget(book_path, "ali")
     z = np.load(book_path, allow_pickle=False)
     assert [str(s) for s in z["ids"]] == ["sami"] and len(z["emb"]) == 1
+
+
+def test_one_look_alike_photo_does_not_name_a_stranger(tmp_path):
+    e = np.eye(128, dtype=np.float32)
+    models = FakeModels({100: e[0], 120: e[1], 140: e[2], 160: e[0] + e[1] + e[2]})
+    sami = tmp_path / "people" / "sami"
+    sami.mkdir(parents=True)
+    for i, code in enumerate((100, 120, 140)):  # three different-looking photos of one person
+        photo(sami / f"{i}.jpg", 60, code)
+    book_path = tmp_path / "faces.npz"
+    enroll(models, tmp_path / "people", book_path)
+    book = FaceBook.load(models, book_path, 0.42, 0.05)
+
+    stranger = book.identify(frame(tmp_path / "s.jpg", 60, 100))  # equal to one photo only
+    assert stranger[0].person_id is None
+    sami_again = book.identify(frame(tmp_path / "r.jpg", 60, 160))  # close to all three
+    assert sami_again[0].person_id == "sami"

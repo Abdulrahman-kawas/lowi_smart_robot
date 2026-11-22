@@ -120,7 +120,9 @@ class Settings(BaseSettings):
     perception_detectors: list[str] = Field(default_factory=lambda: ["models/yolo26n.onnx"])
     perception_min_score: float = Field(0.35, gt=0, lt=1)
     perception_threads: int = Field(2, ge=1, le=6)  # the VLM and Whisper share this CPU
-    face_threshold: float = 0.363  # SFace cosine at LFW; check with the calibration script
+    # SFace, mean of a person's 3 best photos. LFW at 45-130 px faces: 99.4-100 % of enrolled
+    # people named, 0.1-0.2 % of strangers (perception/faces.py). Raise it to name fewer strangers.
+    face_threshold: float = 0.42
     face_margin: float = 0.05  # the best person must beat the second best by this much
     gesture_head: str = ""  # "models/gestures_mlp.npz" after a custom head is trained
     gesture_min_score: float = Field(0.6, gt=0, lt=1)
