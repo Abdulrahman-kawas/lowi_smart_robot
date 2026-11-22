@@ -104,7 +104,11 @@ def test_speech_and_facts_lines_stay_short_and_in_arabic():
 def test_who_questions_are_recognised_in_arabic_and_english():
     assert is_who_question("مين هاد؟")
     assert is_who_question("who is that?")
+    assert is_who_question("مين اللي قدامك؟")
+    assert is_who_question("من هذا؟")
     assert not is_who_question("شو قدامك؟")
+    assert not is_who_question("شو في قدامك من أغراض؟")  # "من" = "of" here
+    assert not is_who_question("")
 
 
 COCO = (

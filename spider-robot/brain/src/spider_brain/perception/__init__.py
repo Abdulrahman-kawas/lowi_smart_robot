@@ -26,7 +26,6 @@ YUNET = "models/face_detection_yunet_2023mar.onnx"
 SFACE = "models/face_recognition_sface_2021dec.onnx"
 GESTURES = "models/gesture_recognizer.task"
 
-_WHO_WORDS = frozenset({"هاد", "هذا", "ذا", "قدام", "قدامك", "القدام", "هنا", "بالصورة", "هي"})
 _WORD = re.compile(r"[\w']+")
 
 
@@ -53,13 +52,17 @@ def decode_jpeg(jpeg: bytes) -> np.ndarray:
 
 
 def is_who_question(text: str) -> bool:
-    """Arabic and English 'who is this / who is in front of you' questions."""
-    words = set(_WORD.findall(text.lower()))
-    if "who" in words or "whos" in words:
-        return True
-    if "مين" not in words and "من" not in words:
+    """'Who is this / who is in front of you', in Levantine, standard Arabic or English.
+
+    "مين" always asks who. "من" also means "from"/"of" ("شو في قدامك من أغراض؟"), so it counts
+    only when it opens a short question ("من هذا؟", "من قدامك؟").
+    """
+    words = _WORD.findall(text.lower())
+    if not words:
         return False
-    return len(words) <= 3 or bool(words & _WHO_WORDS)
+    if {"who", "whos", "مين"} & set(words):
+        return True
+    return words[0] == "من" and len(words) <= 3
 
 
 def facts_line(dets: list[Detection], faces: list, width: int, height: int,

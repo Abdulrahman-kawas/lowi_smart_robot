@@ -10,11 +10,10 @@
                                                WhatsApp alerts + memory + skills + voice
       --planner claude|liquid --autonomy supervised|guarded|autonomous
   spider-brain pair                            one-time code for the mobile app (2 min)
-   spider-brain devices list | revoke <name>    paired phones
-   spider-brain faces enroll | list | check | forget <id>   private face book on the server
-   spider-brain perception grab --out DIR --n N --every S   frames for labelling
+  spider-brain devices list | revoke <name>    paired phones
+  spider-brain faces enroll | list | check | forget <id>   private face book on the server
+  spider-brain perception grab --out DIR --n N --every S   frames for labelling
 """
-
 
 from __future__ import annotations
 
