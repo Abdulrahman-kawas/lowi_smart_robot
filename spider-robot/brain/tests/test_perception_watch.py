@@ -28,7 +28,8 @@ class Robot:
         self.free = True
         self.jpeg = jpeg_bytes()
 
-    def camera_free(self):
+    def camera_free(self, human=True):
+        assert human is False  # watch mode asks on the brain's own source
         return self.free
 
     def stop(self):
@@ -100,17 +101,42 @@ async def test_only_stop_can_touch_motion_and_others_speak_or_send_photos():
     assert robot.stops == 2
 
 
-async def test_step_reuses_a_fresh_live_view_frame():
+def live_view(robot, n=1, age=0.1, wanted=True):
+    return SimpleNamespace(latest=SimpleNamespace(n=n, jpeg=robot.jpeg), age_s=lambda: age,
+                           wanted=wanted)
+
+
+async def test_one_live_view_frame_is_looked_at_once_and_cannot_fire_alone():
     robot = Robot()
-    feed = SimpleNamespace(latest=SimpleNamespace(jpeg=robot.jpeg), age_s=lambda: 0.1)
+    feed = live_view(robot)
     w, _said, _photos = watcher(robot, Perception(["Open_Palm"]), feed=feed)
 
-    await w.step()
-    await w.step()  # two frames: the debouncer fires once
-    assert robot.snapshots == 0 and robot.stops == 1
+    assert await w.step() is True
+    assert await w.step() is False  # the same frame again: not a second sighting
+    assert await w.step() is False
+    assert robot.stops == 0 and robot.snapshots == 0
 
-    w.feed.age_s = lambda: 30.0
-    await w.step()
+    feed.latest = SimpleNamespace(n=2, jpeg=robot.jpeg)  # the next camera frame
+    assert await w.step() is True
+    assert robot.stops == 1 and robot.snapshots == 0
+
+
+async def test_watch_reads_the_live_view_even_while_its_camera_turn_is_taken():
+    robot = Robot()
+    robot.free = False  # the live view keeps the camera busy
+    w, _said, _photos = watcher(robot, Perception(["Open_Palm"]), feed=live_view(robot))
+    assert await w.step() is True
+    assert robot.snapshots == 0
+
+
+async def test_own_snapshots_only_when_the_live_view_is_off():
+    robot = Robot()
+    feed = live_view(robot, age=30.0)
+    w, _said, _photos = watcher(robot, Perception(), feed=feed)
+    assert await w.step() is False  # live view on but stale: wait for it, never compete
+    assert robot.snapshots == 0
+    feed.wanted = False
+    assert await w.step() is True
     assert robot.snapshots == 1
 
 
@@ -124,7 +150,7 @@ async def test_watch_halves_its_rate_when_the_control_loop_is_late():
     assert rate == 1.2
 
 
-async def test_no_snapshots_while_the_phone_live_view_is_streaming():
+async def test_no_snapshot_while_a_voice_question_waits_for_the_camera():
     robot = Robot()
     robot.free = False
     w, _said, _photos = watcher(robot, Perception(["Open_Palm"]))

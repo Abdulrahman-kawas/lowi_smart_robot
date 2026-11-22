@@ -1,6 +1,9 @@
 """Watch mode: while the owner has it on, look about every 0.6 s and turn held hand gestures into
 allowed actions. Off by default and off again after watch_minutes. The only robot command sent
 from here is Stop; everything else is speech or a photo to the owner.
+
+Every frame is looked at once: a gesture must be seen in two different camera frames before it
+acts. While the app's live view runs, watch mode reads its frames and asks for none of its own.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ LATE_TICK_MS = 10.0  # half the 20 ms control budget
 LATE_WINDOW = 8
 LATE_COUNT = 3
 FEED_MAX_AGE_S = 2.0
+IDLE_S = 0.1  # how often to look again when there is no new frame yet
 
 
 class Debouncer:
@@ -72,6 +76,7 @@ class Watcher:
         self.until = float("-inf")
         self._late: deque[bool] = deque(maxlen=LATE_WINDOW)
         self._late_ts: float | None = None
+        self._last_feed_n: int | None = None  # the live-view frame looked at last
 
     @property
     def on(self) -> bool:
@@ -98,19 +103,33 @@ class Watcher:
         """Half rate when the control loop is late, like the app's live view."""
         return 2 * self.period_s if self._control_late() else self.period_s
 
-    async def step(self) -> None:
-        jpeg = None
-        if self.feed is not None and self.feed.latest is not None:
-            age = self.feed.age_s()
+    async def next_frame(self) -> bytes | None:
+        """A camera frame not looked at before, or None when there is none yet."""
+        feed = self.feed
+        if feed is not None and feed.latest is not None:
+            age = feed.age_s()
             if age is not None and age <= FEED_MAX_AGE_S:
-                jpeg = self.feed.latest.jpeg
+                if feed.latest.n == self._last_feed_n:
+                    return None  # already looked at; wait for the live view's next frame
+                self._last_feed_n = feed.latest.n
+                return feed.latest.jpeg
+        if feed is not None and feed.wanted:
+            return None  # the live view is fetching frames: do not compete with it
+        if not self.robot.camera_free(human=False):
+            return None  # a voice question or a photo is waiting for the camera: let it go first
+        return await self.robot.snapshot(timeout_s=3.0)
+
+    async def step(self) -> bool:
+        """Look at one new frame and act on gestures held long enough. False: no new frame."""
+        jpeg = await self.next_frame()
         if jpeg is None:
-            jpeg = await self.robot.snapshot(timeout_s=3.0)
+            return False
         frame = decode_jpeg(jpeg)
         seen = await self.perception.run(self.perception.see, frame)
         by_label = {g.label: g for g in seen.gestures}
         for label in self.debounce.push(set(by_label), self.clock()):
             await self.act(label, by_label[label].person, jpeg, frame)
+        return True
 
     async def act(self, label: str, person: FaceMatch | None, jpeg: bytes, frame) -> None:
         action = self.actions.get(label)
@@ -137,17 +156,18 @@ class Watcher:
     async def run(self) -> None:
         while True:
             started = self.clock()
-            if self.on and self.robot.camera_free():
+            looked = False
+            if self.on:
                 try:
-                    await self.step()
+                    looked = await self.step()
                 except RobotOffline:
                     await asyncio.sleep(1.0)
                 except (TimeoutError, RuntimeError, ValueError) as exc:
                     log.debug("watch frame skipped: %r", exc)
                 except Exception:
                     log.exception("watch step failed")
-            period = self.effective_period_s()
-            await asyncio.sleep(max(0.1, period - (self.clock() - started)))
+            period = self.effective_period_s() if looked else IDLE_S
+            await asyncio.sleep(max(IDLE_S, period - (self.clock() - started)))
 
 
 __all__ = ["Debouncer", "Watcher"]

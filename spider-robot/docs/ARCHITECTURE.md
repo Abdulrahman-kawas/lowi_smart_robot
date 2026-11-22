@@ -137,7 +137,8 @@ Every step has a timeout. On failure the robot says it could not answer; motion 
 can read text that tries to give orders. Motion comes from the owner's voice, or from the planner
 through the risk policy and approvals. Local hand-gesture watch mode is the one perception input
 that can touch motion: an Open Palm may publish Stop, and nothing else may start, turn or move the
-robot. Watch mode is off by default, times out, and skips frames while the phone live view is fresh.
+robot. Watch mode is off by default and times out. It looks at each camera frame once and,
+while the phone's live view runs, reads its frames instead of asking for more.
 
 ## Remote control
 
