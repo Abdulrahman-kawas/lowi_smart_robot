@@ -32,6 +32,8 @@ enum ConnectionCheck: Equatable {
 final class AppModel {
     static let maxFrameAge: TimeInterval = 2.0
     static let lookGap: TimeInterval = 0.25
+    static let protectionTTL: TimeInterval = 2.0
+    static let protectionRenewGap: TimeInterval = 1.0
 
     // MARK: settings, kept between launches
     var addressText: String { didSet { defaults.set(addressText, forKey: Keys.address) } }
@@ -79,7 +81,10 @@ final class AppModel {
     var textEditing = false  // a text field has the keyboard: keys type, they do not drive
     var isActive = true {
         didSet {
-            if !isActive { hardware?.reset() }
+            if !isActive {
+                hardware?.reset()
+                restoreProtection()
+            }
             tick()
             updateVideo()
         }
@@ -93,6 +98,9 @@ final class AppModel {
     @ObservationIgnored private var padTurn: CGFloat?
     @ObservationIgnored private var pendingLook: Double?
     @ObservationIgnored private var lastLookAt: TimeInterval = 0
+    @ObservationIgnored private var protectionOffRequested = false
+    @ObservationIgnored private var seenProtectionOff = false
+    @ObservationIgnored private var lastProtectionRenew: TimeInterval = 0
     @ObservationIgnored private var hardware: HardwareInput?
     @ObservationIgnored private let socket = LiveSocket()
     @ObservationIgnored private var ticker: Task<Void, Never>?
@@ -168,6 +176,7 @@ final class AppModel {
         }
     }
     var movesState: MovesState { brain?.gateway.moves ?? MovesState() }
+    var protectionOn: Bool { brain?.robot?.protectionOn ?? true }
 
     static func speedStep(_ stored: Double?) -> Double {
         stored.flatMap { value in speedSteps.first { abs($0 - value) < 0.001 } } ?? 1.0
@@ -192,6 +201,58 @@ final class AppModel {
             return
         }
         limitRequest = (speed, turn, clock())
+    }
+
+    func setProtection(_ enabled: Bool) {
+        #if DEBUG
+        if UITestFakes.isOn {
+            UITestFakes.state.robot?.protection = enabled
+            brain = UITestFakes.state
+            protectionOffRequested = !enabled
+            seenProtectionOff = !enabled
+            return
+        }
+        #endif
+        guard enabled || isLive else {
+            notice = String(localized: "Not connected to the brain.")
+            return
+        }
+        if enabled {
+            protectionOffRequested = false
+            seenProtectionOff = false
+            socket.send(.protection(enabled: true, ttlS: Self.protectionTTL))
+            return
+        }
+        guard brain?.online == true, brain?.robot?.estop != true else {
+            notice = String(localized: "Not connected to the brain.")
+            return
+        }
+        protectionOffRequested = true
+        seenProtectionOff = false
+        guard socket.send(.protection(enabled: false, ttlS: Self.protectionTTL)) else {
+            protectionOffRequested = false
+            notice = String(localized: "Not connected to the brain.")
+            return
+        }
+        lastProtectionRenew = clock()
+    }
+
+    private func renewProtection(now: TimeInterval) {
+        guard protectionOffRequested, isActive, isLive, brain?.online == true,
+              let robot = brain?.robot, !robot.estop, !robot.protectionOn else { return }
+        guard now - lastProtectionRenew >= Self.protectionRenewGap else { return }
+        guard socket.send(.protection(enabled: false, ttlS: Self.protectionTTL)) else {
+            protectionOffRequested = false
+            return
+        }
+        lastProtectionRenew = now
+    }
+
+    private func restoreProtection() {
+        guard protectionOffRequested else { return }
+        protectionOffRequested = false
+        seenProtectionOff = false
+        socket.send(.protection(enabled: true, ttlS: Self.protectionTTL))
     }
 
     // MARK: derived
@@ -254,6 +315,7 @@ final class AppModel {
         perform(deadMan.update(held: touch || keyAxes.isHeld || pad, input: input,
                                block: driveBlock(at: now), now: now))
         flushLook(force: false)
+        renewProtection(now: now)
     }
 
     private func perform(_ commands: [DriveCommand]) {
@@ -431,6 +493,8 @@ final class AppModel {
 
     func unpair() {
         socket.stop()
+        protectionOffRequested = false
+        seenProtectionOff = false
         Keychain.delete(Keys.token)
         token = nil
         brain = nil
@@ -450,6 +514,7 @@ final class AppModel {
 
     private func linkChanged(_ status: LiveSocket.Status) {
         link = status
+        if status != .live { restoreProtection() }
         switch status {
         case .live:
             updateVideo()
@@ -472,6 +537,14 @@ final class AppModel {
             robotId = hello.robotId
         case .state(let state):
             brain = state
+            if let robot = state.robot {
+                if !robot.protectionOn { seenProtectionOff = true }
+                if seenProtectionOff && robot.protectionOn {
+                    protectionOffRequested = false
+                    seenProtectionOff = false
+                }
+                if robot.estop { restoreProtection() }
+            }
             if let request = limitRequest, let limits = state.gateway.remoteLimits,
                abs(limits.maxSpeedMps - request.speedMps) < 1e-9,
                abs(limits.maxWzRps - request.wzRps) < 1e-9 {
@@ -542,6 +615,7 @@ final class AppModel {
         deviceName = "UI test"
         robotId = "spider-01"
         brain = UITestFakes.state
+        if ProcessInfo.processInfo.arguments.contains("-uiTestFakeLive") { link = .live }
         lidar = UITestFakes.lidar
         for event in UITestFakes.events { record(event) }
         toast = nil
@@ -591,6 +665,7 @@ extension BrainEvent {
         case "preempted": String(localized: "Taken over")
         case "drive_refused": String(localized: "Drive refused")
         case "drive_ended": String(localized: "Drive ended")
+        case "protection": String(localized: "LiDAR protection")
         case "perform_started": String(localized: "Move started")
         case "perform_done": String(localized: "Move done")
         case "perform_rejected": String(localized: "Move refused")

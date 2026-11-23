@@ -36,6 +36,7 @@ from spider_common.protocol import (
     MovesSwitch,
     Perform,
     Posture,
+    Protection,
     RobotEvent,
     RobotState,
     Snapshot,
@@ -274,6 +275,10 @@ class RobotClient:
 
     def moves_switch(self, voice: bool | None, remote: bool | None) -> int:
         return self._send(MovesSwitch(voice=voice, remote=remote), human=True)
+
+    def protection(self, enabled: bool, ttl_s: float = 2.0, human: bool = True) -> int:
+        """App-only LiDAR override. The body enforces its TTL and restores protection itself."""
+        return self._send(Protection(enabled=enabled, ttl_s=ttl_s), human=human)
 
     def speed_limit(self, max_speed_mps: float, max_wz_rps: float) -> int:
         """The app's top speed and turn rate. The gateway keeps it, up to its remote ceiling."""

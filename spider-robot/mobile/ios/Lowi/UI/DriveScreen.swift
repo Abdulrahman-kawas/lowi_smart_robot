@@ -79,6 +79,32 @@ struct CameraStage: View {
                     }
                     .accessibilityLabel(Text("Motion limited: \(limiter)"))
                 }
+                if !model.protectionOn {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text("Protection off")
+                            .font(.caption.weight(.semibold))
+                        Spacer(minLength: 8)
+                        Button {
+                            model.setProtection(true)
+                        } label: {
+                            Text("Turn on")
+                                .font(.caption.weight(.bold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(.white))
+                                .foregroundStyle(Theme.stopFill)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("turnOnProtection")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.stopFill))
+                    .foregroundStyle(.white)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("protectionBanner")
+                }
                 if let toast = model.toast {
                     ToastView(item: toast)
                 }

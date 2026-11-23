@@ -163,6 +163,12 @@ Nobody may be near the robot during remote use, so:
   sent as the `remote` source. The brain stops the robot when renewals stop for 0.6 s or the
   driving phone's socket drops, and any refusal or safety stop ends the hold until the owner
   presses again.
+- LiDAR protection is on by default. Only the app, as the `remote` source, may turn it off with
+  `protection {enabled: false, ttl_s}`: a 1-5 s lease renewed about every 1 s while the app is
+  active. The body then skips LiDAR freshness, obstacle distances and unknown tilt, but keeps
+  known tilt, joint limits, Stop, E-stop and the link watchdog. Protection returns on E-stop,
+  relax, an explicit `enabled: true`, lease expiry or disconnect; Stop does not clear it. Voice,
+  the planner and HTTP have no path to this switch.
 - Only `SB_TELEGRAM_OWNER_IDS` are served, so that Telegram account is effectively the robot's key.
   Turn on two-step verification.
 

@@ -15,6 +15,7 @@ from spider_common.protocol import (
     HealthReport,
     Move,
     MovesSwitch,
+    Protection,
     SayRequest,
     Snapshot,
     SourceStatus,
@@ -109,6 +110,18 @@ def test_say_request_is_text_only_and_bounded():
         SayRequest(trace="t1", text="x" * (MAX_SAY_CHARS + 1))
     with pytest.raises(ValidationError):
         SayRequest.model_validate_json('{"trace":"t1","text":"hi","action":"move"}')
+
+
+def test_protection_roundtrip_and_bounds():
+    cmd = parse_command(Protection(enabled=False, ttl_s=2.5, trace="t1").model_dump_json())
+    assert isinstance(cmd, Protection)
+    assert (cmd.enabled, cmd.ttl_s, cmd.trace) == (False, 2.5, "t1")
+    assert parse_command('{"type":"protection","enabled":true}').ttl_s == 2.0
+    for bad in ('{"type":"protection"}',
+                '{"type":"protection","enabled":false,"ttl_s":0.5}',
+                '{"type":"protection","enabled":false,"ttl_s":6}'):
+        with pytest.raises(ValidationError):
+            parse_command(bad)
 
 
 def test_status_models_serialise():
