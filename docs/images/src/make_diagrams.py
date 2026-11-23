@@ -3,10 +3,9 @@
 
     python3 docs/images/src/make_diagrams.py
 
-Writes docs/images/<name>.en.svg and <name>.ja.svg, and the photo placeholders in
-docs/images/photos/. Standard library only. The animations use SMIL and CSS, which GitHub shows
-inside <img>. Every SVG carries its own dark background, so it reads the same in GitHub's light
-and dark themes.
+Writes docs/images/<name>.en.svg and <name>.ja.svg. Standard library only. The animations use
+SMIL and CSS, which GitHub shows inside <img>. Every SVG carries its own dark background, so it
+reads the same in GitHub's light and dark themes.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 OUT = Path(__file__).resolve().parents[1]
-PHOTOS = OUT / "photos"
 
 FONT_EN = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 FONT_JA = ("-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', "
@@ -858,40 +856,11 @@ def mobile(lang):
     return svg(w, h, lang, s["title"], s["desc"], "\n".join(o))
 
 
-# ----------------------------------------------------------------------------- photo placeholders
-PLACEHOLDERS = [
-    # file, width, height, English, Japanese, the photo to put there
-    ("robot-lidar", 600, 450, "LiDAR close-up", "LiDARのアップ", "robot-lidar.jpg · Unitree L2 on the robot"),
-    ("robot-legs", 600, 450, "Legs and servos", "脚とサーボ", "robot-legs.jpg · one leg, three servos"),
-    ("robot-walk", 600, 392, "Real robot walking", "実機の歩行", "robot-walk.gif · short clip, ≤ 10 MB"),
-]
-
-
-def placeholder(w, h, en, ja, hint):
-    cx, cy = w / 2, h / 2 - 34
-    body = "\n".join([
-        f'<rect x="16" y="16" width="{w - 32}" height="{h - 32}" rx="18" fill="none" stroke="#3a4556" '
-        f'stroke-width="2" stroke-dasharray="10 8"><animate attributeName="stroke-dashoffset" from="0" '
-        f'to="-36" dur="2s" repeatCount="indefinite"/></rect>',
-        f'<rect x="{cx - 34}" y="{cy - 22}" width="68" height="48" rx="9" fill="none" stroke="{MUTED}" stroke-width="2.5"/>',
-        f'<path d="M{cx - 14} {cy - 22} l6 -9 h16 l6 9" fill="none" stroke="{MUTED}" stroke-width="2.5" stroke-linejoin="round"/>',
-        f'<circle cx="{cx}" cy="{cy + 2}" r="13" fill="none" stroke="{MUTED}" stroke-width="2.5"/>',
-        f'<text x="{cx}" y="{cy + 66}" font-size="22" font-weight="700" fill="{TEXT}" text-anchor="middle">'
-        f'{esc(en)} <tspan fill="{DIM}">·</tspan> <tspan font-size="19" fill="#c5cdd8">{esc(ja)}</tspan></text>',
-        T(cx, cy + 94, "coming soon · 近日公開", 14, MUTED, None, "middle"),
-        T(cx, cy + 122, hint, 13, DIM, None, "middle", "mono"),
-    ])
-    return svg(w, h, "ja", f"{en} (placeholder)", f"Placeholder for {hint}", body)
-
-
 def main() -> None:
-    PHOTOS.mkdir(parents=True, exist_ok=True)
     for lang in ("en", "ja"):
         for name, fn in (("banner", banner), ("architecture", architecture), ("robot", robot),
                          ("messaging", messaging), ("mobile-app", mobile)):
             (OUT / f"{name}.{lang}.svg").write_text(fn(lang), encoding="utf-8")
-    for name, w, h, en, ja, hint in PLACEHOLDERS:
-        (PHOTOS / f"{name}.svg").write_text(placeholder(w, h, en, ja, hint), encoding="utf-8")
     print(f"wrote diagrams to {OUT}")
 
 
