@@ -8,12 +8,15 @@ from pydantic import ValidationError
 from spider_common.link import InMemoryHub, topic_matches
 from spider_common.obs import Histogram, JsonFormatter
 from spider_common.protocol import (
+    MAX_SAY_CHARS,
+    PROTOCOL_VERSION,
     EStopRelease,
     GatewayStatus,
     HealthReport,
     Move,
     MovesSwitch,
     Protection,
+    SayRequest,
     Snapshot,
     SourceStatus,
     SpeedLimit,
@@ -48,6 +51,7 @@ def test_bad_commands_rejected(payload):
 def test_topics():
     t = Topics("spider-01")
     assert t.cmd == "spider/spider-01/cmd"
+    assert t.voice_say == "spider/spider-01/voice/say"
     assert topic_matches(t.camera_filter, t.camera("abc"))
     assert not topic_matches(t.camera_filter, t.state)
 
@@ -93,6 +97,19 @@ def test_speed_limit_roundtrip_and_bounds():
                 '{"type":"speed_limit","max_speed_mps":0.6,"max_wz_rps":0.4}'):
         with pytest.raises(ValidationError):
             parse_command(bad)
+
+
+def test_say_request_is_text_only_and_bounded():
+    req = SayRequest.model_validate_json(
+        SayRequest(trace="t1", text="هاي من الدماغ").model_dump_json()
+    )
+    assert req.text == "هاي من الدماغ" and req.v == PROTOCOL_VERSION
+    with pytest.raises(ValidationError):
+        SayRequest(trace="t1", text="")
+    with pytest.raises(ValidationError):
+        SayRequest(trace="t1", text="x" * (MAX_SAY_CHARS + 1))
+    with pytest.raises(ValidationError):
+        SayRequest.model_validate_json('{"trace":"t1","text":"hi","action":"move"}')
 
 
 def test_protection_roundtrip_and_bounds():

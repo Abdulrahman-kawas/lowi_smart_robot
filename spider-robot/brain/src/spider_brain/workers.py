@@ -71,8 +71,9 @@ def make_chat_chain(settings: Settings) -> list[ChatClient]:
 
 class AskService:
     def __init__(self, link: Link, settings: Settings, robot: RobotClient, vision,
-                 chat: list[ChatClient]) -> None:
+                 chat: list[ChatClient], perception=None) -> None:
         self.link, self.robot, self.vision, self.chat = link, robot, vision, chat
+        self.perception = perception  # optional fast detectors on the home server
         self.topic = Topics(settings.robot_id).rpc_reply("ask", "voice")
         self._busy = False
         self._tasks: set[asyncio.Task] = set()
@@ -97,7 +98,24 @@ class AskService:
     async def _answer(self, request: AskRequest) -> tuple[str, str]:
         if request.need_image:
             jpeg = await self.robot.snapshot()
-            return await self.vision.ask(jpeg, request.text), "vision"
+            question = request.text
+            local_prefix = ""
+            if self.perception is not None:
+                try:
+                    from .perception import decode_jpeg, is_who_question
+
+                    frame = decode_jpeg(jpeg)
+                    if is_who_question(question):
+                        answer = await self.perception.run(self.perception.who, frame)
+                        return answer, "faces"
+                    local_prefix = await self.perception.run(self.perception.facts, frame)
+                except Exception as exc:  # perception is a helper; the VLM still answers
+                    log.warning("perception failed: %r", exc)
+            if local_prefix:
+                # Only the local model sees names from the face book. The cloud backup gets the
+                # owner's question without the fast detectors' prefix.
+                return await self.vision.ask(jpeg, question, local_prefix=local_prefix), "vision"
+            return await self.vision.ask(jpeg, question), "vision"
         last: Exception | None = None
         for client in self.chat:
             try:

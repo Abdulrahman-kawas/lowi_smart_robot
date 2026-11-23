@@ -13,6 +13,13 @@ Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
+# Gestures can only lead to these. Stop reduces motion; the rest speak or send a photo.
+# Anything that moves the robot is refused here (the owner has not approved it).
+SAFE_GESTURE_ACTIONS = frozenset({"stop", "greet", "describe", "photo"})
+DEFAULT_GESTURE_ACTIONS = {
+    "Open_Palm": "stop", "Thumb_Up": "greet", "Victory": "photo", "Pointing_Up": "describe",
+}
+
 
 class Settings(BaseSettings):
     # On servers put settings in /etc/spider-brain/brain.env and set SB_ENV_FILE to it.
@@ -106,6 +113,24 @@ class Settings(BaseSettings):
     vision_url: str = "http://127.0.0.1:8081/v1"
     vision_model: str = "LFM2.5-VL-1.6B"
     vision_timeout_s: float = 90.0
+
+    # Perception: objects, faces, gestures (home server; uv sync --extra perception) ----------
+    perception: bool = False
+    perception_dir: str = "data/perception"  # models/, people/, faces.npz; brain/data is gitignored
+    perception_detectors: list[str] = Field(default_factory=lambda: ["models/yolo26n.onnx"])
+    perception_min_score: float = Field(0.35, gt=0, lt=1)
+    perception_threads: int = Field(2, ge=1, le=6)  # the VLM and Whisper share this CPU
+    # SFace, mean of a person's 3 best photos. LFW at 45-130 px faces: 99.4-100 % of enrolled
+    # people named, 0.1-0.2 % of strangers (perception/faces.py). Raise it to name fewer strangers.
+    face_threshold: float = 0.42
+    face_margin: float = 0.05  # the best person must beat the second best by this much
+    # Trained on HaGRID (perception-train/train_gestures.py); MediaPipe's own classifier if missing.
+    gesture_head: str = "models/gestures_mlp.npz"
+    gesture_min_score: float = Field(0.6, gt=0, lt=1)
+    watch_period_s: float = Field(0.6, ge=0.5)  # the gateway refuses snapshots < 0.5 s apart
+    watch_minutes: float = Field(30.0, gt=0, le=240)
+    gesture_actions: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_GESTURE_ACTIONS))
+    gesture_anyone: list[str] = Field(default_factory=lambda: ["stop"])  # others: enrolled only
 
     # Workers for the Pi's voice loop (request and reply over MQTT) --------------
     ask_worker: bool = False
@@ -205,6 +230,16 @@ class Settings(BaseSettings):
                 "SB_HUMAN_SOURCE=remote, so the app is held to the remote caps."
             )
         return self
+
+    @field_validator("gesture_actions")
+    @classmethod
+    def _gestures_never_move(cls, value: dict[str, str]) -> dict[str, str]:
+        for gesture, action in value.items():
+            if action in SAFE_GESTURE_ACTIONS or (action.startswith("say:") and len(action) > 4):
+                continue
+            raise ValueError(f"gesture {gesture!r}: action {action!r} is not allowed; gestures "
+                             f"may only {sorted(SAFE_GESTURE_ACTIONS)} or say:<text>")
+        return value
 
     @field_validator("host")
     @classmethod

@@ -18,6 +18,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from spider_common.link import Link
+from spider_common.obs import new_trace
+from spider_common.protocol import MAX_SAY_CHARS, SayRequest
 
 from .config import Settings
 from .confirm import ConfirmFlow
@@ -100,8 +102,35 @@ class BrainService:
                                      self.skills, self.memory)
         self.voice = voice if voice is not None else (
             VoiceService(settings) if settings.gemini_api_key else None)
+        self.perception = None
+        self.perception_error: str | None = None
+        self.watcher = None
+        if settings.perception:
+            try:
+                from .perception import make_perception
+
+                self.perception = make_perception(settings)
+            except Exception as exc:  # e.g. the perception extra is not installed
+                self.perception_error = f"{type(exc).__name__}: {exc}"
+                log.exception("perception is off: it failed to start")
+        if self.perception is not None:
+            from .perception.watch import Watcher
+
+            async def say(text: str) -> None:
+                self.say_on_robot(text)
+
+            async def photo(jpeg: bytes, caption: str) -> None:
+                if self.telegram is not None:
+                    await self.telegram.send_owner_photo(jpeg, caption)
+
+            self.watcher = Watcher(
+                self.robot, self.perception, settings.gesture_actions,
+                set(settings.gesture_anyone), say, photo,
+                period_s=settings.watch_period_s, minutes=settings.watch_minutes,
+            )
         self.ask = (
-            AskService(self.link, settings, self.robot, self.vision, make_chat_chain(settings))
+            AskService(self.link, settings, self.robot, self.vision, make_chat_chain(settings),
+                       perception=self.perception)
             if settings.ask_worker else None
         )
         self.stt = SttWorker(self.link, settings) if settings.stt_worker else None
@@ -124,6 +153,8 @@ class BrainService:
             from .mobile.hub import MobileHub
 
             self.mobile = MobileHub(self, data_dir(settings.mobile_data_dir))
+        if self.watcher is not None and self.mobile is not None:
+            self.watcher.feed = self.mobile.feed
         self.telegram = None
         if settings.telegram_enabled:
             from .telegram import TelegramBot
@@ -153,6 +184,14 @@ class BrainService:
     def _on_gateway_status(self, _topic: str, payload: bytes) -> None:
         self.bus.publish("gateway_status", status=json.loads(payload))
 
+    def say_on_robot(self, text: str) -> bool:
+        """Ask the Pi voice to speak one short line. Text only: no path to a motion command."""
+        clean = text.strip()
+        if not clean:
+            return False
+        req = SayRequest(trace=new_trace(), text=clean[:MAX_SAY_CHARS])
+        return self.link.publish(self.robot.topics.voice_say, req.model_dump_json(), qos=0)
+
     # ------------------------------------------------------------------ lifecycle
     def context(self) -> str:
         try:
@@ -167,6 +206,8 @@ class BrainService:
             asyncio.create_task(self.robot.heartbeat_loop(self.settings.heartbeat_hz),
                                 name="heartbeat"),
         ]
+        if self.watcher is not None:
+            self._bg.append(asyncio.create_task(self.watcher.run(), name="watch"))
         if self.settings.dashboard or self.mobile is not None:
             self._server = self._build_server()
             self._bg.append(asyncio.create_task(self._server.serve(), name="http"))
@@ -192,6 +233,8 @@ class BrainService:
         for t in self._bg:
             t.cancel()
         await asyncio.gather(*self._bg, return_exceptions=True)
+        if self.perception is not None:
+            self.perception.close()
         with contextlib.suppress(Exception):
             await self.link.stop()
 

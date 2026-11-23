@@ -19,6 +19,10 @@ dependencies = [
 voice = ["google-genai>=1.0", "gTTS>=2.5"]
 # Converts a recording to a ROS 1 bag for the SLAM container. Only on the home server.
 slam = ["rosbags>=0.11", "numpy>=1.26"]
+# Objects, faces and hand gestures in camera frames. Only on the home server.
+# mediapipe pulls opencv-contrib-python; do not add opencv-python(-headless) as well (both are cv2).
+perception = ["onnxruntime>=1.18", "mediapipe>=0.10.14", "opencv-contrib-python>=4.10",
+              "numpy>=1.26"]
 
 [project.scripts]
 spider-brain = "spider_brain.main:main"

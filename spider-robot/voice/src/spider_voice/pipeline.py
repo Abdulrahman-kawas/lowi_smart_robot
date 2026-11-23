@@ -388,6 +388,19 @@ class VoicePipeline:
                 log.warning("answer failed: %r", exc)
         await self.speak(answer or self.cfg.escalation.failure, trace)
 
+    def can_speak_remote(self) -> bool:
+        """A brain ask may speak only when no utterance is in flight and no audio is playing."""
+        return (not self._speech_lock.locked() and not self.echo.playing(self.clock())
+                and not self._tasks and not self._escalations and not self._short_queue
+                and self._long_pending is None and self._stt_running == 0)
+
+    def speak_remote(self, text: str, trace: str = "") -> bool:
+        """Speak a brain request, or drop it. Never cuts over the owner's own turn."""
+        if not self.can_speak_remote():
+            return False
+        self._spawn(self.speak(text, trace))
+        return True
+
     async def speak(self, text: str, trace: str = "") -> float | None:
         clean = self.stop_words.strip_from(text)[:MAX_SPOKEN_CHARS] or SAY_DONE
         self.audio.cut()  # newest speech wins

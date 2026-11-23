@@ -32,6 +32,7 @@ Ollama alone leaves Core 0 open to Whisper and Piper.
 | Brain: `spider-brain serve` (planner, routing, skills, memory, dashboard) | exists; move from EC2 |
 | Telegram bot, WhatsApp alerts | exists |
 | Vision: LFM2.5-VL-1.6B | client exists; server to install |
+| Local camera perception: objects, enrolled faces, hand gestures; watch mode off by default | exists on the home server |
 | Stronger local LLM (LFM2.5-1.2B) as planner fallback | client exists; server to install |
 | Better STT for hard utterances (Whisper `small` or `medium`) | to build |
 | 3D SLAM, on demand only (it competes with vision for the CPU) | later |
@@ -107,7 +108,8 @@ The gateway runs on the Pi and is the only client allowed to publish to `spider/
   own limits; the gateway never replaces them.
 
 Broker ACLs change to match: server and voice publish to gateway topics, the gateway alone
-publishes to `cmd`.
+publishes to `cmd`, and the brain publishes `spider/<id>/voice/say` while voice subscribes to it.
+The voice loop drops that request while its speaker is busy.
 
 ## Voice loop on the Pi (to build)
 
@@ -133,7 +135,10 @@ Every step has a timeout. On failure the robot says it could not answer; motion 
 
 **Vision and cloud answers are spoken only.** They never produce motion directly, because a camera
 can read text that tries to give orders. Motion comes from the owner's voice, or from the planner
-through the risk policy and approvals.
+through the risk policy and approvals. Local hand-gesture watch mode is the one perception input
+that can touch motion: an Open Palm may publish Stop, and nothing else may start, turn or move the
+robot. Watch mode is off by default and times out. It looks at each camera frame once and,
+while the phone's live view runs, reads its frames instead of asking for more.
 
 ## Remote control
 

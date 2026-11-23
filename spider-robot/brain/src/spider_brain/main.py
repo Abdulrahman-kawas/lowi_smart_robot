@@ -11,6 +11,8 @@
       --planner claude|liquid --autonomy supervised|guarded|autonomous
   spider-brain pair                            one-time code for the mobile app (2 min)
   spider-brain devices list | revoke <name>    paired phones
+  spider-brain faces enroll | list | check | forget <id>   private face book on the server
+  spider-brain perception grab --out DIR --n N --every S   frames for labelling
 """
 
 from __future__ import annotations
@@ -76,6 +78,17 @@ async def _look(settings: Settings, question: str) -> int:
     for t in tasks:
         t.cancel()
     return 0
+
+
+async def _grab(settings: Settings, out: str, count: int, every: float) -> int:
+    from .perception.cli import grab
+
+    robot, tasks = await _connect(settings, "grab")
+    try:
+        return await grab(robot, Path(out), count, every)
+    finally:
+        for t in tasks:
+            t.cancel()
 
 
 async def _ping(settings: Settings, n: int) -> int:
@@ -179,6 +192,14 @@ def main(argv: list[str] | None = None) -> int:
     devices = sub.add_parser("devices", help="list or revoke paired phones")
     devices.add_argument("action", choices=["list", "revoke"])
     devices.add_argument("name", nargs="?")
+    faces = sub.add_parser("faces", help="the private face book on the home server")
+    faces.add_argument("action", choices=["enroll", "list", "check", "forget"])
+    faces.add_argument("person", nargs="?")
+    perception = sub.add_parser("perception", help="camera-frame tools")
+    perception.add_argument("action", choices=["grab"])
+    perception.add_argument("--out", default="data/perception/grab")
+    perception.add_argument("--n", type=int, default=40)
+    perception.add_argument("--every", type=float, default=1.0)
     p.add_argument("--log-level", default="WARNING")
     args = p.parse_args(argv)
     logging.basicConfig(
@@ -210,6 +231,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "pair":
             return cli.pair(settings)
         return cli.devices(settings, args.action, args.name)
+    if args.command == "faces":
+        from .perception import cli
+
+        return cli.faces(settings, args.action, args.person)
     try:
         if args.command == "status":
             return asyncio.run(_status(settings))
@@ -219,6 +244,8 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_ping(settings, args.n))
         if args.command == "look":
             return asyncio.run(_look(settings, args.question))
+        if args.command == "perception":
+            return asyncio.run(_grab(settings, args.out, args.n, args.every))
         if args.command == "serve":
             return asyncio.run(_serve(settings))
         if settings.planner == "claude" and not settings.anthropic_api_key:
