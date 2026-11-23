@@ -188,6 +188,7 @@ def test_servo_bank_writes_only_changes_in_one_transfer_per_board(cfg):
 
     data = cfg.model_dump()
     data["servo_driver"] = "pca9685"
+    data["camera_pan"] = None  # the camera pan needs the SSC-32U
     for leg in data["legs"]:
         for j in ("coxa", "femur", "tibia"):
             if leg[j]["channel"] >= 16:  # channels 16-31: second board, channels 0-15
@@ -242,7 +243,7 @@ def test_ssc32u_group_moves_changed_only_and_rate_limited(cfg):
               for j in ("coxa", "femur", "tibia")}
     bank.write(angles)
     cmd = ser.written[-1].decode()
-    channels = sorted(s.channel for s in bank.servos.values())
+    channels = sorted(s.channel for jid, s in bank.servos.items() if jid != "camera_pan")
     assert cmd == "".join(f"#{ch}P1500" for ch in channels) + "T40\r"  # 25 Hz -> T40, all 18
     ser.written.clear()
     t[0] = 0.02
@@ -255,8 +256,9 @@ def test_ssc32u_group_moves_changed_only_and_rate_limited(cfg):
     t[0] = 0.04
     bank.write(angles)
     assert ser.written == [f"#{bank.servos['RM.femur'].channel}P1700T40\r".encode()]
-    bank.relax()
-    assert ser.written[-1] == ("".join(f"#{ch}P0" for ch in channels) + "\r").encode()
+    bank.relax()  # every channel, the camera's (27) too
+    every = sorted(s.channel for s in bank.servos.values())
+    assert ser.written[-1] == ("".join(f"#{ch}P0" for ch in every) + "\r").encode()
     assert bank.version() == "SSC32-V2.50USB"
 
 

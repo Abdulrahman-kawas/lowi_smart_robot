@@ -15,6 +15,7 @@ from spider_common.protocol import (
     RobotEvent,
     RobotState,
     Snapshot,
+    SpeedLimit,
     Stop,
     Topics,
 )
@@ -111,9 +112,10 @@ async def test_each_source_is_capped(rig, source, speed, turn, secs):
     assert out["wz"] == pytest.approx(turn) and out["duration_s"] == pytest.approx(secs)
 
 
-async def test_remote_cap_is_tighter_than_voice(rig):
-    gw, *_ = rig
-    assert gw.policies["remote"].max_speed_mps < gw.policies["voice"].max_speed_mps
+async def test_remote_starts_slower_than_voice_and_its_moves_stay_shorter(rig):
+    gw, _, clock = rig
+    assert gw.status(clock.now).remote_limits["max_speed_mps"] < \
+        gw.policies["voice"].max_speed_mps
     assert gw.policies["remote"].max_duration_s < gw.policies["voice"].max_duration_s
 
 
@@ -360,9 +362,125 @@ def test_policy_file_may_tighten_but_not_invert(tmp_path):
     fine.write_text("remote:\n  max_speed_mps: 0.03\n")
     assert load_policies(fine)["remote"].max_speed_mps == 0.03
     bad = tmp_path / "bad.yaml"
-    bad.write_text("remote:\n  max_speed_mps: 0.2\n")
+    bad.write_text("remote:\n  max_duration_s: 3.0\n")  # a remote Move longer than voice's
     with pytest.raises(ValueError):
         load_policies(bad)
+
+
+def test_the_remote_ceiling_may_be_above_voice(tmp_path):
+    """Owner's decision, 2026-11-20: the app sets the robot's speed up to the body's limits."""
+    remote, voice = DEFAULT_POLICIES["remote"], DEFAULT_POLICIES["voice"]
+    assert (remote.max_speed_mps, remote.max_wz_rps) == (0.12, 0.6)
+    assert remote.max_speed_mps > voice.max_speed_mps
+    assert load_policies()["remote"].max_wz_rps == 0.6  # check_order accepts it
+
+
+# ----------------------------------------------------------------------------- app speed limit
+async def speed_rig(state_dir, policies=None):
+    link = InMemoryHub().endpoint([])
+    await link.start()
+    clock = Clock()
+    gw = Gateway(link, ROBOT, clock=clock, wall=lambda: 1000.0 + clock.now,
+                 config=GatewayConfig(state_dir=state_dir), policies=policies)
+    return gw, link, clock
+
+
+def speed_limit(clock, speed, turn, seq=1, session="r"):
+    return SpeedLimit(max_speed_mps=speed, max_wz_rps=turn, seq=seq, session=session,
+                      ts=1000.0 + clock.now).model_dump_json()
+
+
+def limits(gw, clock):
+    view = gw.status(clock.now).remote_limits
+    return view["max_speed_mps"], view["max_wz_rps"]
+
+
+async def test_speed_limit_raises_and_lowers_the_remote_cap(tmp_path):
+    gw, link, clock = await speed_rig(tmp_path)
+    assert limits(gw, clock) == (0.05, 0.3)  # today's caps until the owner changes them
+    gw.on_request("remote", speed_limit(clock, 0.1, 0.5))
+    assert replies(link, "remote")[-1]["kind"] == "ack"
+    assert any(m.topic == T.gateway_status for m in link.published)  # shown at once
+    gw.on_request("remote", move(clock, seq=2, session="r", vx=0.3, wz=2.0))
+    out = sent(link)[-1]
+    assert out["vx"] == pytest.approx(0.1) and out["wz"] == pytest.approx(0.5)
+
+    gw.on_request("remote", speed_limit(clock, 0.03, 0.2, seq=3))
+    gw.on_request("remote", move(clock, seq=4, session="r", vx=0.3, wz=-2.0))
+    out = sent(link)[-1]
+    assert out["vx"] == pytest.approx(0.03) and out["wz"] == pytest.approx(-0.2)
+    assert [c["type"] for c in sent(link)] == ["move", "move"]  # never forwarded to the body
+    gw.on_request("voice", move(clock, seq=1, session="v", vx=0.3))
+    assert sent(link)[-1]["vx"] == pytest.approx(0.08)  # voice keeps its own cap
+
+
+async def test_speed_limit_never_goes_past_the_ceiling(tmp_path):
+    gw, link, clock = await speed_rig(tmp_path)
+    gw.on_request("remote", speed_limit(clock, 0.13, 0.5))
+    assert replies(link, "remote")[-1]["detail"] == (
+        "above the ceiling of 0.12 m/s and 0.6 rad/s (remote in the gateway policy)")
+    gw.on_request("remote", speed_limit(clock, 0.1, 0.61, seq=2))
+    assert replies(link, "remote")[-1]["kind"] == "rejected"
+    assert limits(gw, clock) == (0.05, 0.3)
+    gw.on_request("remote", speed_limit(clock, 0.12, 0.6, seq=3))  # the ceiling itself is fine
+    assert gw.status(clock.now).remote_limits == {
+        "max_speed_mps": 0.12, "max_wz_rps": 0.6, "ceiling_speed_mps": 0.12,
+        "ceiling_wz_rps": 0.6}
+
+    policy = tmp_path / "policy.yaml"
+    policy.write_text("remote: {max_speed_mps: 0.08}\n")
+    gw, link, clock = await speed_rig(tmp_path / "other", load_policies(policy))
+    gw.on_request("remote", speed_limit(clock, 0.1, 0.3))
+    assert "above the ceiling of 0.08 m/s" in replies(link, "remote")[-1]["detail"]
+
+
+async def test_speed_limit_survives_a_restart_and_a_lower_ceiling(tmp_path):
+    gw, link, clock = await speed_rig(tmp_path)
+    gw.on_request("remote", speed_limit(clock, 0.1, 0.5))
+    assert json.loads((tmp_path / "remote_limits.json").read_text("utf-8")) == {
+        "max_speed_mps": 0.1, "max_wz_rps": 0.5}
+    again, _, clock = await speed_rig(tmp_path)
+    assert limits(again, clock) == (0.1, 0.5)
+
+    policy = tmp_path / "policy.yaml"
+    policy.write_text("remote: {max_speed_mps: 0.08, max_wz_rps: 0.4}\n")
+    lowered, _, clock = await speed_rig(tmp_path, load_policies(policy))
+    assert limits(lowered, clock) == (0.08, 0.4)  # the owner lowered the ceiling since
+
+    for broken in ("not json", "[1, 2]", '{"max_speed_mps": -1, "max_wz_rps": 0.4}'):
+        (tmp_path / "remote_limits.json").write_text(broken)
+        fresh, _, clock = await speed_rig(tmp_path)
+        assert limits(fresh, clock) == (0.05, 0.3)
+
+
+async def test_only_the_app_and_voice_may_set_the_speed_limit(tmp_path):
+    gw, link, clock = await speed_rig(tmp_path)
+    gw.on_request("planner", speed_limit(clock, 0.1, 0.5, session="p"))
+    assert replies(link, "planner")[-1]["detail"] == "planner may not change the app's speed limit"
+    assert limits(gw, clock) == (0.05, 0.3)
+    gw.on_request("voice", speed_limit(clock, 0.1, 0.5, session="v"))
+    assert replies(link, "voice")[-1]["kind"] == "ack"
+    assert limits(gw, clock) == (0.1, 0.5)
+    assert sent(link) == []
+
+
+async def test_a_late_speed_limit_is_refused(tmp_path):
+    gw, link, clock = await speed_rig(tmp_path)
+    gw.on_request("remote", speed_limit(clock, 0.05, 0.3))
+    clock.now += 1.0
+    gw.on_request("remote", SpeedLimit(max_speed_mps=0.1, max_wz_rps=0.5, seq=2, session="r",
+                                       ts=996.0 + clock.now).model_dump_json())
+    assert "late" in replies(link, "remote")[-1]["detail"]
+    assert limits(gw, clock) == (0.05, 0.3)
+
+
+async def test_an_unwritable_state_dir_keeps_the_speed_limit_in_memory(tmp_path):
+    blocked = tmp_path / "not-a-dir"
+    blocked.write_text("x")
+    gw, link, clock = await speed_rig(blocked)
+    gw.on_request("remote", speed_limit(clock, 0.1, 0.5))
+    assert replies(link, "remote")[-1]["detail"].endswith("kept until the gateway restarts)")
+    assert limits(gw, clock) == (0.1, 0.5)
 
 
 async def test_move_stuck_in_a_network_queue_is_refused(rig):

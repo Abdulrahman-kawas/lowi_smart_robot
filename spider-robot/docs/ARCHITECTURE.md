@@ -149,7 +149,9 @@ never speaks MQTT.
 
 Nobody may be near the robot during remote use, so:
 
-- Remote motion uses lower speed and duration caps than local voice.
+- Remote Moves are shorter than local voice ones (at most 1 s). Remote speed is the app's own
+  setting, kept by the gateway, up to its remote ceiling at the body's gait limits (0.12 m/s,
+  0.6 rad/s): the owner's decision of 2026-11-20. The body's own checks are unchanged.
 - Keep autonomy at `guarded`, with approval for longer walks.
 - Releasing an E-stop remotely needs a fresh camera frame and an explicit confirmation.
 - The app drives only while a finger or stick is held: 1 s moves renewed about every 0.4 s, all

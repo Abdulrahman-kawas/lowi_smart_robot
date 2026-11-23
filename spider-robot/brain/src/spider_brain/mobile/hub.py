@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from spider_common.protocol import MOVE_NAMES
+
 from ..robot_client import TELEMETRY_STALE_S, RobotOffline
 from .camera import Frame, FrameFeed
 from .devices import DeviceStore, PairingCodes
@@ -33,6 +35,7 @@ log = logging.getLogger(__name__)
 
 API_VERSION = 1
 TICK_S = 0.05
+LOOK_GAP_S = 0.2  # the app sends targets while dragging; the gateway also caps Looks at 5/s
 STATE_KEEPALIVE_S = 1.0  # send state at least this often, so the app sees "offline" too
 REVOKE_CHECK_S = 1.0
 QUEUE_MAX = 64  # outgoing messages per socket; a link this far behind is closed
@@ -40,10 +43,11 @@ CLOSE_REVOKED = 4401
 CLOSE_TOO_SLOW = 1013
 GATEWAY_STALE_S = 3.0  # it publishes status at 1 Hz
 ALERTS = frozenset({"obstacle_stop", "tilt", "fallen", "link_lost", "estop", "offline", "health"})
-REFUSALS = frozenset({"rejected", "preempted"})
-QUIET = frozenset({"ack", "move_done", "challenge", "perform_started", "perform_done"})
+REFUSALS = frozenset({"rejected", "preempted", "perform_rejected"})
+QUIET = frozenset({"ack", "move_done", "challenge"})
 DRIVE_MODES = frozenset({"standing", "walking"})
 POSTURES = frozenset({"stand", "sit", "relax"})
+OLD_GATEWAY_LIMITS = (0.05, 0.3)  # remote caps of a gateway that reports none (before 2026-11-20)
 
 
 class Busy(RuntimeError):
@@ -89,9 +93,9 @@ class MobileHub:
         self.source = self.robot.human_source  # "remote": the settings refuse anything else
         self.devices = DeviceStore(data_dir)
         self.codes = PairingCodes(data_dir, s.mobile_pair_code_s)
-        self.caps = Caps(s.mobile_max_speed_mps, s.mobile_max_wz_rps, s.mobile_move_s)
-        self.drive = DriveControl(self.robot, self.caps, s.mobile_deadman_s, self._preflight,
-                                  self._notify, gait=s.gait)
+        self.brain_caps = Caps(s.mobile_max_speed_mps, s.mobile_max_wz_rps, s.mobile_move_s)
+        self.drive = DriveControl(self.robot, self._caps_for(None), s.mobile_deadman_s,
+                                  self._preflight, self._notify, gait=s.gait)
         self.feed = FrameFeed(self.robot, self._on_frame,
                               lambda kind, detail: self._notify(None, kind, detail, False))
         self.sessions: dict[int, Session] = {}
@@ -102,6 +106,8 @@ class MobileHub:
         self._state_rx_sent: float | None = None
         self._state_sent_at = -math.inf
         self._photo = asyncio.Lock()
+        self._look_pending: tuple[float, float] | None = None
+        self._last_look_at = -math.inf
         self._tasks: set[asyncio.Task] = set()
         stt = getattr(svc, "stt", None)
         self.talk = TalkService(s, stop=self.stop, estop=self.estop, context=self._talk_context,
@@ -138,13 +144,22 @@ class MobileHub:
             self.estop(session.device)
         elif kind == "drive":
             self.drive.drive(session.device, msg.get("x", 0.0), msg.get("y", 0.0),
-                             msg.get("turn", 0.0), msg.get("hold_id"))
+                             msg.get("turn", 0.0), msg.get("hold_id"), msg.get("speed", 1.0),
+                             msg.get("turn_speed", 1.0))
         elif kind == "heartbeat":
             t = msg.get("t")
             session.put({"type": "pong", "t": t if isinstance(t, (int, float)) else None})
         elif kind == "video":
             session.video = bool(msg.get("on"))
             self._video_changed()
+        elif kind == "look":
+            self._look(session.device, msg.get("pan_deg"), msg.get("speed", 0.5))
+        elif kind == "perform":
+            self._spawn(self._perform(session, msg))
+        elif kind == "moves_switch":
+            self._moves_switch(session, msg)
+        elif kind == "speed_limit":
+            self._speed_limit(session.device, msg.get("max_speed_mps"), msg.get("max_wz_rps"))
         elif kind == "posture":
             self._spawn(self._posture(session, msg.get("posture")))
         else:
@@ -193,6 +208,104 @@ class MobileHub:
         self._notify(session.device, "posture", text,
                      text.startswith(("Rejected", "No answer")))
 
+    def _look(self, device: str, pan: object, speed: object) -> None:
+        if not self._number(pan) or not -90.0 <= pan <= 90.0:
+            self._notify(device, "look", "camera direction must be a number from -90 to 90", True)
+            return
+        if not self._number(speed) or not 0.0 < speed <= 1.0:
+            self._notify(device, "look", "camera speed must be greater than 0 and at most 1", True)
+            return
+        self._look_pending = (pan, speed)
+        self._flush_look()
+
+    async def _perform(self, session: Session, msg: dict[str, Any]) -> None:
+        name, speed, leg = msg.get("name"), msg.get("speed", 0.5), msg.get("leg")
+        if name not in MOVE_NAMES:
+            self._notify(session.device, "perform_rejected", f"unknown move {name!r}", True)
+            return
+        if leg not in (None, "LF", "RF"):
+            self._notify(session.device, "perform_rejected", "leading leg must be LF or RF", True)
+            return
+        if not self._number(speed) or not 0.0 < speed <= 1.0:
+            self._notify(session.device, "perform_rejected",
+                         "move speed must be greater than 0 and at most 1", True)
+            return
+        why = self._move_preflight(session.device)
+        if why is not None:
+            self._notify(session.device, "perform_rejected", why, True)
+            return
+        self.robot.perform(name, speed, leg, human=True)
+
+    def _moves_switch(self, session: Session, msg: dict[str, Any]) -> None:
+        values: dict[str, bool | None] = {}
+        for name in ("voice", "remote"):
+            value = msg.get(name)
+            if value is not None and not isinstance(value, bool):
+                self._notify(session.device, "moves_switch",
+                             f"{name} must be true, false or null", True)
+                return
+            values[name] = value
+        self.robot.moves_switch(values["voice"], values["remote"])
+
+    def _speed_limit(self, device: str, speed: object, turn: object) -> None:
+        """The app's top speed and turn rate, kept by the gateway up to its remote ceiling."""
+        if not (self._number(speed) and speed > 0 and self._number(turn) and turn > 0):
+            self._notify(device, "speed_limit",
+                         "max_speed_mps and max_wz_rps must be numbers above 0", True)
+            return
+        b = self.brain_caps
+        if speed > b.max_speed_mps or turn > b.max_wz_rps:
+            self._notify(device, "speed_limit", f"above the brain's caps of {b.max_speed_mps:g} "
+                         f"m/s and {b.max_wz_rps:g} rad/s", True)
+            return
+        if self.robot.speed_limit(speed, turn) < 0:
+            self._notify(device, "speed_limit", "the brain is not connected to the robot", True)
+
+    def _caps_for(self, status: dict[str, Any] | None) -> Caps:
+        """The brain's caps, lowered to the gateway's runtime remote limit (the app's top speed)."""
+        limits = (status or {}).get("remote_limits") or {}
+        speed, turn = limits.get("max_speed_mps"), limits.get("max_wz_rps")
+        if not (self._number(speed) and speed > 0 and self._number(turn) and turn > 0):
+            speed, turn = OLD_GATEWAY_LIMITS
+        b = self.brain_caps
+        return Caps(min(b.max_speed_mps, speed), min(b.max_wz_rps, turn), b.move_s)
+
+    @staticmethod
+    def _number(value: object) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) \
+            and math.isfinite(value)
+
+    def _move_preflight(self, device: str) -> str | None:
+        """Why this device may not start a move now, or None. The body checks again."""
+        if self.robot.version_error:
+            return self.robot.version_error
+        st, rx = self.robot.state, self.robot.state_rx
+        now = time.monotonic()
+        if st is None or rx is None or now - rx > TELEMETRY_STALE_S:
+            return "no fresh telemetry from the robot"
+        if st.estop:
+            return "the E-stop is latched"
+        if st.mode != "standing":
+            return f"the robot is {st.mode}; stand it up first"
+        mine = [s for s in self.sessions.values() if s.device == device and s.video]
+        sent = [s.last_frame_at for s in mine if s.last_frame_at is not None]
+        if sent and now - max(sent) <= self.max_frame_age_s:
+            return None
+        if st.lidar_age_s is not None and st.lidar_age_s <= 0.5:
+            return None
+        return "turn the live view on, or wait for the LiDAR"
+
+    def _flush_look(self) -> None:
+        if self._look_pending is None:
+            return
+        now = time.monotonic()
+        if now - self._last_look_at < LOOK_GAP_S:
+            return
+        pan, speed = self._look_pending
+        self._look_pending = None
+        self._last_look_at = now
+        self.robot.look(pan, speed, human=True)
+
     # ------------------------------------------------------------------ outgoing
     def _notify(self, device: str | None, kind: str, detail: str, refusal: bool,
                 hold_id: str | None = None) -> None:
@@ -223,18 +336,20 @@ class MobileHub:
                 await socket.send_json(item)
 
     # ------------------------------------------------------------------ views
-    def caps_view(self) -> dict[str, float]:
-        return {"max_speed_mps": self.caps.max_speed_mps, "max_wz_rps": self.caps.max_wz_rps,
-                "move_s": self.caps.move_s}
+    def caps_view(self) -> dict[str, Any]:
+        caps = self.drive.caps  # min(brain caps, the gateway's remote limit)
+        return {"max_speed_mps": caps.max_speed_mps, "max_wz_rps": caps.max_wz_rps,
+                "move_s": caps.move_s, "moves": list(MOVE_NAMES)}
 
     def _gateway_view(self, now: float) -> dict[str, Any]:
         g = self.gateway
         if g is None or self._gateway_rx is None or now - self._gateway_rx > GATEWAY_STALE_S:
             return {"online": False, "owner": None, "owner_remaining_s": 0.0, "estop": None,
-                    "remote_alive": False}
+                    "remote_alive": False, "moves": {}, "remote_limits": None}
         return {"online": bool(g.get("online", True)), "owner": g.get("owner"),
                 "owner_remaining_s": g.get("owner_remaining_s", 0.0), "estop": g.get("estop"),
-                "remote_alive": bool(g.get("sources", {}).get(self.source, {}).get("alive"))}
+                "remote_alive": bool(g.get("sources", {}).get(self.source, {}).get("alive")),
+                "moves": g.get("moves", {}), "remote_limits": g.get("remote_limits") or None}
 
     def state_view(self) -> dict[str, Any]:
         now = time.monotonic()
@@ -298,6 +413,7 @@ class MobileHub:
         kind = ev.get("kind")
         if kind == "gateway_status":
             self.gateway, self._gateway_rx = ev.get("status") or {}, time.monotonic()
+            self.drive.caps = self._caps_for(self.gateway)
         elif kind == "robot_event" and ev.get("source") in (None, self.source):
             name, seq, detail = ev.get("event", ""), ev.get("seq"), ev.get("detail", "")
             if ev.get("source") == self.source:
@@ -310,6 +426,8 @@ class MobileHub:
         while True:
             now = time.monotonic()
             self.drive.tick()
+            if self._look_pending is not None and now - self._last_look_at >= LOOK_GAP_S:
+                self._flush_look()
             rx = self.robot.state_rx
             fresh = rx is not None and rx != self._state_rx_sent
             if fresh or now - self._state_sent_at >= STATE_KEEPALIVE_S:

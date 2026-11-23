@@ -154,6 +154,19 @@ class ConfirmRequest(_Cmd):
     request_id: str = Field(min_length=1, max_length=64, pattern=PATTERN_ID)
 
 
+class Look(_Cmd):
+    """Turn the front camera's pan servo to an absolute angle and hold it there.
+
+    pan_deg: 0 = straight ahead, + = left (counter-clockwise seen from above, like wz). The body
+    glides there at camera_pan.max_rate_dps * speed at most and clamps to its own limits. It moves
+    no leg; Stop and E-stop freeze it where it is.
+    """
+
+    type: Literal["look"] = "look"
+    pan_deg: float = Field(0.0, ge=-90.0, le=90.0)
+    speed: float = Field(0.5, gt=0.0, le=1.0)
+
+
 # Expressive moves run on the body from a fixed list: no source can upload a trajectory. The body
 # validates every one before it starts (support, reach, servo limits, joint speed) and refuses it
 # whole rather than clipping it. Stop and E-stop end any move within one control tick.
@@ -185,9 +198,28 @@ class Reach(_Cmd):
     speed: float = Field(0.5, gt=0.0, le=1.0)
 
 
+class MovesSwitch(_Cmd):
+    """Gateway only: who may start expressive moves now. None leaves that source as it is.
+    Turning a source on never goes past its policy (allow_moves in SG_POLICY_FILE)."""
+
+    type: Literal["moves_switch"] = "moves_switch"
+    voice: bool | None = None
+    remote: bool | None = None
+
+
+class SpeedLimit(_Cmd):
+    """Gateway only: the remote source's (the app's) top speed and turn rate from now on. It can
+    never go above the remote policy's max_speed_mps and max_wz_rps (the ceiling in
+    SG_POLICY_FILE), and the body still clamps with its own limits."""
+
+    type: Literal["speed_limit"] = "speed_limit"
+    max_speed_mps: float = Field(gt=0.0, le=0.5)
+    max_wz_rps: float = Field(gt=0.0, le=2.0)
+
+
 Command = Annotated[
     Move | Stop | Posture | BodyPose | Snapshot | Heartbeat | EStop | EStopRelease | ConfirmRequest
-    | Perform | Reach,
+    | Perform | Reach | Look | MovesSwitch | SpeedLimit,
     Field(discriminator="type"),
 ]
 _COMMAND: TypeAdapter[Command] = TypeAdapter(Command)
@@ -235,6 +267,7 @@ class RobotState(BaseModel):
     loop_late_hist: list[int] = Field(default_factory=list)  # since boot: <1,<2,<5,<10,<20,>=20 ms
     rt_ok: bool = False  # SCHED_FIFO and locked memory are really active
     perform: str | None = None  # the move running now (mode stays "standing" while it runs)
+    camera_pan_deg: float | None = None  # front camera pan (+ left); None: no pan servo, or limp
 
 
 EventKind = Literal[
@@ -286,6 +319,10 @@ class GatewayStatus(BaseModel):
     estop: bool | None = None
     sources: dict[str, SourceStatus] = Field(default_factory=dict)
     holdoff_s: dict[str, float] = Field(default_factory=dict)
+    moves: dict[str, bool] = Field(default_factory=dict)
+    # The app's speed limit now and its ceiling: max_speed_mps, max_wz_rps, ceiling_speed_mps,
+    # ceiling_wz_rps. Empty from a gateway older than 2026-11-20.
+    remote_limits: dict[str, float] = Field(default_factory=dict)
     pending_challenges: int = 0
     counters: dict[str, int] = Field(default_factory=dict)
 

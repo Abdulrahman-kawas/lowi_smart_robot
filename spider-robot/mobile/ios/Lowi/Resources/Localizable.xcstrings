@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ cm/s": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ cm/秒"
+          }
+        }
+      }
+    },
     "%@ is driving": {
       "localizations": {
         "ja": {
@@ -47,12 +57,42 @@
         }
       }
     },
+    "%@ °/s": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ °/秒"
+          }
+        }
+      }
+    },
     "%@: left stick drives, right stick turns, B stops, Y E-stops": {
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "%@：左スティックで移動、右スティックで旋回、B で停止、Y で非常停止"
+          }
+        }
+      }
+    },
+    "%lld degrees left": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左に %lld 度"
+          }
+        }
+      }
+    },
+    "%lld degrees right": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右に %lld 度"
           }
         }
       }
@@ -94,6 +134,13 @@
             "state": "translated",
             "value": "2. このデバイスをペアリング"
           }
+        }
+      }
+    },
+    "Allow both": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "両方を許可" }
         }
       }
     },
@@ -157,6 +204,26 @@
         }
       }
     },
+    "Camera direction": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラの向き"
+          }
+        }
+      }
+    },
+    "Camera direction unknown": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラの向きは不明です"
+          }
+        }
+      }
+    },
     "Camera frame": {
       "localizations": {
         "ja": {
@@ -183,6 +250,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "キャンセル"
+          }
+        }
+      }
+    },
+    "Center": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中央"
           }
         }
       }
@@ -647,6 +724,22 @@
         }
       }
     },
+    "Most the robot allows: %@, %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Most the robot allows: %1$@, %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ロボットの上限: %1$@・%2$@"
+          }
+        }
+      }
+    },
     "Motion limited: %@": {
       "localizations": {
         "ja": {
@@ -1013,6 +1106,16 @@
         }
       }
     },
+    "Slow": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遅い"
+          }
+        }
+      }
+    },
     "STOP": {
       "localizations": {
         "ja": {
@@ -1030,6 +1133,361 @@
             "state": "translated",
             "value": "話した内容を送信"
           }
+        }
+      }
+    },
+    "Alert": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "警戒" }
+        }
+      }
+    },
+    "Attack stance": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "攻撃の構え" }
+        }
+      }
+    },
+    "Block both": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "両方をブロック" }
+        }
+      }
+    },
+    "Body wave": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "ボディウェーブ" }
+        }
+      }
+    },
+    "Bow": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "おじぎ" }
+        }
+      }
+    },
+    "Celebrate": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "お祝い" }
+        }
+      }
+    },
+    "Crab sway": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "カニのゆらゆら" }
+        }
+      }
+    },
+    "Dance": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "ダンス" }
+        }
+      }
+    },
+    "Dance and fun": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "ダンスと楽しい動き" }
+        }
+      }
+    },
+    "Defense stance": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "防御の構え" }
+        }
+      }
+    },
+    "Double hi": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "両手であいさつ" }
+        }
+      }
+    },
+    "Fast": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "速い" }
+        }
+      }
+    },
+    "Greetings": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "あいさつ" }
+        }
+      }
+    },
+    "Hi": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "やあ" }
+        }
+      }
+    },
+    "Leading leg": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "前に出す脚" }
+        }
+      }
+    },
+    "Left": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "左" }
+        }
+      }
+    },
+    "Leg ripple": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "脚のウェーブ" }
+        }
+      }
+    },
+    "Limited": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "制限" }
+        }
+      }
+    },
+    "Lively": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "活発" }
+        }
+      }
+    },
+    "Move done": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "動きが完了" }
+        }
+      }
+    },
+    "Move not available": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "この動きは利用できません" }
+        }
+      }
+    },
+    "Move refused": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "動きを拒否" }
+        }
+      }
+    },
+    "Move started": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "動きを開始" }
+        }
+      }
+    },
+    "Moves": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "動き" }
+        }
+      }
+    },
+    "Moves from the app are switched off": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "アプリからの動きはオフです" }
+        }
+      }
+    },
+    "No move yet": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "まだ動きはありません" }
+        }
+      }
+    },
+    "Normal": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "普通" }
+        }
+      }
+    },
+    "Open every move": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "すべての動きを開く" }
+        }
+      }
+    },
+    "Open moves settings": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "動きの設定を開きます" }
+        }
+      }
+    },
+    "Right": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "右" }
+        }
+      }
+    },
+    "Running": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "実行中" }
+        }
+      }
+    },
+    "Set moves.offer_hand_ahead_m to 0.06 in robot.yaml": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "robot.yaml の moves.offer_hand_ahead_m を 0.06 に設定してください" }
+        }
+      }
+    },
+    "Shake hands": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "握手" }
+        }
+      }
+    },
+    "Shimmy": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "シミー" }
+        }
+      }
+    },
+    "Sleep": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "おやすみ" }
+        }
+      }
+    },
+    "Speed: Fast": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "速度: 速い" }
+        }
+      }
+    },
+    "Speed: Lively": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "速度: 活発" }
+        }
+      }
+    },
+    "Speed: Normal": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "速度: 普通" }
+        }
+      }
+    },
+    "Stances": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "構え" }
+        }
+      }
+    },
+    "Stand the robot up first": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "まずロボットを立たせてください" }
+        }
+      }
+    },
+    "Stopped mid-move: press Stand to return to the stand pose": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "動きの途中で停止しました。Stand を押して立ち姿勢に戻してください" }
+        }
+      }
+    },
+    "Stomp": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "足踏み" }
+        }
+      }
+    },
+    "Stretch": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "ストレッチ" }
+        }
+      }
+    },
+    "Top speed from the app": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリからの最高速度"
+          }
+        }
+      }
+    },
+    "Top turning speed": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最高旋回速度"
+          }
+        }
+      }
+    },
+    "Turning": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋回"
+          }
+        }
+      }
+    },
+    "Wait for the current move": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "今の動きが終わるまで待ってください" }
+        }
+      }
+    },
+    "Walking": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歩行"
+          }
+        }
+      }
+    },
+    "Wave": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "手を振る" }
         }
       }
     },
@@ -1263,6 +1721,16 @@
         }
       }
     },
+    "The camera is turned %@: this photo does not show straight ahead.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラは%@を向いています。この写真は正面を写していません。"
+          }
+        }
+      }
+    },
     "The microphone could not start.": {
       "localizations": {
         "ja": {
@@ -1360,6 +1828,13 @@
             "state": "translated",
             "value": "この確認は 1 回だけ有効で、あと %lld 秒で期限が切れます。"
           }
+        }
+      }
+    },
+    "This app can start moves": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "このアプリで動きを開始できる" }
         }
       }
     },
@@ -1749,6 +2224,16 @@
         }
       }
     },
+    "straight ahead": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正面"
+          }
+        }
+      }
+    },
     "unknown": {
       "localizations": {
         "ja": {
@@ -1756,6 +2241,13 @@
             "state": "translated",
             "value": "不明"
           }
+        }
+      }
+    },
+    "Voice can start moves": {
+      "localizations": {
+        "ja": {
+          "stringUnit": { "state": "translated", "value": "音声で動きを開始できる" }
         }
       }
     },

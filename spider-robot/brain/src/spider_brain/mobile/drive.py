@@ -47,8 +47,21 @@ class Caps:
     move_s: float
 
 
-def scale(x: object, y: object, turn: object, caps: Caps) -> tuple[float, float, float]:
-    """App inputs (-1..1; x forward, y left, turn + = left) to velocities within the caps."""
+def _fraction(value: object, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) \
+            or not 0.0 < value <= 1.0:
+        raise ValueError(f"{name} must be a number greater than 0 and at most 1")
+    return float(value)
+
+
+def scale(x: object, y: object, turn: object, caps: Caps, speed: object = 1.0,
+          turn_speed: object = 1.0) -> tuple[float, float, float]:
+    """App inputs (-1..1; x forward, y left, turn + = left) to velocities within the caps.
+
+    speed and turn_speed are the app's walking and turning setting (Slow, Normal, Fast), each a
+    fraction of the caps: 0 < f <= 1. An older app sends neither, which is 1.
+    """
+    walk, spin = _fraction(speed, "speed"), _fraction(turn_speed, "turn_speed")
     values = []
     for v in (x, y, turn):
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
@@ -59,12 +72,13 @@ def scale(x: object, y: object, turn: object, caps: Caps) -> tuple[float, float,
     r = math.hypot(x, y)
     if r > 1.0:
         x, y = x / r, y / r
-    vx, vy = x * caps.max_speed_mps, y * caps.max_speed_mps
-    speed = math.hypot(vx, vy)
-    if speed > caps.max_speed_mps:  # float rounding: stay under the cap, or the gateway clamps
-        k = caps.max_speed_mps / speed * (1.0 - 1e-9)
+    top = caps.max_speed_mps * walk
+    vx, vy = x * top, y * top
+    norm = math.hypot(vx, vy)
+    if norm > top:  # float rounding: stay under the cap, or the gateway clamps
+        k = top / norm * (1.0 - 1e-9)
         vx, vy = vx * k, vy * k
-    return vx, vy, turn * caps.max_wz_rps
+    return vx, vy, turn * caps.max_wz_rps * spin
 
 
 @dataclass
@@ -105,14 +119,15 @@ class DriveControl:
         return self.clock() - self._last_motion.get(device, -math.inf) < MOTION_TAIL_S
 
     # ------------------------------------------------------------------ from the app
-    def drive(self, device: str, x: object, y: object, turn: object, hold_id: object) -> None:
+    def drive(self, device: str, x: object, y: object, turn: object, hold_id: object,
+              speed: object = 1.0, turn_speed: object = 1.0) -> None:
         if not isinstance(hold_id, str) or not 0 < len(hold_id) <= MAX_HOLD_ID:
             self.notify(device, "drive_refused", "a drive needs a hold_id", True, None)
             return
         if hold_id in self._ended[device]:
             return  # this press already ended and was reported once: lift and press again
         try:
-            want = scale(x, y, turn, self.caps)
+            want = scale(x, y, turn, self.caps, speed, turn_speed)
         except ValueError as exc:
             self._refuse(device, hold_id, str(exc))
             return

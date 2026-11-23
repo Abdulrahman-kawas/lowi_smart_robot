@@ -12,6 +12,7 @@ struct ConfirmPrompt: Identifiable, Equatable {
     let id: String  // the challenge id
     let action: String  // estop_release or wake_from_limp
     let image: UIImage?
+    let cameraPanDeg: Double?  // where the camera pointed for this photo
     let frameAgeMs: Double  // when it reached this phone
     let receivedAt: TimeInterval
     let expiresAt: TimeInterval
@@ -30,12 +31,18 @@ enum ConnectionCheck: Equatable {
 @Observable
 final class AppModel {
     static let maxFrameAge: TimeInterval = 2.0
+    static let lookGap: TimeInterval = 0.25
 
     // MARK: settings, kept between launches
     var addressText: String { didSet { defaults.set(addressText, forKey: Keys.address) } }
     var deviceName: String { didSet { defaults.set(deviceName, forKey: Keys.device) } }
     var hapticsOn: Bool { didSet { defaults.set(hapticsOn, forKey: Keys.haptics) } }
     var speakAnswers: Bool { didSet { defaults.set(speakAnswers, forKey: Keys.speak) } }
+    var moveSpeed: Double { didSet { defaults.set(moveSpeed, forKey: Keys.moveSpeed) } }
+    /// Walking and Turning in Settings: Slow, Normal or Fast, a fraction of the top speed.
+    var walkSpeed: Double { didSet { defaults.set(walkSpeed, forKey: Keys.walkSpeed) } }
+    var turnSpeed: Double { didSet { defaults.set(turnSpeed, forKey: Keys.turnSpeed) } }
+    static let speedSteps = [0.4, 0.7, 1.0]
     private(set) var token: String?
 
     // MARK: live state
@@ -50,6 +57,8 @@ final class AppModel {
     private(set) var appRttMs: Double?
     private(set) var robotId: String?
     var prompt: ConfirmPrompt?
+    /// The top speed the owner just set, shown until the gateway reports it (at most 3 s).
+    private(set) var limitRequest: (speedMps: Double, wzRps: Double, at: TimeInterval)?
     var notice: String? {
         didSet {
             guard let notice else { return }
@@ -82,6 +91,8 @@ final class AppModel {
     @ObservationIgnored private var keyAxes = DriveMapping.KeyAxes.none
     @ObservationIgnored private var padStick: CGVector?
     @ObservationIgnored private var padTurn: CGFloat?
+    @ObservationIgnored private var pendingLook: Double?
+    @ObservationIgnored private var lastLookAt: TimeInterval = 0
     @ObservationIgnored private var hardware: HardwareInput?
     @ObservationIgnored private let socket = LiveSocket()
     @ObservationIgnored private var ticker: Task<Void, Never>?
@@ -95,6 +106,9 @@ final class AppModel {
         static let device = "deviceName"
         static let haptics = "haptics"
         static let speak = "speakAnswers"
+        static let moveSpeed = "moveSpeed"
+        static let walkSpeed = "walkSpeed"
+        static let turnSpeed = "turnSpeed"
         static let token = "deviceToken"
     }
 
@@ -110,6 +124,10 @@ final class AppModel {
         deviceName = defaults.string(forKey: Keys.device) ?? UIDevice.current.name
         hapticsOn = defaults.object(forKey: Keys.haptics) as? Bool ?? true
         speakAnswers = defaults.object(forKey: Keys.speak) as? Bool ?? true
+        moveSpeed = defaults.object(forKey: Keys.moveSpeed) as? Double ?? 0.5
+        // Fast (all of the top speed) by default: driving feels as it did before the setting.
+        walkSpeed = Self.speedStep(defaults.object(forKey: Keys.walkSpeed) as? Double)
+        turnSpeed = Self.speedStep(defaults.object(forKey: Keys.turnSpeed) as? Double)
         token = Keychain.read(Keys.token)
         socket.onStatus = { [weak self] status in self?.linkChanged(status) }
         socket.onMessage = { [weak self] message in self?.handle(message) }
@@ -135,6 +153,46 @@ final class AppModel {
     var address: BrainAddress? { BrainAddress(addressText) }
     var api: APIClient? { address.map { APIClient(address: $0, token: token) } }
     var isLive: Bool { link == .live }
+    var moveSpeedLabel: LocalizedStringKey {
+        switch moveSpeed {
+        case 0.75: "Lively"
+        case 1.0: "Fast"
+        default: "Normal"
+        }
+    }
+    var moveSpeedText: LocalizedStringKey {
+        switch moveSpeed {
+        case 0.75: "Speed: Lively"
+        case 1.0: "Speed: Fast"
+        default: "Speed: Normal"
+        }
+    }
+    var movesState: MovesState { brain?.gateway.moves ?? MovesState() }
+
+    static func speedStep(_ stored: Double?) -> Double {
+        stored.flatMap { value in speedSteps.first { abs($0 - value) < 0.001 } } ?? 1.0
+    }
+
+    /// The app's top speed (m/s) and turn rate (rad/s) at the gateway, or what the owner just
+    /// set until the gateway reports it. Nil while the gateway reports none.
+    var topSpeed: (speedMps: Double, wzRps: Double)? {
+        if let request = limitRequest, clock() - request.at < 3 {
+            return (request.speedMps, request.wzRps)
+        }
+        guard let limits = brain?.gateway.remoteLimits else { return nil }
+        return (limits.maxSpeedMps, limits.maxWzRps)
+    }
+
+    /// Sends the app's new top speed; the gateway refuses anything above its ceiling.
+    func setTopSpeed(speedMps: Double? = nil, wzRps: Double? = nil) {
+        guard let current = topSpeed else { return }
+        let speed = speedMps ?? current.speedMps, turn = wzRps ?? current.wzRps
+        guard socket.send(.speedLimit(maxSpeedMps: speed, maxWzRps: turn)) else {
+            notice = String(localized: "Not connected to the brain.")
+            return
+        }
+        limitRequest = (speed, turn, clock())
+    }
 
     // MARK: derived
 
@@ -195,13 +253,14 @@ final class AppModel {
             : DriveMapping.input(stick: padStick, turn: padTurn)
         perform(deadMan.update(held: touch || keyAxes.isHeld || pad, input: input,
                                block: driveBlock(at: now), now: now))
+        flushLook(force: false)
     }
 
     private func perform(_ commands: [DriveCommand]) {
         for command in commands {
             switch command {
             case .drive(let input, let holdId):
-                socket.send(.drive(input, holdId: holdId))
+                socket.send(.drive(input, holdId: holdId, speed: walkSpeed, turnSpeed: turnSpeed))
             case .stop:
                 if !socket.send(.stop) { Task { try? await api?.stop() } }
             }
@@ -238,6 +297,41 @@ final class AppModel {
         if !socket.send(.posture(posture)) {
             notice = String(localized: "Not connected to the brain.")
         }
+    }
+
+    func startMove(_ name: String, leg: String?) {
+        if !socket.send(.perform(name: name, speed: moveSpeed, leg: leg)) {
+            notice = String(localized: "Not connected to the brain.")
+        }
+    }
+
+    func setMoves(voice: Bool? = nil, remote: Bool? = nil) {
+        if !socket.send(.movesSwitch(voice: voice, remote: remote)) {
+            notice = String(localized: "Not connected to the brain.")
+        }
+    }
+
+    /// Dragging the camera slider coalesces into one Look every 0.25 s; release always sends.
+    func look(_ panDeg: Double, final: Bool = false) {
+        pendingLook = panDeg
+        if final {
+            flushLook(force: true)
+        } else {
+            tick()
+        }
+    }
+
+    private func flushLook(force: Bool) {
+        guard let pan = pendingLook else { return }
+        let now = clock()
+        guard force || now - lastLookAt >= Self.lookGap else { return }
+        guard socket.send(.look(panDeg: pan, speed: 0.5)) else {
+            pendingLook = nil
+            notice = String(localized: "Not connected to the brain.")
+            return
+        }
+        pendingLook = nil
+        lastLookAt = now
     }
 
     func takePhoto(question: String?) async throws -> PhotoResult {
@@ -281,6 +375,7 @@ final class AppModel {
             prompt = ConfirmPrompt(
                 id: challenge.challengeId, action: challenge.action,
                 image: challenge.jpeg.flatMap(UIImage.init(data:)),
+                cameraPanDeg: brain?.robot?.cameraPanDeg,
                 frameAgeMs: challenge.frameAgeMs, receivedAt: now, expiresAt: now + challenge.ttlS)
         } catch {
             refuse(error.localizedDescription)
@@ -377,6 +472,11 @@ final class AppModel {
             robotId = hello.robotId
         case .state(let state):
             brain = state
+            if let request = limitRequest, let limits = state.gateway.remoteLimits,
+               abs(limits.maxSpeedMps - request.speedMps) < 1e-9,
+               abs(limits.maxWzRps - request.wzRps) < 1e-9 {
+                limitRequest = nil  // the gateway has it
+            }
         case .lidar(let scan):
             lidar = scan
         case .event(let event):
@@ -491,6 +591,10 @@ extension BrainEvent {
         case "preempted": String(localized: "Taken over")
         case "drive_refused": String(localized: "Drive refused")
         case "drive_ended": String(localized: "Drive ended")
+        case "perform_started": String(localized: "Move started")
+        case "perform_done": String(localized: "Move done")
+        case "perform_rejected": String(localized: "Move refused")
+        case "clamped": String(localized: "Limited")
         case "video_slowed", "video_failed", "video_ok": String(localized: "Live view")
         default: nil
         }

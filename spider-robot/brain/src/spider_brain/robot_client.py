@@ -31,11 +31,15 @@ from spider_common.protocol import (
     EStopRelease,
     Heartbeat,
     LidarSummary,
+    Look,
     Move,
+    MovesSwitch,
+    Perform,
     Posture,
     RobotEvent,
     RobotState,
     Snapshot,
+    SpeedLimit,
     Stop,
     Topics,
 )
@@ -239,6 +243,23 @@ class RobotClient:
         """Raw velocity command (teleop). The body clamps it and stops after duration_s."""
         return self._send(Move(vx=vx, vy=vy, wz=wz, duration_s=duration_s, gait=gait), qos=0,
                           human=human)
+
+    def look(self, pan_deg: float, speed: float = 0.5, human: bool = False) -> int:
+        """Camera pan (deg, + left). Fire and forget: the ack or refusal comes as an event."""
+        return self._send(Look(pan_deg=pan_deg, speed=speed), human=human)
+
+    def perform(self, name: str, speed: float = 0.5, leg: str | None = None,
+                human: bool = False) -> int:
+        """One built-in expressive move. The body's own checks still apply."""
+        return self._send(Perform(name=name, speed=speed, leg=leg), human=human)
+
+    def moves_switch(self, voice: bool | None, remote: bool | None) -> int:
+        return self._send(MovesSwitch(voice=voice, remote=remote), human=True)
+
+    def speed_limit(self, max_speed_mps: float, max_wz_rps: float) -> int:
+        """The app's top speed and turn rate. The gateway keeps it, up to its remote ceiling."""
+        return self._send(SpeedLimit(max_speed_mps=max_speed_mps, max_wz_rps=max_wz_rps),
+                          human=True)
 
     def estop(self) -> int:
         return self._send(EStop(), human=True)

@@ -148,11 +148,13 @@ class Settings(BaseSettings):
 
     # Mobile app API: /v1 on the dashboard's port, published with `tailscale serve` -------------
     # Everything the app does goes out as the gateway's "remote" source, so the gateway's remote
-    # caps and the body's limits apply. The values below can only be lower than those caps.
+    # caps and the body's limits apply. The app's own top speed lives in the gateway (SpeedLimit,
+    # set from Settings) and is the one that counts; these two only cap it on the brain's side, at
+    # most the body's gait limits.
     mobile: bool = False
     mobile_data_dir: str = "data/mobile"  # paired devices (token hashes) and the pairing code
-    mobile_max_speed_mps: float = Field(0.05, gt=0.0, le=0.05)
-    mobile_max_wz_rps: float = Field(0.3, gt=0.0, le=0.3)
+    mobile_max_speed_mps: float = Field(0.12, gt=0.0, le=0.12)
+    mobile_max_wz_rps: float = Field(0.6, gt=0.0, le=0.6)
     mobile_move_s: float = Field(1.0, gt=0.0, le=1.0)
     mobile_deadman_s: float = Field(0.6, gt=0.0, le=0.6)  # no drive renewal for this long: stop
     mobile_max_frame_age_s: float = Field(2.0, gt=0.0, le=2.0)  # no driving on an older frame
