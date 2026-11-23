@@ -8,6 +8,10 @@ Python turns each cloud into a small polar "sector map": for each 10 deg sector 
 robot, the distance to the nearest obstacle between z_min and z_max above the ground. That map
 drives the on-board safety reflex and is the only LiDAR data sent to the cloud (raw clouds are
 far too big for MQTT).
+
+The front camera sits in front of the L2 and above its centre, so some beams hit it. Along those
+beams the L2 sees nothing else, only the camera and ghost returns off its edges, so
+lidar.camera_window drops them near the L2. Beams below and beside it are untouched.
 """
 
 from __future__ import annotations
@@ -46,7 +50,8 @@ class LidarProcessor:
     """Point cloud -> 36-sector map of the nearest obstacle (distance from the LiDAR centre).
 
     Points inside the robot's own footprint box (its legs) are ignored. Anything outside the
-    box, however close, is kept: the safety layer measures from the box edge.
+    box, however close, is kept: the safety layer measures from the box edge. The one other
+    exception is the camera window (module docstring).
     """
 
     def __init__(self, cfg: LidarCfg, footprint: tuple[float, float] = (0.24, 0.27)) -> None:
@@ -76,6 +81,15 @@ class LidarProcessor:
             & ~inside_robot
             & (r <= c.max_range_m)
         )
+        w = c.camera_window
+        if w is not None:  # beams that hit the camera, near the L2
+            bearing = np.degrees(np.arctan2(y, x))
+            elevation = np.degrees(np.arctan2(z0, r))
+            mask &= ~(
+                (bearing >= w.bearing_min_deg) & (bearing <= w.bearing_max_deg)
+                & (elevation >= w.elevation_min_deg) & (elevation <= w.elevation_max_deg)
+                & (r <= w.max_range_m)
+            )
         sectors = np.full(c.sectors, c.max_range_m, dtype=np.float64)
         if mask.any():
             ang = np.degrees(np.arctan2(y[mask], x[mask]))
@@ -102,6 +116,8 @@ class LidarFeed:
     ) -> None:
         self.cfg = cfg
         self.proc = LidarProcessor(cfg, footprint)
+        yaw = math.radians(cfg.mount_yaw_deg)
+        self._c, self._s = math.cos(yaw), math.sin(yaw)
         self.imu_timeout_s = imu_timeout_s
         self._summary: LidarSummary | None = None
         self._rx: float | None = None
@@ -155,6 +171,9 @@ class LidarFeed:
             ax, ay, az = float(d[7]), float(d[8]), float(d[9])
             if self.cfg.imu_upside_down:  # rotated 180 deg about x: y and z flip
                 ay, az = -ay, -az
+            # into the robot's frame like the points, so a turned L2 still reads nose down as
+            # nose down (at 180 deg both signs flipped; at 90 roll and pitch swapped)
+            ax, ay = self._c * ax - self._s * ay, self._s * ax + self._c * ay
             roll = math.degrees(math.atan2(ay, az))
             pitch = math.degrees(math.atan2(-ax, math.hypot(ay, az)))
             a = 0.2  # low-pass: footsteps shake the IMU
