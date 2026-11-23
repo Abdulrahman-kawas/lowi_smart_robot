@@ -78,14 +78,15 @@ class PCA9685:
 
 class ServoBank(Protocol):
     def write(self, servo_deg: dict[str, float]) -> None:
-        """joint id ("LF.coxa") -> servo command in degrees (0..180, already calibrated)."""
+        """joint id ("LF.coxa") -> servo command in logical degrees (already calibrated)."""
 
     def relax(self) -> None:
         """Stop sending pulses: servos go limp (no holding torque)."""
 
 
-def clamp_servo(cfg: ServoCfg, deg: float) -> tuple[float, bool]:
-    clamped = max(cfg.min_deg, min(cfg.max_deg, deg))
+def clamp_servo(cfg: BodyConfig, servo: ServoCfg, deg: float) -> tuple[float, bool]:
+    lo, hi = cfg.limits_of(servo)
+    clamped = max(lo, min(hi, deg))
     return clamped, clamped != deg
 
 
@@ -104,8 +105,8 @@ class PcaServoBank:
             f"{leg.name}.{j}": getattr(leg, j) for leg in cfg.legs for j in JOINTS
         }
 
-    def _pulse(self, deg: float) -> float:
-        return self.cfg.pulse.pulse_us(deg)
+    def _pulse(self, s: ServoCfg, deg: float) -> float:
+        return self.cfg.pulse_of(s).pulse_us(deg)
 
     def write(self, servo_deg: dict[str, float]) -> None:
         """Only channels whose 12-bit value changed are sent; at most one transfer per board.
@@ -116,18 +117,25 @@ class PcaServoBank:
         changes: dict[int, dict[int, int]] = {}
         for joint_id, deg in servo_deg.items():
             s = self.servos[joint_id]
-            deg, _ = clamp_servo(s, deg)
+            deg, _ = clamp_servo(self.cfg, s, deg)
             board = self.boards[s.board]
-            t = board.to_ticks(self._pulse(deg))
+            t = board.to_ticks(self._pulse(s, deg))
             if board.ticks[s.channel] != t:
                 changes.setdefault(s.board, {})[s.channel] = t
         for b, ch in changes.items():
             self.boards[b].write_channels(ch)
 
-    def write_raw(self, joint_id: str, deg: float) -> None:
-        """Calibration only: no trims, no direction, only the 0..180 clamp."""
+    def write_raw(self, joint_id: str, deg: float, t_ms: int | None = None) -> None:
+        """Calibration only: no trims, no direction, only the 0..180 clamp. The PCA9685 has no
+        timed move, so t_ms is ignored and the servo goes at its own speed."""
         s = self.servos[joint_id]
-        self.boards[s.board].set_pulse_us(s.channel, self._pulse(max(0.0, min(180.0, deg))))
+        self.boards[s.board].set_pulse_us(s.channel, self._pulse(s, max(0.0, min(180.0, deg))))
+
+    def relax_joints(self, joint_ids: list[str]) -> None:
+        """Cut the pulses of these joints only (one leg during calibration)."""
+        for jid in joint_ids:
+            s = self.servos[jid]
+            self.boards[s.board].off(s.channel)
 
     def relax(self) -> None:
         for board in self.boards:
@@ -151,8 +159,12 @@ class FakeServoBank:
         self.relaxed = False
         self.writes += 1
 
-    def write_raw(self, joint_id: str, deg: float) -> None:
+    def write_raw(self, joint_id: str, deg: float, t_ms: int | None = None) -> None:
         self.write({joint_id: deg})
+
+    def relax_joints(self, joint_ids: list[str]) -> None:
+        for jid in joint_ids:
+            self.last.pop(jid, None)
 
     def relax(self) -> None:
         self.relaxed = True
@@ -186,14 +198,14 @@ class SscServoBank:
         self._pending: dict[int, int] = {}
         self._last_send = -1e9
 
-    def _us(self, deg: float) -> int:
-        return int(round(self.cfg.pulse.pulse_us(deg)))
+    def _us(self, s: ServoCfg, deg: float) -> int:
+        return int(round(self.cfg.pulse_of(s).pulse_us(deg)))
 
     def write(self, servo_deg: dict[str, float]) -> None:
         for joint_id, deg in servo_deg.items():
             s = self.servos[joint_id]
-            deg, _ = clamp_servo(s, deg)
-            us = self._us(deg)
+            deg, _ = clamp_servo(self.cfg, s, deg)
+            us = self._us(s, deg)
             if self._sent.get(s.channel) != us:
                 self._pending[s.channel] = us
             else:
@@ -213,10 +225,20 @@ class SscServoBank:
         self._sent.update(moves)
         moves.clear()
 
-    def write_raw(self, joint_id: str, deg: float) -> None:
-        """Calibration only: no trims, no direction, only the 0..180 clamp; sent at once."""
+    def write_raw(self, joint_id: str, deg: float, t_ms: int | None = None) -> None:
+        """Calibration only: no trims, no direction, only the 0..180 clamp. Sent at once; with
+        t_ms the board glides there over that time. The first move after the board powers up
+        can still go at full speed: the board does not know where the servo is yet."""
         s = self.servos[joint_id]
-        self._send({s.channel: self._us(max(0.0, min(180.0, deg)))}, None)
+        self._send({s.channel: self._us(s, max(0.0, min(180.0, deg)))}, t_ms or None)
+
+    def relax_joints(self, joint_ids: list[str]) -> None:
+        """Cut the pulses of these joints only (one leg during calibration)."""
+        channels = sorted({self.servos[jid].channel for jid in joint_ids})
+        self.ser.write(("".join(f"#{ch}P0" for ch in channels) + "\r").encode("ascii"))
+        for ch in channels:
+            self._sent.pop(ch, None)
+            self._pending.pop(ch, None)
 
     def relax(self) -> None:
         """P0 stops the pulses on a channel (servo goes limp). Verify on the bench (S13)."""

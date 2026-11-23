@@ -190,7 +190,7 @@ def test_servo_bank_writes_only_changes_in_one_transfer_per_board(cfg):
     data["servo_driver"] = "pca9685"
     for leg in data["legs"]:
         for j in ("coxa", "femur", "tibia"):
-            if leg[j]["channel"] >= 16:  # right legs: second board, channels 0-15
+            if leg[j]["channel"] >= 16:  # channels 16-31: second board, channels 0-15
                 leg[j]["board"], leg[j]["channel"] = 1, leg[j]["channel"] - 16
     cfg = type(cfg).model_validate(data)
     bus = FakeSMBus()
@@ -200,15 +200,20 @@ def test_servo_bank_writes_only_changes_in_one_transfer_per_board(cfg):
     bus.transfers.clear()
     bank.write(angles)
     assert len(bus.transfers) == 2  # one per board, not 18
-    addr, reg, data = bus.transfers[0]
-    assert reg == 0x06 and len(data) == 11 * 4  # channels 0..10
+    used: dict[int, list[int]] = {}  # board -> its channels, from the config (any wiring)
+    for s in bank.servos.values():
+        used.setdefault(s.board, []).append(s.channel)
+    for addr, reg, data in bus.transfers:  # one span per board, lowest to highest channel used
+        chans = used[cfg.pca.addresses.index(addr)]
+        assert reg == 0x06 + 4 * min(chans) and len(data) == 4 * (max(chans) - min(chans) + 1)
     bus.transfers.clear()
     bank.write(angles)  # nothing changed -> no I2C traffic at all
     assert bus.transfers == []
     angles["RM.femur"] = 100.0
     bank.write(angles)
-    assert len(bus.transfers) == 1 and bus.transfers[0][0] == 0x41
-    assert bus.transfers[0][1] == 0x06 + 4 * 5 and len(bus.transfers[0][2]) == 4
+    femur = bank.servos["RM.femur"]
+    assert len(bus.transfers) == 1 and bus.transfers[0][0] == cfg.pca.addresses[femur.board]
+    assert bus.transfers[0][1] == 0x06 + 4 * femur.channel and len(bus.transfers[0][2]) == 4
 
 
 class FakeSerial:
@@ -237,8 +242,8 @@ def test_ssc32u_group_moves_changed_only_and_rate_limited(cfg):
               for j in ("coxa", "femur", "tibia")}
     bank.write(angles)
     cmd = ser.written[-1].decode()
-    assert cmd.startswith("#0P1500#1P1500") and cmd.endswith("T40\r")  # 25 Hz -> T40
-    assert cmd.count("#") == 18 and "#26P1500" in cmd
+    channels = sorted(s.channel for s in bank.servos.values())
+    assert cmd == "".join(f"#{ch}P1500" for ch in channels) + "T40\r"  # 25 Hz -> T40, all 18
     ser.written.clear()
     t[0] = 0.02
     bank.write(angles)  # nothing changed -> nothing sent
@@ -249,9 +254,9 @@ def test_ssc32u_group_moves_changed_only_and_rate_limited(cfg):
     assert ser.written == []
     t[0] = 0.04
     bank.write(angles)
-    assert ser.written == [b"#21P1700T40\r"]
+    assert ser.written == [f"#{bank.servos['RM.femur'].channel}P1700T40\r".encode()]
     bank.relax()
-    assert ser.written[-1].startswith(b"#0P0#1P0") and ser.written[-1].count(b"P0") == 18
+    assert ser.written[-1] == ("".join(f"#{ch}P0" for ch in channels) + "\r").encode()
     assert bank.version() == "SSC32-V2.50USB"
 
 
@@ -270,3 +275,38 @@ def test_ssc_rejects_9600_baud(cfg):
     data["ssc"]["baud"] = 9600
     with pytest.raises(ValidationError):
         type(cfg).model_validate(data)
+
+
+# The owner wired the servos on 2026-11-19 and keeps this layout:
+# coxa (at the body), femur, tibia (tip).
+WIRED = {"LF": (29, 30, 31), "LM": (22, 21, 20), "LR": (19, 18, 16),
+         "RF": (13, 14, 15), "RM": (5, 6, 7), "RR": (1, 2, 3)}
+
+
+@pytest.mark.parametrize("name", ["robot.example.yaml", "robot.sim.yaml"])
+def test_the_configs_carry_the_owners_wiring(name):
+    from pathlib import Path
+
+    from spider_body.config import load_config
+
+    path = Path(__file__).resolve().parents[1] / "config" / name
+    cfg = load_config(path, calibration="/nonexistent")
+    wired = {leg.name: (leg.coxa.channel, leg.femur.channel, leg.tibia.channel) for leg in cfg.legs}
+    assert wired == WIRED
+    used = {getattr(leg, j).channel for leg in cfg.legs for j in ("coxa", "femur", "tibia")}
+    assert 27 not in used  # the camera's servo
+
+
+def test_the_one_180_degree_servo_gets_its_own_pulse_range(cfg):
+    from spider_body.hw.servos import SscServoBank
+
+    lr_tibia = next(leg.tibia for leg in cfg.legs if leg.name == "LR")
+    assert cfg.pulse_of(lr_tibia).range_deg == 180 and cfg.pulse.range_deg == 270
+    ser = FakeSerial()
+    bank = SscServoBank(cfg, port=ser, clock=lambda: 0.0)
+    angles = {f"{leg}.{j}": 90.0 for leg in WIRED for j in ("coxa", "femur", "tibia")}
+    angles["LR.tibia"] = angles["LF.tibia"] = 117.0  # +27 logical deg on each
+    bank.write(angles)
+    cmd = ser.written[-1].decode()
+    assert "#16P1800" in cmd  # 180-degree servo: +27 * 2000/180 = +300 us
+    assert "#31P1700" in cmd  # 270-degree servo: +27 * 2000/270 = +200 us

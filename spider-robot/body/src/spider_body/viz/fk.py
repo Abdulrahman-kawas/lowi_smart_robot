@@ -3,7 +3,7 @@
 This is the exact inverse of the path in Robot.solve:
   foot (level frame) -> rotate_rpy(inverse) -> body_to_leg -> leg_ik -> joint_to_servo_deg
 so a viewer drawing these points shows the pose the servos would hold, including the effect of
-each servo's direction and trim_deg and of the mechanical clamp (min_deg/max_deg).
+each servo's direction and trim_deg and of the joint limits (BodyConfig.limits_of).
 
 Frames are the ones in kinematics.py: body frame x forward, y left, z up, origin at the body
 centre on the coxa plane. "Level frame" = body frame rotated by the body pose (roll, pitch, yaw),

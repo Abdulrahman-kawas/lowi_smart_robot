@@ -63,11 +63,30 @@ activate() {
   done
 }
 
+# Keep the three newest releases, by NAME: they are timestamps, and "initial" (from setup_pi.sh) is
+# the oldest. Never the live one or the one to go back to. Directory times are no guide: rsync -a
+# copies the laptop folder's time onto every release, so sorting by time once deleted the live
+# release (2026-11-19).
+prune_releases() {
+  local all=() dir drop
+  [[ -d "$RELEASES/initial" ]] && all+=("$RELEASES/initial")
+  while IFS= read -r dir; do all+=("$dir"); done < <(find "$RELEASES" -mindepth 1 -maxdepth 1 \
+    -type d -name '[0-9]*' | sort)
+  drop=$(( ${#all[@]} - 3 ))
+  (( drop > 0 )) || return 0
+  for dir in "${all[@]:0:drop}"; do
+    [[ "$dir" == "$release" || "$dir" == "$previous" ]] || sudo rm -rf "$dir"
+  done
+}
+
 if activate "$release"; then
   echo "deployed $release (previous: $previous)"
-  ls -1dt "$RELEASES"/* | tail -n +4 | xargs -r sudo rm -rf   # keep three
-else
+  prune_releases
+elif [[ -d "$previous" ]]; then
   echo "a service failed; going back to $previous"
   activate "$previous"
+  exit 1
+else
+  echo "a service failed, and the previous release $previous is gone: staying on $release"
   exit 1
 fi
