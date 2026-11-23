@@ -22,6 +22,7 @@ import math
 import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -33,6 +34,45 @@ from .config import SafetyCfg
 log = logging.getLogger(__name__)
 
 TiltState = Literal["ok", "tilt", "fallen"]
+
+
+class ProtectionGuard:
+    """Short-lived app override of LiDAR/IMU checks. True means protection is ON.
+
+    The app turns protection off for at most a few seconds and renews it while in use; the body
+    restores it on expiry, E-stop, relax, or restart. Only the clock is touched here, so it is
+    safe to call from the 50 Hz control loop.
+    """
+
+    def __init__(self, clock: Callable[[], float]) -> None:
+        self.clock = clock
+        self._off_until = 0.0
+
+    @property
+    def on(self) -> bool:
+        return self.clock() >= self._off_until
+
+    def off(self) -> bool:
+        return not self.on
+
+    def disable(self, ttl_s: float) -> bool:
+        """Turn protection off for ttl_s. Returns True only on the on->off event edge."""
+        changed = self.on
+        self._off_until = self.clock() + ttl_s
+        return changed
+
+    def enable(self) -> bool:
+        """Restore protection now. Returns True only on the off->on event edge."""
+        changed = self.off()
+        self._off_until = 0.0
+        return changed
+
+    def expire(self) -> bool:
+        """Restore protection if its TTL elapsed. Returns True on the off->on event edge."""
+        if self._off_until and self.clock() >= self._off_until:
+            self._off_until = 0.0
+            return True
+        return False
 
 
 class EStopLatch:
@@ -136,7 +176,10 @@ class SafetyGuard:
         wz: float,
         lidar: LidarSummary | None,
         lidar_age_s: float | None,
+        skip_checks: bool = False,
     ) -> Limited:
+        if skip_checks:
+            return Limited(vx, vy, wz, None)
         c = self.cfg
         reason: str | None = None
         fresh = lidar is not None and lidar_age_s is not None and lidar_age_s <= c.lidar_timeout_s

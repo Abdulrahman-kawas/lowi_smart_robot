@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 API_VERSION = 1
 TICK_S = 0.05
 LOOK_GAP_S = 0.2  # the app sends targets while dragging; the gateway also caps Looks at 5/s
+PROTECTION_TTL_S = 2.0  # the app renews about once a second; the body is the backstop
 STATE_KEEPALIVE_S = 1.0  # send state at least this often, so the app sees "offline" too
 REVOKE_CHECK_S = 1.0
 QUEUE_MAX = 64  # outgoing messages per socket; a link this far behind is closed
@@ -66,6 +67,7 @@ class Session:
     device: str
     queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=QUEUE_MAX))
     video: bool = False
+    protection_off: bool = False  # this socket is the one that asked to skip LiDAR checks
     frame_queued: bool = False
     last_frame_at: float | None = None  # asked_at of the newest frame sent here
     close_code: int | None = None
@@ -131,6 +133,8 @@ class MobileHub:
     def disconnect(self, session: Session) -> None:
         if self.sessions.pop(session.id, None) is None:
             return
+        if session.protection_off:
+            self._restore_protection_if_idle(session.device)
         self._video_changed()
         if not any(s.device == session.device for s in self.sessions.values()):
             self.drive.disconnect(session.device)
@@ -158,6 +162,8 @@ class MobileHub:
             self._spawn(self._perform(session, msg))
         elif kind == "moves_switch":
             self._moves_switch(session, msg)
+        elif kind == "protection":
+            self._protection(session, msg.get("enabled"), msg.get("ttl_s"))
         elif kind == "speed_limit":
             self._speed_limit(session.device, msg.get("max_speed_mps"), msg.get("max_wz_rps"))
         elif kind == "posture":
@@ -180,6 +186,8 @@ class MobileHub:
 
     def estop(self, device: str) -> int:
         seq = self.robot.estop()
+        for s in self.sessions.values():  # the body restores protection on E-stop
+            s.protection_off = False
         self.drive.stop_all(device)
         self.supervisor.stop()
         return seq
@@ -260,6 +268,30 @@ class MobileHub:
             return
         if self.robot.speed_limit(speed, turn) < 0:
             self._notify(device, "speed_limit", "the brain is not connected to the robot", True)
+
+    def _protection(self, session: Session, enabled: object, ttl_s: object) -> None:
+        """App-only LiDAR override. The gateway and body check it again."""
+        if not isinstance(enabled, bool):
+            self._notify(session.device, "protection", "enabled must be true or false", True)
+            return
+        ttl = PROTECTION_TTL_S if ttl_s is None else ttl_s
+        if not self._number(ttl) or not 1.0 <= ttl <= 5.0:
+            self._notify(session.device, "protection",
+                         "ttl_s must be a number from 1 to 5 seconds", True)
+            return
+        if self.robot.protection(enabled, ttl, human=True) < 0:
+            self._notify(session.device, "protection", "the brain is not connected to the robot",
+                         True)
+            return
+        session.protection_off = not enabled
+        if enabled:
+            self._restore_protection_if_idle(session.device)
+
+    def _restore_protection_if_idle(self, device: str) -> None:
+        """One app closing must not undo another app on the same device still using the robot."""
+        if any(s.device == device and s.protection_off for s in self.sessions.values()):
+            return
+        self.robot.protection(True, human=True)
 
     def _caps_for(self, status: dict[str, Any] | None) -> Caps:
         """The brain's caps, lowered to the gateway's runtime remote limit (the app's top speed)."""

@@ -44,9 +44,11 @@ struct RobotStatus: Decodable, Sendable, Equatable {
     var pitchDeg: Double?
     var cameraPanDeg: Double?
     var perform: String?
+    var protection: Bool? = nil
 
     /// The body accepts moves only while standing or already walking.
     var canWalk: Bool { mode == "standing" || mode == "walking" }
+    var protectionOn: Bool { protection ?? true }
 }
 
 struct MovesState: Decodable, Sendable, Equatable {
@@ -195,6 +197,7 @@ enum ClientMessage: Sendable, Equatable {
     case perform(name: String, speed: Double, leg: String?)
     case movesSwitch(voice: Bool?, remote: Bool?)
     case speedLimit(maxSpeedMps: Double, maxWzRps: Double)
+    case protection(enabled: Bool, ttlS: Double = 2.0)
     case posture(String)
     case video(Bool)
     case heartbeat(Double)
@@ -218,6 +221,8 @@ enum ClientMessage: Sendable, Equatable {
             if let remote { object["remote"] = remote }
         case .speedLimit(let speed, let turn):
             object = ["type": "speed_limit", "max_speed_mps": speed, "max_wz_rps": turn]
+        case .protection(let enabled, let ttlS):
+            object = ["type": "protection", "enabled": enabled, "ttl_s": ttlS]
         case .posture(let posture): object = ["type": "posture", "posture": posture]
         case .video(let on): object = ["type": "video", "on": on]
         case .heartbeat(let t): object = ["type": "heartbeat", "t": t]

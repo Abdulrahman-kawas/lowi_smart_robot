@@ -13,6 +13,7 @@ from spider_common.protocol import (
     HealthReport,
     Move,
     MovesSwitch,
+    Protection,
     Snapshot,
     SourceStatus,
     SpeedLimit,
@@ -90,6 +91,18 @@ def test_speed_limit_roundtrip_and_bounds():
     for bad in ('{"type":"speed_limit","max_speed_mps":0,"max_wz_rps":0.4}',
                 '{"type":"speed_limit","max_speed_mps":0.08}',
                 '{"type":"speed_limit","max_speed_mps":0.6,"max_wz_rps":0.4}'):
+        with pytest.raises(ValidationError):
+            parse_command(bad)
+
+
+def test_protection_roundtrip_and_bounds():
+    cmd = parse_command(Protection(enabled=False, ttl_s=2.5, trace="t1").model_dump_json())
+    assert isinstance(cmd, Protection)
+    assert (cmd.enabled, cmd.ttl_s, cmd.trace) == (False, 2.5, "t1")
+    assert parse_command('{"type":"protection","enabled":true}').ttl_s == 2.0
+    for bad in ('{"type":"protection"}',
+                '{"type":"protection","enabled":false,"ttl_s":0.5}',
+                '{"type":"protection","enabled":false,"ttl_s":6}'):
         with pytest.raises(ValidationError):
             parse_command(bad)
 
