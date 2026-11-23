@@ -25,6 +25,8 @@ gateway, which:
     reports it done
   * keeps the app's (remote) speed and turn-rate limit, which the owner sets from the app or by
     voice (SpeedLimit) up to the remote policy's ceiling, and remembers it across restarts
+  * lets only the app (remote) switch LiDAR protection, so no voice, bench or planner path can
+    weaken the body's checks
 
 It adds to the body's limits and replaces none of them. If the gateway dies, its heartbeat stops
 and the body's own watchdog stops the robot.
@@ -66,6 +68,7 @@ from spider_common.protocol import (
     MovesSwitch,
     Perform,
     Posture,
+    Protection,
     Reach,
     RobotEvent,
     RobotState,
@@ -101,6 +104,7 @@ _NEEDS_CONFIRM_TO_WAKE = frozenset({"remote", "planner"})
 DEFAULT_MOVES_ON = {"voice": True, "remote": False}
 REMOTE_START_LIMITS = (0.05, 0.3)  # m/s, rad/s: the app's top speed until the owner changes it
 _SPEED_LIMIT_SOURCES = frozenset({"voice", "remote"})
+_PROTECTION_SOURCES = frozenset({"remote"})  # LiDAR protection is app-only; never by voice
 
 
 @dataclass(frozen=True)
@@ -360,6 +364,8 @@ class Gateway:
             self._on_moves_switch(cmd, source)
         elif isinstance(cmd, SpeedLimit):
             self._on_speed_limit(cmd, source)
+        elif isinstance(cmd, Protection):
+            self._on_protection(cmd, source)
         else:
             self._forward(cmd, source)
 
@@ -646,6 +652,14 @@ class Gateway:
             detail += " (not saved: kept until the gateway restarts)"
         self._reply(source, cmd.seq, "ack", detail)
         self.publish_status(self.clock())
+
+    def _on_protection(self, cmd: Protection, source: str) -> None:
+        """LiDAR protection is an app-only override. All other sources must be refused."""
+        if source not in _PROTECTION_SOURCES:
+            self._reply(source, cmd.seq, "rejected",
+                        f"{source} may not change LiDAR protection")
+            return
+        self._forward(cmd, source)
 
     # ------------------------------------------------------------------ events
     def on_state(self, payload: bytes | str) -> None:

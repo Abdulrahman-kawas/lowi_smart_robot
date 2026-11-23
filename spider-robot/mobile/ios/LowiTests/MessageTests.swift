@@ -11,8 +11,8 @@ struct MessageTests {
 
          "lidar_age_s":0.1,"last_seq":7,"link_ok":true,"estop":false,
          "limiter":"slowing: obstacle 0.40 m from the legs","loop_overruns":0,"loop_max_ms":0.3,
-         "rt_ok":false,"perform":null},
-         "robot_age_ms":40,"online":true,
+          "rt_ok":false,"perform":null,"protection":false},
+          "robot_age_ms":40,"online":true,
          "gateway":{"online":true,"owner":"remote","owner_remaining_s":0.8,"estop":false,
                     "remote_alive":true,"moves":{"voice":true,"remote":false},
                     "remote_limits":{"max_speed_mps":0.08,"max_wz_rps":0.4,
@@ -29,6 +29,7 @@ struct MessageTests {
         #expect(state.robot?.mode == "standing" && state.robot?.canWalk == true)
         #expect(state.robot?.cameraPanDeg == 12.5)
         #expect(state.robot?.limiter == "slowing: obstacle 0.40 m from the legs")
+        #expect(state.robot?.protection == false && state.robot?.protectionOn == false)
         #expect(state.gateway.owner == "remote" && state.drive.holder == "iPhone")
         #expect(state.gateway.moves == MovesState(voice: true, remote: false))
         #expect(state.gateway.remoteLimits == RemoteLimits(
@@ -49,6 +50,19 @@ struct MessageTests {
             return
         }
         #expect(state.gateway.moves == nil && state.gateway.remoteLimits == nil)
+    }
+
+    @Test func olderBodyWithoutProtectionReadsAsOn() throws {
+        let text = """
+        {"type":"state","robot":{"mode":"standing","estop":false,"vx":0,"vy":0,"wz":0},
+         "online":true,"gateway":{"online":true,"remote_alive":true},"drive":{},"latency":{},
+         "caps":{"max_speed_mps":0.05,"max_wz_rps":0.3,"move_s":1.0}}
+        """
+        guard case .state(let state) = try ServerMessage.decode(text: text) else {
+            Issue.record("not a state message")
+            return
+        }
+        #expect(state.robot?.protection == nil && state.robot?.protectionOn == true)
     }
 
     @Test func eventsCarryTheHoldTheyEnd() throws {
@@ -87,6 +101,15 @@ struct MessageTests {
         #expect(limitObject["type"] as? String == "speed_limit")
         #expect(limitObject["max_speed_mps"] as? Double == 0.08)
         #expect(limitObject["max_wz_rps"] as? Double == 0.4)
+        let protection = ClientMessage.protection(enabled: false).json
+        let protectionObject = try #require(try JSONSerialization.jsonObject(with: Data(protection.utf8)) as? [String: Any])
+        #expect(protectionObject["type"] as? String == "protection")
+        #expect(protectionObject["enabled"] as? Bool == false)
+        #expect(protectionObject["ttl_s"] as? Double == 2)
+        let protectionOn = ClientMessage.protection(enabled: true, ttlS: 1.5).json
+        let protectionOnObject = try #require(try JSONSerialization.jsonObject(with: Data(protectionOn.utf8)) as? [String: Any])
+        #expect(protectionOnObject["enabled"] as? Bool == true)
+        #expect(protectionOnObject["ttl_s"] as? Double == 1.5)
         let look = ClientMessage.look(panDeg: -40, speed: 0.5).json
         let lookObject = try #require(try JSONSerialization.jsonObject(with: Data(look.utf8)) as? [String: Any])
         #expect(lookObject["type"] as? String == "look")

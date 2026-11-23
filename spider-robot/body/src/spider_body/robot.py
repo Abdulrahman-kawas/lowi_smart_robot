@@ -38,10 +38,12 @@ from spider_common.protocol import (
     EStopRelease,
     EventKind,
     Heartbeat,
+    LidarSummary,
     Look,
     Move,
     Perform,
     Posture,
+    Protection,
     Reach,
     RobotEvent,
     RobotMode,
@@ -70,7 +72,7 @@ from .moves import (
     raised_feet,
     validate,
 )
-from .safety import EStopLatch, SafetyGuard
+from .safety import EStopLatch, ProtectionGuard, SafetyGuard
 
 log = logging.getLogger(__name__)
 
@@ -105,6 +107,7 @@ class Robot:
         self.gait = GaitEngine(cfg.legs, cfg.geometry, cfg.gait)
         g = cfg.geometry
         self.guard = SafetyGuard(cfg.safety, (g.footprint_x_m, g.footprint_y_m))
+        self.protection = ProtectionGuard(clock)
         self.geom = LegGeometry(g.coxa_m, g.femur_m, g.tibia_m)
 
         self.latch = latch
@@ -141,6 +144,7 @@ class Robot:
         self.moves = MoveLibrary(cfg)
         self.perform: Runner | None = None
         self._frame = None  # (body, feet) of the move pose being sent, while it runs or holds
+        self._held = "stopped"  # what a held _frame is: a move held at its end (table) or stopped
         self._after_recover: str | None = None  # "sit": sit down once back in the stand pose
         # Front camera pan (Look): deg, + left. None while the servos are limp: nobody knows
         # where the camera hangs, and the first command after limp snaps to pan_target.
@@ -157,6 +161,14 @@ class Robot:
         event = RobotEvent(robot_id=self.cfg.robot_id, kind=kind, seq=seq, detail=detail,
                            trace=trace)
         self.link.publish(self.topics.event, event.model_dump_json(), qos=1)
+
+    def _protection_off(self) -> bool:
+        """One helper for every LiDAR/IMU check the app switch is allowed to skip."""
+        return self.protection.off()
+
+    def _restore_protection(self, reason: str, seq: int | None = None, trace: str = "") -> None:
+        if self.protection.enable():
+            self.emit("protection", seq, f"on: {reason}", trace)
 
     # ------------------------------------------------------------------ commands
     def handle(self, cmd: Command) -> None:
@@ -182,6 +194,7 @@ class Robot:
             return  # sent before a Stop that already arrived: drop silently
 
         if isinstance(cmd, EStop):
+            self._restore_protection("estop", cmd.seq, cmd.trace)
             self._cancel_move("estop")
             self.gait.freeze()  # hold every foot where it is: no jump
             self._hold_pan()  # and the camera where it is
@@ -205,6 +218,13 @@ class Robot:
             task.add_done_callback(self._tasks.discard)
         elif isinstance(cmd, (Perform, Reach)):
             self._handle_perform(cmd)
+        elif isinstance(cmd, Protection):
+            if cmd.enabled:
+                self._restore_protection("app", cmd.seq, cmd.trace)
+            elif self.estop:
+                self.emit("rejected", cmd.seq, "estop is latched; protection stays on", cmd.trace)
+            elif self.protection.disable(cmd.ttl_s):
+                self.emit("protection", cmd.seq, "off: app", cmd.trace)
         elif isinstance(cmd, Look):
             self._handle_look(cmd)
         elif self.estop:
@@ -288,6 +308,8 @@ class Robot:
             self.emit("ack", cmd.seq, "moving", cmd.trace)
 
     def _handle_posture(self, cmd: Posture) -> None:
+        if cmd.posture == "relax":
+            self._restore_protection("relax", cmd.seq, cmd.trace)
         if self.perform is not None:
             self.emit("rejected", cmd.seq, f"{self.perform.spec.name} is running; send stop first")
             return
@@ -403,13 +425,14 @@ class Robot:
             return "not at the stand height; send stand first"
         if max(abs(a) for a in (*self.pose, *self.pose_target)) > 1e-3:
             return "the body pose is not neutral; send body_pose with zeros first"
+        skipped = self._protection_off()
         roll, pitch = self.lidar.tilt()
-        if roll is None or pitch is None:
+        if not skipped and (roll is None or pitch is None):
             return "tilt unknown: IMU is not reporting"
-        if max(abs(roll), abs(pitch)) > s.max_level_deg:
+        if roll is not None and pitch is not None and max(abs(roll), abs(pitch)) > s.max_level_deg:
             return f"not level (roll {roll:.1f}, pitch {pitch:.1f} deg)"
         summary, age = self.lidar.latest()
-        if summary is None or age is None or age > s.lidar_timeout_s:
+        if not skipped and (summary is None or age is None or age > s.lidar_timeout_s):
             return "LiDAR data is stale"
         return None
 
@@ -432,6 +455,19 @@ class Robot:
                 return "the target moved closer"
         return None
 
+    def _clear_lidar_summary(self) -> LidarSummary:
+        """A benign map for planning when protection is off and LiDAR has no data yet."""
+        far = self.cfg.lidar.max_range_m
+        sectors = [far] * self.cfg.lidar.sectors
+        return LidarSummary(
+            ts=self.wall(),
+            sector_deg=360.0 / self.cfg.lidar.sectors,
+            sectors_m=sectors,
+            nearest_m=far,
+            nearest_bearing_deg=0.0,
+            points=len(sectors),
+        )
+
     def _handle_perform(self, cmd: Perform | Reach) -> None:
         what = cmd.name if isinstance(cmd, Perform) else "reach"
 
@@ -443,7 +479,12 @@ class Robot:
             refuse(why)
             return
         summary, _ = self.lidar.latest()
-        assert summary is not None
+        skipped = self._protection_off()
+        if summary is None and skipped:
+            summary = self._clear_lidar_summary()
+        if summary is None:
+            refuse("LiDAR data is stale")
+            return
         try:
             if isinstance(cmd, Perform):
                 spec = self.moves.get(cmd.name, cmd.leg)
@@ -454,10 +495,11 @@ class Robot:
         except MoveError as exc:
             refuse(str(exc))
             return
-        why = self._obstacle_blocker(spec, summary)
-        if why:
-            refuse(why)
-            return
+        if not skipped:
+            why = self._obstacle_blocker(spec, summary)
+            if why:
+                refuse(why)
+                return
         report = validate(self.moves.geo, spec, cmd.speed)
         if not report.ok:
             refuse(report.reason)
@@ -485,6 +527,7 @@ class Robot:
         r = self.perform
         assert r is not None
         self.perform = None
+        self._held = "stopped"
         self.emit("perform_done", r.seq, f"{r.spec.name} interrupted: {reason}", r.trace)
         if reason == "fallen":
             self._frame = None
@@ -498,7 +541,7 @@ class Robot:
         """Runtime checks while a move plays. Any failure ends it like a Stop."""
         r = self.perform
         assert r is not None and self._frame is not None
-        if r.spec.guard == "none":
+        if r.spec.guard == "none" or self._protection_off():
             return
         s = self.cfg.safety
         summary, age = self.lidar.latest()
@@ -525,6 +568,11 @@ class Robot:
         r = self.perform
         assert r is not None
         self.perform = None
+        if r.spec.hold_at_end:  # table: keep the last frame; Stand plans the way back
+            self._held = r.spec.name
+            self.emit("perform_done", r.seq, f"{r.spec.name} held: send stand to come back",
+                      r.trace)
+            return
         self._frame = None
         self.pose = [0.0, 0.0, 0.0]
         self.pose_target = [0.0, 0.0, 0.0]
@@ -546,6 +594,9 @@ class Robot:
     def tick(self, dt: float) -> None:
         now = self.clock()
         s = self.cfg.safety
+
+        if self.protection.expire():
+            self.emit("protection", self.last_seq, "on: expired")
 
         if self.latch is not None and self.latch.write_failed != self._latch_error_reported:
             self._latch_error_reported = self.latch.write_failed
@@ -590,14 +641,17 @@ class Robot:
         # 4. obstacle / LiDAR limits on the active Move
         self.lidar.set_height_offset(self.gait.height - self.cfg.geometry.body_height_m)
         level = max(abs(a) for a in self.pose) <= math.radians(s.max_level_deg)
-        tilt_unknown = roll is None and self.cfg.lidar.enabled and s.require_lidar
+        skipped = self._protection_off()
+        tilt_unknown = (roll is None and self.cfg.lidar.enabled and s.require_lidar
+                        and not skipped)
         if self.move is not None and not self.estop and (not level or tilt_unknown):
             # walk only with a level body (LiDAR height band) and a known tilt (fall check)
             self.limiter = "leveling body" if not level else "imu_stale"
             self.gait.stop()
         elif self.move is not None and not self.estop:
             summary, age = self.lidar.latest()
-            lim = self.guard.limit_motion(self.move.vx, self.move.vy, self.move.wz, summary, age)
+            lim = self.guard.limit_motion(self.move.vx, self.move.vy, self.move.wz, summary, age,
+                                          skip_checks=skipped)
             self.limiter = lim.reason
             blocked = lim.reason is not None and (
                 lim.reason.startswith("obstacle")
@@ -738,4 +792,6 @@ class Robot:
             rt_ok=self.rt_ok,
             perform=self.perform.spec.name if self.perform is not None else None,
             camera_pan_deg=None if self.pan_deg is None else round(self.pan_deg, 1),
+            held_pose=self._held if self._frame is not None and self.perform is None else None,
+            protection=self.protection.on,
         )

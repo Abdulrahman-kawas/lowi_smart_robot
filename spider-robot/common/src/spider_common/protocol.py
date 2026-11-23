@@ -173,7 +173,7 @@ class Look(_Cmd):
 MoveName = Literal[
     "wave", "bow", "body_wave", "shimmy", "leg_ripple", "stomp", "dance",
     "attack_stance", "defense_stance", "alert", "crab_sway", "stretch", "sleep", "celebrate",
-    "hi", "double_hi", "offer_hand",
+    "hi", "double_hi", "offer_hand", "table",
 ]
 MOVE_NAMES: tuple[str, ...] = get_args(MoveName)
 FrontLeg = Literal["LF", "RF"]
@@ -217,9 +217,20 @@ class SpeedLimit(_Cmd):
     max_wz_rps: float = Field(gt=0.0, le=2.0)
 
 
+class Protection(_Cmd):
+    """App only: skip LiDAR/IMU checks while enabled=false. The body expires the override.
+
+    ttl_s is used only when turning protection off; the app renews about once a second.
+    """
+
+    type: Literal["protection"] = "protection"
+    enabled: bool
+    ttl_s: float = Field(2.0, ge=1.0, le=5.0)
+
+
 Command = Annotated[
     Move | Stop | Posture | BodyPose | Snapshot | Heartbeat | EStop | EStopRelease | ConfirmRequest
-    | Perform | Reach | Look | MovesSwitch | SpeedLimit,
+    | Perform | Reach | Look | MovesSwitch | SpeedLimit | Protection,
     Field(discriminator="type"),
 ]
 _COMMAND: TypeAdapter[Command] = TypeAdapter(Command)
@@ -268,12 +279,16 @@ class RobotState(BaseModel):
     rt_ok: bool = False  # SCHED_FIFO and locked memory are really active
     perform: str | None = None  # the move running now (mode stays "standing" while it runs)
     camera_pan_deg: float | None = None  # front camera pan (+ left); None: no pan servo, or limp
+    # A pose the body holds until Stand: "table", or "stopped" (a move stopped halfway); else None
+    held_pose: str | None = None
+    # LiDAR/IMU protection: None from a body built before this field (treat as True).
+    protection: bool | None = None
 
 
 EventKind = Literal[
     "ack", "rejected", "obstacle_stop", "tilt", "fallen", "link_lost", "estop",
     "move_done", "online", "offline", "error", "snapshot_failed", "preempted", "challenge",
-    "clamped", "perform_started", "perform_done", "perform_rejected",
+    "clamped", "perform_started", "perform_done", "perform_rejected", "protection",
 ]
 
 

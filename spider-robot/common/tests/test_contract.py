@@ -18,6 +18,7 @@ from spider_common.protocol import (
     GatewayStatus,
     Move,
     Posture,
+    Protection,
     RobotEvent,
     RobotState,
     SttRequest,
@@ -37,7 +38,11 @@ def test_unknown_event_kind_and_state_field_are_tolerated():
     ev = RobotEvent.model_validate_json('{"robot_id":"r","kind":"from_the_future"}')
     assert ev.kind == "from_the_future"
     st = RobotState.model_validate_json('{"robot_id":"r","mode":"standing","new_field":1}')
-    assert st.mode == "standing"
+    assert st.mode == "standing" and st.protection is None  # older body: treat as on
+    new = RobotState(robot_id="r", mode="standing", protection=False)
+    assert "protection" in json.loads(new.model_dump_json())
+    cmd = parse_command(Protection(enabled=False).model_dump_json())
+    assert isinstance(cmd, Protection) and cmd.ttl_s == 2.0
 
 
 def test_commands_still_reject_unknown_fields():
@@ -113,7 +118,7 @@ def test_perform_and_reach_roundtrip():
     for name in MOVE_NAMES:
         cmd = parse_command(Perform(name=name, speed=1.0).model_dump_json())
         assert isinstance(cmd, Perform) and cmd.name == name and cmd.leg is None
-    assert len(MOVE_NAMES) == 17 and "offer_hand" in MOVE_NAMES
+    assert len(MOVE_NAMES) == 18 and "offer_hand" in MOVE_NAMES and "table" in MOVE_NAMES
     reach = parse_command('{"type":"reach","target":[0.3,0.1,-0.03],"leg":"RF"}')
     assert isinstance(reach, Reach) and reach.target == (0.3, 0.1, -0.03)
     assert parse_command('{"type":"reach"}').target == "nearest"
