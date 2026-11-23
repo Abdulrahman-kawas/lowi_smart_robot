@@ -28,9 +28,11 @@
 
 ## What it is
 
-Lowi is a six-legged spider robot you talk to. Say *"Lowi, walk forward"* in Arabic and it walks.
-Say *"look"* and it takes a photo and tells you what it sees. Ask it something hard and it says
-*"one moment"*, then answers with a bigger model on your home server.
+Lowi is a six-legged spider robot you talk to. It walks on the floor, stands, sits and holds
+poses, driven from its iPhone app. In the app, hold Talk and speak Arabic: say *"stop"* and it
+stops at once, ask a question and it answers in Lowi's voice. Ask what it sees and it takes a
+photo and answers with a vision model on your home server. Next is voice on the robot itself,
+with its own microphone and speaker: say *"Lowi, walk forward"* and it walks.
 
 - **Safe on its own.** It stops near obstacles, when it tilts, and when it loses its brain. It never waits for the network to be safe.
 - **Fast where it matters.** "Stop" and simple moves are handled on the robot, without any model in the way.
@@ -112,14 +114,7 @@ they never move the robot, because a camera can read text that tries to give ord
 
 </details>
 
-<!-- PHOTO SLOTS: replace with docs/images/photos/robot-lidar.jpg, robot-legs.jpg -->
-<table>
-  <tr>
-    <td width="33%"><img src="docs/images/photos/robot-top.jpg" alt="Lowi from above: six legs, the LiDAR in the middle and the camera at the front"></td>
-    <td width="33%"><img src="docs/images/photos/robot-lidar.svg" alt="LiDAR close-up (coming soon)"></td>
-    <td width="33%"><img src="docs/images/photos/robot-legs.svg" alt="A leg and its three servos (coming soon)"></td>
-  </tr>
-</table>
+<p align="center"><img src="docs/images/photos/robot-top.jpg" alt="Lowi from above: six legs, the LiDAR in the middle and the camera at the front" width="40%"></p>
 
 ---
 
@@ -170,13 +165,7 @@ The simulator runs the **real body code**: the same `Robot` class, gait, inverse
 safety rules, with fake servos and a simulated LiDAR room. If a move is unsafe, the simulator
 refuses it exactly as the robot would.
 
-<table>
-  <tr>
-    <td width="50%" align="center"><img src="docs/images/sim-walk.gif" alt="The simulated robot walks, turns and waves hello"><br><sub>Simulator: walk, turn, then “hi”</sub></td>
-    <!-- PHOTO SLOT: replace with docs/images/photos/robot-walk.gif -->
-    <td width="50%" align="center"><img src="docs/images/photos/robot-walk.svg" alt="The real robot walking (coming soon)"><br><sub>The real robot (coming soon)</sub></td>
-  </tr>
-</table>
+<p align="center"><img src="docs/images/sim-walk.gif" alt="The simulated robot walks, turns and waves hello" width="60%"><br><sub>Simulator: walk, turn, then “hi”</sub></p>
 
 ```bash
 cd spider-robot/body
@@ -270,7 +259,8 @@ cd brain && uv sync && uv run spider-brain teleop
 
 > [!WARNING]
 > Keep servo power off until calibration, with a motor power switch in reach.
-> No walking on the floor until the hardware E-stop (relay, watchdog, fuse) has passed its tests.
+> Walk on the floor only with the LiDAR required (`require_lidar: true`) and someone watching.
+> The hardware E-stop (relay, watchdog, fuse) is still to come.
 
 ### 5. Set up the home server
 
@@ -364,8 +354,8 @@ it does.
 </table>
 
 Remote limits today: 0.05 m/s, 0.3 rad/s, moves of at most 1 s. The screenshots come from the
-simulator, whose camera shows a grey frame with an orange box. The app has been paired with the home
-server from a real iPhone; driving with the body running is the next check. Setup, pairing and the API:
+simulator, whose camera shows a grey frame with an orange box. The app drives the real robot from an
+iPhone, through the home server. Setup, pairing and the API:
 [spider-robot/mobile/README.md](spider-robot/mobile/README.md).
 
 ---
@@ -396,10 +386,11 @@ spider-robot/
 | Real-time check | One hour at 50 Hz under full load (P06) | ⏳ Next |
 | Camera, mic and speaker | Camera fitted and checked: fresh photos, no missed body ticks. Mic and speaker next (`hw_check.sh`) | 🔨 Camera done |
 | Lowi and the robot | Hard questions go to Lowi, with offline fallbacks | 🔨 In progress |
-| First motion | Servo calibration and walking on a stand (P08) | 🔜 |
-| Hardware E-stop and floor walking | Relay, watchdog, fuse, obstacle tests (P09) | 🔜 |
+| First motion | All 18 servos calibrated; stands, sits and holds poses (P08) | ✅ Done, 2026-11-19 |
+| Floor walking | Walks on the floor, driven from the iPhone app | ✅ Done |
+| Hardware E-stop and obstacle tests | Relay, watchdog, fuse, obstacle tests on the floor (P09) | 🔜 |
 | Voice tuning | 200 recorded phrases and accuracy targets (P10) | 🔜 |
-| Mobile app | iPhone and iPad: drive from the camera and hold to talk in Lowi's voice, with 32 unit tests and UI tests | ✅ Paired on a real iPhone |
+| Mobile app | iPhone and iPad: drive from the camera and hold to talk in Lowi's voice, with 32 unit tests and UI tests | ✅ Drives the real robot |
 | Edge sensors | VL53L1X stair-edge and side sensors | 🗓️ Planned |
 | 3D mapping | LiDAR recordings to SLAM on an on-demand AWS worker | 🗓️ Planned |
 | Raspberry Pi 5 (16 GB) | A strong offline Lowi on the robot itself, around March 2027 | 🗓️ Planned |
